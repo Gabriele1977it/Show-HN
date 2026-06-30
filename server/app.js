@@ -368,9 +368,14 @@ export function createApp({ store, uploadsDir, reminders, billing, ownerEmails =
     res.json(card);
   });
 
+  // --- pages -----------------------------------------------------------
+  // Marketing landing page at the root; the app itself lives at /app.
+  app.get("/", (_req, res) => res.sendFile(join(PUBLIC_DIR, "landing.html")));
+  app.get("/app", (_req, res) => res.sendFile(join(PUBLIC_DIR, "index.html")));
+
   // --- static ----------------------------------------------------------
   app.use("/uploads", express.static(uploadsDir));
-  app.use(express.static(PUBLIC_DIR));
+  app.use(express.static(PUBLIC_DIR, { index: false }));
   app.get("/health", (_req, res) => res.json({ ok: true }));
 
   return app;

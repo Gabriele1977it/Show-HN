@@ -67,7 +67,8 @@ npm install
 npm start          # http://localhost:3000
 ```
 
-Open the app, paste a transcript on the **Build** tab, optionally attach an
+`/` is the marketing **landing page**; the app itself is at **`/app`**. Click
+**Start free**, paste a transcript on the **Build** tab, optionally attach an
 audio file (or paste a URL), and click **Build deck**. Switch to **Study** to
 review due cards and run shadowing loops.
 
@@ -216,7 +217,7 @@ server/
   exporters.js   Anki / CSV / JSON exporters
   reminders.js   due-review reminders + webhook delivery
   stats.js       study dashboard aggregation (history, streak, forecast)
-public/          single-page web client + share.html public viewer
+public/          landing.html (marketing) + index.html (app) + share.html (public viewer)
 test/            node:test suites
 ```
 

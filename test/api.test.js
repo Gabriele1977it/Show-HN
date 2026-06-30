@@ -218,6 +218,18 @@ test("owner accounts are auto-comped to the Team plan", async () => {
   assert.equal((await realFetch(`${base}/api/workspace`, { headers: hdr(ws2.key) }).then(j)).plan, "team");
 });
 
+test("landing page is served at / and the app at /app", async () => {
+  const landing = await realFetch(`${base}/`);
+  assert.equal(landing.status, 200);
+  const lhtml = await landing.text();
+  assert.match(lhtml, /Start free/);
+  assert.match(lhtml, /turn native audio/i);
+
+  const app = await realFetch(`${base}/app`);
+  assert.equal(app.status, 200);
+  assert.match(await app.text(), /id="build-form"/);
+});
+
 test("plans catalog is public", async () => {
   const plans = await realFetch(`${base}/api/plans`).then(j);
   assert.deepEqual(plans.map((p) => p.id), ["free", "pro", "team"]);
