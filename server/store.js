@@ -9,6 +9,7 @@ import { dirname } from "node:path";
 import { nanoid } from "nanoid";
 import { freshSrs, review, isDue } from "./srs.js";
 import { computeStats } from "./stats.js";
+import { suggestCloze } from "./cloze.js";
 
 const EMPTY = { decks: {}, cards: {}, reviewLog: [] };
 
@@ -113,6 +114,7 @@ export function createStore(filePath) {
           start: seg.start ?? null,
           end: seg.end ?? null,
           tags: seg.tags ?? [],
+          cloze: seg.cloze ?? null,
           srs: freshSrs(now),
         };
         state.cards[id] = card;
@@ -136,6 +138,8 @@ export function createStore(filePath) {
       if ("tags" in patch && Array.isArray(patch.tags)) card.tags = patch.tags;
       if ("start" in patch) card.start = patch.start;
       if ("end" in patch) card.end = patch.end;
+      // cloze may be set to a term or cleared with null.
+      if ("cloze" in patch) card.cloze = patch.cloze || null;
       persist();
       return card;
     },
@@ -172,6 +176,26 @@ export function createStore(filePath) {
         .sort((a, b) => a.srs.due - b.srs.due);
     },
 
+    // Auto-assign a cloze term to every card that doesn't have one yet.
+    // `overwrite` regenerates terms for all cards. Returns the updated count.
+    generateClozeForDeck(deckId, { overwrite = false } = {}) {
+      const deck = state.decks[deckId];
+      if (!deck) return null;
+      let updated = 0;
+      for (const cid of deck.cardOrder) {
+        const card = state.cards[cid];
+        if (!card) continue;
+        if (card.cloze && !overwrite) continue;
+        const term = suggestCloze(card.front);
+        if (term) {
+          card.cloze = term;
+          updated++;
+        }
+      }
+      if (updated) persist();
+      return { updated };
+    },
+
     // --- sharing -------------------------------------------------------
     // Publishing assigns an unguessable share id; the deck stays unlisted but
     // anyone with the link can view and export it.
@@ -203,7 +227,7 @@ export function createStore(filePath) {
       const cards = deck.cardOrder
         .map((cid) => state.cards[cid])
         .filter(Boolean)
-        .map((c) => ({ front: c.front, back: c.back, notes: c.notes, start: c.start, end: c.end, tags: c.tags }));
+        .map((c) => ({ front: c.front, back: c.back, notes: c.notes, start: c.start, end: c.end, tags: c.tags, cloze: c.cloze ?? null }));
       return { shareId, title: deck.title, language: deck.language, audioUrl: deck.audioUrl, cards };
     },
 

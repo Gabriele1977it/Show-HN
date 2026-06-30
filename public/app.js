@@ -187,6 +187,7 @@ function renderCard(card, idx) {
       <span class="timecode">⏱ ${fmtTime(card.start)}–${fmtTime(card.end)}</span>
       <span>${due ? '<span class="due-dot"></span> due now' : "next " + fmtDue(card.srs.due)}</span>
       <span>reps ${card.srs.reps}</span>
+      ${card.cloze ? `<span class="cloze-chip">blank: ${esc(card.cloze)} <button class="cloze-x" title="Clear cloze">×</button></span>` : ""}
     </div>
     <input class="back-input" placeholder="Translation / meaning (back of card)" value="${esc(card.back)}" />
     <div class="tools">
@@ -198,6 +199,12 @@ function renderCard(card, idx) {
     const updated = await api.patch(`/api/cards/${card.id}`, { back: backInput.value });
     card.back = updated.back;
     flash($(".save", el), "Saved ✓");
+  });
+  const clozeX = $(".cloze-x", el);
+  if (clozeX) clozeX.addEventListener("click", async () => {
+    await api.patch(`/api/cards/${card.id}`, { cloze: null });
+    card.cloze = null;
+    el.replaceWith(renderCard(card, idx));
   });
   if (hasAudio) $(".play", el).addEventListener("click", () => playLoop(card.start, card.end));
   return el;
@@ -224,6 +231,18 @@ $("#export-btn").addEventListener("click", () => {
   if (!state.deck) return;
   const fmt = $("#export-format").value;
   window.location.href = `/api/decks/${state.deck.id}/export?format=${fmt}`;
+});
+
+// ---- cloze (fill-in-the-blank) ----
+$("#cloze-btn").addEventListener("click", async () => {
+  if (!state.deck) return;
+  const btn = $("#cloze-btn");
+  btn.disabled = true;
+  const res = await api.post(`/api/decks/${state.deck.id}/cloze`, {});
+  state.deck = res.deck;
+  renderDeck();
+  btn.disabled = false;
+  flash(btn, res.updated ? `Cloze +${res.updated}` : "All set");
 });
 
 // ---- sharing ----
@@ -276,17 +295,32 @@ function showCard() {
   const c = review.queue[review.idx];
   if (!c) return closeReview(true);
   $("#review-count").textContent = `${review.idx + 1} / ${review.queue.length}`;
-  $("#review-front").textContent = c.front;
-  $("#review-back").textContent = c.back || "(no translation yet)";
+  // With a cloze term, the prompt is the sentence with the term blanked out.
+  $("#review-front").textContent = c.cloze ? maskCloze(c.front, c.cloze) : c.front;
   $("#review-back").classList.add("hidden");
   $("#grade-buttons").classList.add("hidden");
   $("#show-answer").classList.remove("hidden");
   $("#review-shadow").classList.toggle("hidden", !(state.deck.audioUrl && c.start != null));
 }
 function showAnswer() {
+  const c = review.queue[review.idx];
+  let html = "";
+  // Reveal the full sentence with the blanked term highlighted (cloze cards).
+  if (c.cloze) html += `<div>${highlightTerm(c.front, c.cloze)}</div>`;
+  if (c.back) html += `<div style="margin-top:6px">${esc(c.back)}</div>`;
+  $("#review-back").innerHTML = html || "(no translation yet)";
   $("#review-back").classList.remove("hidden");
   $("#show-answer").classList.add("hidden");
   $("#grade-buttons").classList.remove("hidden");
+}
+function maskCloze(text, term) {
+  const i = text.indexOf(term);
+  return i === -1 ? text : text.slice(0, i) + "＿＿＿" + text.slice(i + term.length);
+}
+function highlightTerm(text, term) {
+  const i = text.indexOf(term);
+  if (i === -1) return esc(text);
+  return esc(text.slice(0, i)) + `<mark>${esc(term)}</mark>` + esc(text.slice(i + term.length));
 }
 async function gradeCard(grade) {
   const c = review.queue[review.idx];

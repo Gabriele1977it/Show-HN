@@ -24,6 +24,9 @@ already uses (Anki, spreadsheets, JSON).
   playback speed (0.6× / 0.75× / 1×) for repeat-after-me practice.
 - **Spaced repetition** — an SM-2 scheduler surfaces a daily *due* queue so
   study sessions stay short and effective.
+- **Cloze (fill-in-the-blank)** — one click auto-blanks a key term in each
+  sentence (longest kanji run / longest word heuristic); review hides the term
+  and reveals it highlighted alongside the translation. Terms are editable.
 - **Inline editing** — add the translation / meaning to the back of each card.
 - **Cross-deck search** — the topbar search box (and `/api/search`) finds any
   card by front/back/notes across every deck, with the match highlighted and a
@@ -88,6 +91,7 @@ The web UI is a thin client over a small REST API:
 | `GET` | `/api/decks/:id` | Deck with all cards. |
 | `DELETE` | `/api/decks/:id` | Delete a deck and its cards. |
 | `POST` | `/api/decks/:id/cards` | Append more cards from extra transcript text. |
+| `POST` | `/api/decks/:id/cloze` | Auto-generate cloze terms (`{overwrite?}`); returns updated count + deck. |
 | `GET` | `/api/decks/:id/due` | Cards due for review now. |
 | `GET` | `/api/decks/:id/export?format=anki\|csv\|json` | Download the deck. |
 | `PATCH` | `/api/cards/:id` | Update `front` / `back` / `notes` / `tags` / timing. |
@@ -138,6 +142,7 @@ server/
   store.js       atomic JSON persistence
   segment.js     transcript → segments
   srs.js         SM-2 spaced repetition
+  cloze.js       fill-in-the-blank term suggestion + masking
   exporters.js   Anki / CSV / JSON exporters
   reminders.js   due-review reminders + webhook delivery
   stats.js       study dashboard aggregation (history, streak, forecast)
@@ -149,7 +154,6 @@ test/            node:test suites
 
 - Auto-transcription of uploaded audio (Whisper-class model) so creators can
   skip the manual transcript step.
-- Cloze (fill-in-the-blank) card generation.
 - Team workspaces and accounts (sharing today is per-deck, unlisted links).
 - Per-user / per-deck reminder schedules and quiet hours (current reminders are
   a single global webhook).

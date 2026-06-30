@@ -118,6 +118,14 @@ export function createApp({ store, uploadsDir, reminders }) {
     res.status(201).json(cards);
   });
 
+  // Auto-generate fill-in-the-blank (cloze) terms for the deck's cards.
+  app.post("/api/decks/:id/cloze", (req, res) => {
+    const overwrite = req.body?.overwrite === true;
+    const result = store.generateClozeForDeck(req.params.id, { overwrite });
+    if (!result) return res.status(404).json({ error: "Deck not found" });
+    res.json({ ...result, deck: store.getDeck(req.params.id) });
+  });
+
   app.get("/api/decks/:id/due", (req, res) => {
     const deck = store.getDeck(req.params.id);
     if (!deck) return res.status(404).json({ error: "Deck not found" });

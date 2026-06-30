@@ -183,6 +183,37 @@ test("search finds cards by front/back across decks, with deck context", async (
   assert.equal(limited.length, 1);
 });
 
+test("cloze generation fills blanks and is idempotent without overwrite", async () => {
+  const deck = await fetch(`${base}/api/decks`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title: "Cloze deck", language: "Japanese", transcript: "[00:00] 今日は天気がいいです\n[00:04] 週末は雨が降ります" }),
+  }).then(j);
+
+  const gen = await fetch(`${base}/api/decks/${deck.id}/cloze`, { method: "POST" }).then(j);
+  assert.equal(gen.updated, 2);
+  assert.ok(gen.deck.cards.every((c) => c.cloze && c.front.includes(c.cloze)), "each cloze term occurs in its sentence");
+
+  // Second run with no overwrite changes nothing.
+  const again = await fetch(`${base}/api/decks/${deck.id}/cloze`, { method: "POST" }).then(j);
+  assert.equal(again.updated, 0);
+
+  // A manual cloze survives PATCH and can be cleared with null.
+  const cardId = gen.deck.cards[0].id;
+  const set = await fetch(`${base}/api/cards/${cardId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ cloze: "今日" }),
+  }).then(j);
+  assert.equal(set.cloze, "今日");
+  const cleared = await fetch(`${base}/api/cards/${cardId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ cloze: null }),
+  }).then(j);
+  assert.equal(cleared.cloze, null);
+});
+
 test("stats endpoint reflects review activity", async () => {
   // Earlier tests reviewed at least one card, so today's activity is non-zero.
   const s = await fetch(`${base}/api/stats`).then(j);

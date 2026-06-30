@@ -39,6 +39,8 @@
       const $ = (s) => document.querySelector(s);
       const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
       const fmtTime = (s) => (s == null ? "—" : `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`);
+      const mask = (text, term) => { const i = text.indexOf(term); return i === -1 ? text : text.slice(0, i) + "＿＿＿" + text.slice(i + term.length); };
+      const hl = (text, term) => { const i = text.indexOf(term); return i === -1 ? esc(text) : esc(text.slice(0, i)) + `<mark>${esc(term)}</mark>` + esc(text.slice(i + term.length)); };
       const shareId = location.pathname.split("/").filter(Boolean).pop();
       const player = $("#player");
 
@@ -81,21 +83,25 @@
           const el = document.createElement("div");
           el.className = "scard";
           el.innerHTML = `
-            <div class="front">${esc(c.front)}</div>
+            <div class="front">${c.cloze ? esc(mask(c.front, c.cloze)) : esc(c.front)}</div>
             <div class="meta">
               <span>#${i + 1}</span>
               <span class="timecode">⏱ ${fmtTime(c.start)}–${fmtTime(c.end)}</span>
+              ${c.cloze ? '<span class="deck-chip">fill in the blank</span>' : ""}
             </div>
             <div class="tools">
               ${hasAudio ? '<button class="play ghost">▶ Shadow loop</button>' : ""}
-              <button class="reveal ghost">Show meaning</button>
+              <button class="reveal ghost">${c.cloze ? "Reveal" : "Show meaning"}</button>
             </div>
             <div class="back hidden" style="margin-top:10px;color:var(--accent-2)"></div>`;
           const back = el.querySelector(".back");
           el.querySelector(".reveal").addEventListener("click", (e) => {
-            back.classList.toggle("hidden");
-            back.textContent = c.back || "(no translation provided)";
-            e.target.textContent = back.classList.contains("hidden") ? "Show meaning" : "Hide meaning";
+            const hidden = back.classList.toggle("hidden");
+            let html = "";
+            if (c.cloze) html += `<div style="color:var(--ink)">${hl(c.front, c.cloze)}</div>`;
+            if (c.back) html += `<div style="margin-top:6px">${esc(c.back)}</div>`;
+            back.innerHTML = html || "(no translation provided)";
+            e.target.textContent = hidden ? (c.cloze ? "Reveal" : "Show meaning") : "Hide";
           });
           if (hasAudio) el.querySelector(".play").addEventListener("click", () => playLoop(c.start, c.end));
           list.appendChild(el);

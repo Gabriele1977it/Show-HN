@@ -126,6 +126,9 @@ mark { background: rgba(108, 140, 255, .35); color: var(--ink); border-radius: 3
 .scard .tools { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
 .scard .tools button { padding: 6px 12px; }
 .timecode { font-variant-numeric: tabular-nums; }
+.cloze-chip { background: var(--panel-2); border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; color: var(--accent); }
+.cloze-x { background: transparent; border: none; color: var(--muted); font-size: 14px; padding: 0 0 0 2px; line-height: 1; }
+.cloze-x:hover { color: var(--danger); }
 .due-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent-2); display: inline-block; }
 
 .overlay {
