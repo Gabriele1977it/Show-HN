@@ -2,15 +2,21 @@
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 
+// --- workspace auth ---
+const WS_KEY = "echodeck_ws_key";
+const WS_NAME = "echodeck_ws_name";
+let wsKey = localStorage.getItem(WS_KEY) || "";
+const authHeaders = (extra = {}) => (wsKey ? { Authorization: `Bearer ${wsKey}`, ...extra } : extra);
+
 const api = {
-  async get(url) { return handle(await fetch(url)); },
+  async get(url) { return handle(await fetch(url, { headers: authHeaders() })); },
   async post(url, body) {
-    return handle(await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }));
+    return handle(await fetch(url, { method: "POST", headers: authHeaders({ "Content-Type": "application/json" }), body: JSON.stringify(body) }));
   },
   async patch(url, body) {
-    return handle(await fetch(url, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }));
+    return handle(await fetch(url, { method: "PATCH", headers: authHeaders({ "Content-Type": "application/json" }), body: JSON.stringify(body) }));
   },
-  async del(url) { const r = await fetch(url, { method: "DELETE" }); if (!r.ok) throw new Error("Request failed"); },
+  async del(url) { const r = await fetch(url, { method: "DELETE", headers: authHeaders() }); if (!r.ok) throw new Error("Request failed"); },
 };
 async function handle(r) {
   if (!r.ok) {
@@ -61,7 +67,7 @@ $("#audioFile").addEventListener("change", async (e) => {
   try {
     const fd = new FormData();
     fd.append("audio", file);
-    const r = await fetch("/api/upload", { method: "POST", body: fd });
+    const r = await fetch("/api/upload", { method: "POST", headers: authHeaders(), body: fd });
     if (!r.ok) throw new Error("Upload rejected (audio files only).");
     const { url } = await r.json();
     $("#audioUrl").value = url;
@@ -543,4 +549,54 @@ function flash(btn, text) {
   setTimeout(() => (btn.textContent = old), 1200);
 }
 
-loadDecks();
+// ---- workspace bootstrap & switcher ----
+$("#ws-btn").addEventListener("click", () => $("#ws-panel").classList.toggle("hidden"));
+document.addEventListener("click", (e) => {
+  if (!e.target.closest("#ws-panel") && !e.target.closest("#ws-btn")) $("#ws-panel").classList.add("hidden");
+});
+$("#ws-copy").addEventListener("click", async () => {
+  try { await navigator.clipboard.writeText(wsKey); flash($("#ws-copy"), "Copied ✓"); }
+  catch { $("#ws-key").select(); document.execCommand("copy"); flash($("#ws-copy"), "Copied ✓"); }
+});
+$("#ws-join").addEventListener("click", async () => {
+  const key = $("#ws-join-key").value.trim();
+  if (!key) return;
+  $("#ws-msg").textContent = "";
+  // Validate the key before switching to it.
+  const r = await fetch("/api/workspace", { headers: { Authorization: `Bearer ${key}` } });
+  if (!r.ok) { $("#ws-msg").textContent = "That key isn't valid."; return; }
+  const ws = await r.json();
+  setWorkspace(key, ws.name);
+});
+$("#ws-new").addEventListener("click", async () => {
+  const ws = await (await fetch("/api/workspaces", {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: "New workspace" }),
+  })).json();
+  setWorkspace(ws.key, ws.name);
+});
+
+function setWorkspace(key, name) {
+  wsKey = key;
+  localStorage.setItem(WS_KEY, key);
+  localStorage.setItem(WS_NAME, name || "Workspace");
+  location.reload();
+}
+
+async function ensureWorkspace() {
+  if (!wsKey) {
+    // First visit: spin up a personal workspace automatically.
+    const ws = await (await fetch("/api/workspaces", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: "My workspace" }),
+    })).json();
+    wsKey = ws.key;
+    localStorage.setItem(WS_KEY, ws.key);
+    localStorage.setItem(WS_NAME, ws.name);
+  }
+  $("#ws-name").textContent = localStorage.getItem(WS_NAME) || "Workspace";
+  $("#ws-key").value = wsKey;
+}
+
+(async function start() {
+  await ensureWorkspace();
+  loadDecks();
+})();

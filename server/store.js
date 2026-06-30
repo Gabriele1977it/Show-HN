@@ -1,8 +1,10 @@
 // Tiny persistent store.
 //
-// EchoDeck's data set is small (a creator's decks and cards), so a single
-// JSON document with atomic writes is plenty and keeps the MVP dependency-free.
-// The shape is intentionally flat so it is trivial to inspect or export.
+// EchoDeck's data set is small, so a single JSON document with atomic writes is
+// plenty. Data is multi-tenant: every deck (and every review event) belongs to
+// a workspace, and all read/write paths are scoped by the caller's workspace id
+// so teams never see each other's decks. Public share links are the one
+// deliberate exception — they resolve globally by an unguessable share id.
 
 import { readFileSync, writeFileSync, renameSync, existsSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
@@ -11,7 +13,7 @@ import { freshSrs, review, isDue } from "./srs.js";
 import { computeStats } from "./stats.js";
 import { suggestCloze } from "./cloze.js";
 
-const EMPTY = { decks: {}, cards: {}, reviewLog: [] };
+const EMPTY = { workspaces: {}, decks: {}, cards: {}, reviewLog: [] };
 
 // Cap the review log so the JSON document stays small. The stats dashboard only
 // looks back a couple of weeks, so older raw events can be dropped safely.
@@ -28,12 +30,50 @@ export function createStore(filePath) {
     renameSync(tmp, filePath); // atomic on the same filesystem
   }
 
+  // Ownership guards: return the entity only when it belongs to `ws`.
+  const deckOwned = (id, ws) => {
+    const d = state.decks[id];
+    return d && d.workspaceId === ws ? d : null;
+  };
+  const cardOwned = (id, ws) => {
+    const c = state.cards[id];
+    if (!c) return null;
+    const d = state.decks[c.deckId];
+    return d && d.workspaceId === ws ? c : null;
+  };
+  const decksOf = (ws) => Object.values(state.decks).filter((d) => d.workspaceId === ws);
+
   const api = {
+    // --- workspaces ----------------------------------------------------
+    createWorkspace({ name } = {}) {
+      const id = nanoid(10);
+      const ws = { id, name: name?.trim() || "My workspace", key: nanoid(24), createdAt: Date.now() };
+      state.workspaces[id] = ws;
+      persist();
+      return ws;
+    },
+
+    getWorkspaceByKey(key) {
+      if (!key) return null;
+      return Object.values(state.workspaces).find((w) => w.key === key) ?? null;
+    },
+
+    // Public-safe workspace info (no key).
+    getWorkspace(id) {
+      const w = state.workspaces[id];
+      return w ? { id: w.id, name: w.name, createdAt: w.createdAt } : null;
+    },
+
+    listWorkspaceIds() {
+      return Object.keys(state.workspaces);
+    },
+
     // --- decks ---------------------------------------------------------
-    createDeck({ title, language, audioUrl }) {
+    createDeck(ws, { title, language, audioUrl }) {
       const id = nanoid(10);
       const deck = {
         id,
+        workspaceId: ws,
         title: title?.trim() || "Untitled deck",
         language: language?.trim() || "",
         audioUrl: audioUrl || null,
@@ -46,8 +86,8 @@ export function createStore(filePath) {
       return deck;
     },
 
-    listDecks() {
-      return Object.values(state.decks)
+    listDecks(ws) {
+      return decksOf(ws)
         .map((d) => ({
           ...d,
           cardCount: d.cardOrder.length,
@@ -56,29 +96,23 @@ export function createStore(filePath) {
         .sort((a, b) => b.createdAt - a.createdAt);
     },
 
-    getDeck(id) {
-      const deck = state.decks[id];
+    getDeck(id, ws) {
+      const deck = deckOwned(id, ws);
       if (!deck) return null;
       const cards = deck.cardOrder.map((cid) => state.cards[cid]).filter(Boolean);
       return { ...deck, cards };
     },
 
     // Cross-deck review alert: what's due now and when the next card comes up.
-    // This is the surface a creator (or a mobile push) checks each day.
-    dueSummary(now = Date.now()) {
-      const decks = Object.values(state.decks).map((d) => {
+    dueSummary(ws, now = Date.now()) {
+      const decks = decksOf(ws).map((d) => {
         const cards = d.cardOrder.map((cid) => state.cards[cid]).filter(Boolean);
         const dueCount = cards.filter((c) => isDue(c.srs, now)).length;
         const nextDue = cards.length ? Math.min(...cards.map((c) => c.srs.due)) : null;
         return { id: d.id, title: d.title, language: d.language, cardCount: cards.length, dueCount, nextDue };
       });
-      const decksDue = decks
-        .filter((d) => d.dueCount > 0)
-        .sort((a, b) => b.dueCount - a.dueCount);
-      const upcoming = decks
-        .map((d) => d.nextDue)
-        .filter((t) => t != null && t > now)
-        .sort((a, b) => a - b);
+      const decksDue = decks.filter((d) => d.dueCount > 0).sort((a, b) => b.dueCount - a.dueCount);
+      const upcoming = decks.map((d) => d.nextDue).filter((t) => t != null && t > now).sort((a, b) => a - b);
       return {
         totalDue: decksDue.reduce((sum, d) => sum + d.dueCount, 0),
         deckCount: decks.length,
@@ -88,8 +122,8 @@ export function createStore(filePath) {
       };
     },
 
-    deleteDeck(id) {
-      const deck = state.decks[id];
+    deleteDeck(id, ws) {
+      const deck = deckOwned(id, ws);
       if (!deck) return false;
       for (const cid of deck.cardOrder) delete state.cards[cid];
       delete state.decks[id];
@@ -98,9 +132,9 @@ export function createStore(filePath) {
     },
 
     // --- cards ---------------------------------------------------------
-    addCards(deckId, segments) {
-      const deck = state.decks[deckId];
-      if (!deck) return [];
+    addCards(deckId, segments, ws) {
+      const deck = deckOwned(deckId, ws);
+      if (!deck) return null;
       const now = Date.now();
       const created = [];
       for (const seg of segments) {
@@ -125,12 +159,8 @@ export function createStore(filePath) {
       return created;
     },
 
-    getCard(id) {
-      return state.cards[id] ?? null;
-    },
-
-    updateCard(id, patch) {
-      const card = state.cards[id];
+    updateCard(id, patch, ws) {
+      const card = cardOwned(id, ws);
       if (!card) return null;
       for (const key of ["front", "back", "notes"]) {
         if (key in patch) card[key] = patch[key];
@@ -144,8 +174,8 @@ export function createStore(filePath) {
       return card;
     },
 
-    deleteCard(id) {
-      const card = state.cards[id];
+    deleteCard(id, ws) {
+      const card = cardOwned(id, ws);
       if (!card) return false;
       const deck = state.decks[card.deckId];
       if (deck) deck.cardOrder = deck.cardOrder.filter((cid) => cid !== id);
@@ -154,22 +184,19 @@ export function createStore(filePath) {
       return true;
     },
 
-    reviewCard(id, grade, now = Date.now()) {
-      const card = state.cards[id];
+    reviewCard(id, grade, ws, now = Date.now()) {
+      const card = cardOwned(id, ws);
       if (!card) return null;
       card.srs = review(card.srs, grade, now);
-      // Record the event for the stats dashboard (graded value is normalised).
-      state.reviewLog.push({ cardId: id, deckId: card.deckId, grade: card.srs.lastGrade, at: now });
-      if (state.reviewLog.length > MAX_LOG) {
-        state.reviewLog = state.reviewLog.slice(-MAX_LOG);
-      }
+      state.reviewLog.push({ workspaceId: ws, cardId: id, deckId: card.deckId, grade: card.srs.lastGrade, at: now });
+      if (state.reviewLog.length > MAX_LOG) state.reviewLog = state.reviewLog.slice(-MAX_LOG);
       persist();
       return card;
     },
 
-    dueCards(deckId, now = Date.now()) {
-      const deck = state.decks[deckId];
-      if (!deck) return [];
+    dueCards(deckId, ws, now = Date.now()) {
+      const deck = deckOwned(deckId, ws);
+      if (!deck) return null;
       return deck.cardOrder
         .map((cid) => state.cards[cid])
         .filter((c) => c && isDue(c.srs, now))
@@ -177,9 +204,8 @@ export function createStore(filePath) {
     },
 
     // Auto-assign a cloze term to every card that doesn't have one yet.
-    // `overwrite` regenerates terms for all cards. Returns the updated count.
-    generateClozeForDeck(deckId, { overwrite = false } = {}) {
-      const deck = state.decks[deckId];
+    generateClozeForDeck(deckId, ws, { overwrite = false } = {}) {
+      const deck = deckOwned(deckId, ws);
       if (!deck) return null;
       let updated = 0;
       for (const cid of deck.cardOrder) {
@@ -197,10 +223,8 @@ export function createStore(filePath) {
     },
 
     // --- sharing -------------------------------------------------------
-    // Publishing assigns an unguessable share id; the deck stays unlisted but
-    // anyone with the link can view and export it.
-    publishDeck(id) {
-      const deck = state.decks[id];
+    publishDeck(id, ws) {
+      const deck = deckOwned(id, ws);
       if (!deck) return null;
       if (!deck.shareId) {
         deck.shareId = nanoid(16);
@@ -209,8 +233,8 @@ export function createStore(filePath) {
       return deck;
     },
 
-    unpublishDeck(id) {
-      const deck = state.decks[id];
+    unpublishDeck(id, ws) {
+      const deck = deckOwned(id, ws);
       if (!deck) return null;
       if (deck.shareId) {
         deck.shareId = null;
@@ -219,8 +243,7 @@ export function createStore(filePath) {
       return deck;
     },
 
-    // Public, read-only view of a shared deck: card content only, no private
-    // scheduling state.
+    // Public, read-only view of a shared deck (resolves globally by share id).
     getSharedDeck(shareId) {
       const deck = Object.values(state.decks).find((d) => d.shareId === shareId);
       if (!deck) return null;
@@ -231,18 +254,19 @@ export function createStore(filePath) {
       return { shareId, title: deck.title, language: deck.language, audioUrl: deck.audioUrl, cards };
     },
 
-    // Aggregated study statistics for the dashboard.
-    stats(now = Date.now()) {
-      return computeStats(state.reviewLog, Object.values(state.cards), now);
+    // Aggregated study statistics for the dashboard (workspace-scoped).
+    stats(ws, now = Date.now()) {
+      const cards = decksOf(ws).flatMap((d) => d.cardOrder.map((cid) => state.cards[cid]).filter(Boolean));
+      const log = state.reviewLog.filter((e) => e.workspaceId === ws);
+      return computeStats(log, cards, now);
     },
 
-    // Case-insensitive substring search across every card's front/back/notes,
-    // returning matches with their deck context. Preserves deck/card order.
-    searchCards(query, limit = 50) {
+    // Case-insensitive substring search across the workspace's cards.
+    searchCards(ws, query, limit = 50) {
       const q = (query ?? "").trim().toLowerCase();
       if (!q) return [];
       const out = [];
-      for (const deck of Object.values(state.decks)) {
+      for (const deck of decksOf(ws)) {
         for (const cid of deck.cardOrder) {
           const c = state.cards[cid];
           if (!c) continue;
@@ -276,7 +300,12 @@ function load(filePath) {
   try {
     if (existsSync(filePath)) {
       const parsed = JSON.parse(readFileSync(filePath, "utf8"));
-      return { decks: parsed.decks ?? {}, cards: parsed.cards ?? {}, reviewLog: parsed.reviewLog ?? [] };
+      return {
+        workspaces: parsed.workspaces ?? {},
+        decks: parsed.decks ?? {},
+        cards: parsed.cards ?? {},
+        reviewLog: parsed.reviewLog ?? [],
+      };
     }
   } catch {
     // Corrupt or unreadable file: start clean rather than crash.

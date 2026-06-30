@@ -43,6 +43,32 @@ export function createApp({ store, uploadsDir, reminders }) {
     fileFilter: (_req, file, cb) => cb(null, /^audio\//.test(file.mimetype)),
   });
 
+  // --- auth ------------------------------------------------------------
+  // Every /api route is workspace-scoped, except creating a workspace and the
+  // public shared-deck endpoints. The caller proves membership with the
+  // workspace key (Authorization: Bearer <key>).
+  app.use("/api", (req, res, next) => {
+    if (req.method === "POST" && req.path === "/workspaces") return next();
+    if (req.path.startsWith("/shared/")) return next();
+    const key = (req.get("authorization") || "").replace(/^Bearer\s+/i, "").trim();
+    const ws = store.getWorkspaceByKey(key);
+    if (!ws) return res.status(401).json({ error: "Missing or invalid workspace key." });
+    req.ws = ws.id;
+    next();
+  });
+
+  // --- workspaces ------------------------------------------------------
+  // Create a workspace and receive its access key (show once, store client-side).
+  app.post("/api/workspaces", (req, res) => {
+    const ws = store.createWorkspace({ name: req.body?.name });
+    res.status(201).json({ id: ws.id, name: ws.name, key: ws.key });
+  });
+
+  // Identify the current workspace (validates the key).
+  app.get("/api/workspace", (req, res) => {
+    res.json(store.getWorkspace(req.ws));
+  });
+
   // --- audio upload ----------------------------------------------------
   app.post("/api/upload", upload.single("audio"), (req, res) => {
     if (!req.file) return res.status(400).json({ error: "No audio file (field 'audio') accepted." });
@@ -52,45 +78,45 @@ export function createApp({ store, uploadsDir, reminders }) {
   // --- decks -----------------------------------------------------------
   app.post("/api/decks", (req, res) => {
     const { title, language, audioUrl, transcript, maxChars } = req.body ?? {};
-    const deck = store.createDeck({ title, language, audioUrl });
+    const deck = store.createDeck(req.ws, { title, language, audioUrl });
     const segments = segmentTranscript(transcript ?? "", { maxChars: Number(maxChars) || undefined });
-    const cards = store.addCards(deck.id, segments);
-    res.status(201).json({ ...store.getDeck(deck.id), cards });
+    const cards = store.addCards(deck.id, segments, req.ws);
+    res.status(201).json({ ...store.getDeck(deck.id, req.ws), cards });
   });
 
-  app.get("/api/decks", (_req, res) => {
-    res.json(store.listDecks());
+  app.get("/api/decks", (req, res) => {
+    res.json(store.listDecks(req.ws));
   });
 
   // Cross-deck review alert (drives the Alerts tab and any future push/email).
-  app.get("/api/alerts", (_req, res) => {
-    res.json(store.dueSummary());
+  app.get("/api/alerts", (req, res) => {
+    res.json(store.dueSummary(req.ws));
   });
 
   // Study statistics for the dashboard.
-  app.get("/api/stats", (_req, res) => {
-    res.json(store.stats());
+  app.get("/api/stats", (req, res) => {
+    res.json(store.stats(req.ws));
   });
 
   // Cross-deck card search.
   app.get("/api/search", (req, res) => {
     const limit = Math.min(Number(req.query.limit) || 50, 200);
-    res.json(store.searchCards(req.query.q ?? "", limit));
+    res.json(store.searchCards(req.ws, req.query.q ?? "", limit));
   });
 
   // --- reminders -------------------------------------------------------
   // Preview what a reminder would say and whether one would fire right now.
-  app.get("/api/reminders/preview", (_req, res) => {
+  app.get("/api/reminders/preview", (req, res) => {
     if (!reminders) return res.json({ enabled: false });
-    res.json({ enabled: true, ...reminders.preview() });
+    res.json({ enabled: true, ...reminders.preview(req.ws) });
   });
 
   // Force-send a reminder now (ignores the de-dupe gate). Used by the UI's
   // "Send test reminder" button and for ops verification.
-  app.post("/api/reminders/test", async (_req, res) => {
+  app.post("/api/reminders/test", async (req, res) => {
     if (!reminders) return res.status(400).json({ error: "Reminders are not configured." });
     try {
-      const result = await reminders.run({ force: true });
+      const result = await reminders.run({ workspaceId: req.ws, force: true });
       res.json(result);
     } catch (err) {
       res.status(502).json({ error: `Reminder delivery failed: ${err.message}` });
@@ -98,42 +124,41 @@ export function createApp({ store, uploadsDir, reminders }) {
   });
 
   app.get("/api/decks/:id", (req, res) => {
-    const deck = store.getDeck(req.params.id);
+    const deck = store.getDeck(req.params.id, req.ws);
     if (!deck) return res.status(404).json({ error: "Deck not found" });
     res.json(deck);
   });
 
   app.delete("/api/decks/:id", (req, res) => {
-    if (!store.deleteDeck(req.params.id)) return res.status(404).json({ error: "Deck not found" });
+    if (!store.deleteDeck(req.params.id, req.ws)) return res.status(404).json({ error: "Deck not found" });
     res.status(204).end();
   });
 
   // Append more cards from additional transcript text.
   app.post("/api/decks/:id/cards", (req, res) => {
-    const deck = store.getDeck(req.params.id);
-    if (!deck) return res.status(404).json({ error: "Deck not found" });
     const { transcript, maxChars } = req.body ?? {};
     const segments = segmentTranscript(transcript ?? "", { maxChars: Number(maxChars) || undefined });
-    const cards = store.addCards(deck.id, segments);
+    const cards = store.addCards(req.params.id, segments, req.ws);
+    if (cards === null) return res.status(404).json({ error: "Deck not found" });
     res.status(201).json(cards);
   });
 
   // Auto-generate fill-in-the-blank (cloze) terms for the deck's cards.
   app.post("/api/decks/:id/cloze", (req, res) => {
     const overwrite = req.body?.overwrite === true;
-    const result = store.generateClozeForDeck(req.params.id, { overwrite });
+    const result = store.generateClozeForDeck(req.params.id, req.ws, { overwrite });
     if (!result) return res.status(404).json({ error: "Deck not found" });
-    res.json({ ...result, deck: store.getDeck(req.params.id) });
+    res.json({ ...result, deck: store.getDeck(req.params.id, req.ws) });
   });
 
   app.get("/api/decks/:id/due", (req, res) => {
-    const deck = store.getDeck(req.params.id);
-    if (!deck) return res.status(404).json({ error: "Deck not found" });
-    res.json(store.dueCards(req.params.id));
+    const due = store.dueCards(req.params.id, req.ws);
+    if (due === null) return res.status(404).json({ error: "Deck not found" });
+    res.json(due);
   });
 
   app.get("/api/decks/:id/export", (req, res) => {
-    const deck = store.getDeck(req.params.id);
+    const deck = store.getDeck(req.params.id, req.ws);
     if (!deck) return res.status(404).json({ error: "Deck not found" });
     sendExport(res, deck, deck.cards, req.query.format);
   });
@@ -141,13 +166,13 @@ export function createApp({ store, uploadsDir, reminders }) {
   // --- sharing ---------------------------------------------------------
   // Publish a deck to an unguessable public link (or return the existing one).
   app.post("/api/decks/:id/share", (req, res) => {
-    const deck = store.publishDeck(req.params.id);
+    const deck = store.publishDeck(req.params.id, req.ws);
     if (!deck) return res.status(404).json({ error: "Deck not found" });
     res.json({ shareId: deck.shareId, shareUrl: `${req.protocol}://${req.get("host")}/s/${deck.shareId}` });
   });
 
   app.delete("/api/decks/:id/share", (req, res) => {
-    const deck = store.unpublishDeck(req.params.id);
+    const deck = store.unpublishDeck(req.params.id, req.ws);
     if (!deck) return res.status(404).json({ error: "Deck not found" });
     res.status(204).end();
   });
@@ -170,13 +195,13 @@ export function createApp({ store, uploadsDir, reminders }) {
 
   // --- cards -----------------------------------------------------------
   app.patch("/api/cards/:id", (req, res) => {
-    const card = store.updateCard(req.params.id, req.body ?? {});
+    const card = store.updateCard(req.params.id, req.body ?? {}, req.ws);
     if (!card) return res.status(404).json({ error: "Card not found" });
     res.json(card);
   });
 
   app.delete("/api/cards/:id", (req, res) => {
-    if (!store.deleteCard(req.params.id)) return res.status(404).json({ error: "Card not found" });
+    if (!store.deleteCard(req.params.id, req.ws)) return res.status(404).json({ error: "Card not found" });
     res.status(204).end();
   });
 
@@ -186,7 +211,7 @@ export function createApp({ store, uploadsDir, reminders }) {
     if (typeof grade !== "number" || Number.isNaN(grade)) {
       return res.status(400).json({ error: "grade must be 0-5 or one of again/hard/good/easy" });
     }
-    const card = store.reviewCard(req.params.id, grade);
+    const card = store.reviewCard(req.params.id, grade, req.ws);
     if (!card) return res.status(404).json({ error: "Card not found" });
     res.json(card);
   });

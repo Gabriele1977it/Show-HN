@@ -45,17 +45,27 @@ test("service.run sends once then throttles until the interval elapses", async (
     config: { minDue: 1, minIntervalMs: 1000 },
   });
 
-  const first = await svc.run({ now: 0 });
+  const first = await svc.run({ workspaceId: "w1", now: 0 });
   assert.equal(first.sent, true);
   assert.equal(sent.length, 1);
 
-  const second = await svc.run({ now: 500 }); // within interval
+  const second = await svc.run({ workspaceId: "w1", now: 500 }); // within interval
   assert.equal(second.sent, false);
   assert.equal(second.reason, "throttled");
   assert.equal(sent.length, 1);
 
-  const third = await svc.run({ now: 1500 }); // interval elapsed
+  const third = await svc.run({ workspaceId: "w1", now: 1500 }); // interval elapsed
   assert.equal(third.sent, true);
+  assert.equal(sent.length, 2);
+});
+
+test("throttle state is independent per workspace", async () => {
+  const sent = [];
+  const store = { dueSummary: () => summary(2, [{ title: "JP", dueCount: 2 }]) };
+  const svc = createReminderService({ store, notify: async (m) => sent.push(m), config: { minIntervalMs: 1e9 } });
+  assert.equal((await svc.run({ workspaceId: "a", now: 0 })).sent, true);
+  assert.equal((await svc.run({ workspaceId: "a", now: 1 })).sent, false, "same ws throttled");
+  assert.equal((await svc.run({ workspaceId: "b", now: 1 })).sent, true, "other ws unaffected");
   assert.equal(sent.length, 2);
 });
 
@@ -65,10 +75,10 @@ test("service.run force-sends regardless of throttle, but never when nothing is 
   const store = { dueSummary: () => summary(due, due ? [{ title: "JP", dueCount: due }] : []) };
   const svc = createReminderService({ store, notify: async (m) => sent.push(m), config: { minIntervalMs: 1e9 } });
 
-  assert.equal((await svc.run({ force: true })).sent, false, "nothing due -> no send even when forced");
+  assert.equal((await svc.run({ workspaceId: "w1", force: true })).sent, false, "nothing due -> no send even when forced");
   due = 1;
-  assert.equal((await svc.run({ now: 0 })).sent, true);
-  const forced = await svc.run({ now: 1, force: true }); // would be throttled without force
+  assert.equal((await svc.run({ workspaceId: "w1", now: 0 })).sent, true);
+  const forced = await svc.run({ workspaceId: "w1", now: 1, force: true }); // would be throttled without force
   assert.equal(forced.sent, true);
   assert.equal(sent.length, 2);
 });
@@ -76,7 +86,7 @@ test("service.run force-sends regardless of throttle, but never when nothing is 
 test("preview reports the pending message without sending", () => {
   const store = { dueSummary: () => summary(2, [{ title: "JP", dueCount: 2 }]) };
   const svc = createReminderService({ store, notify: async () => { throw new Error("should not send"); } });
-  const p = svc.preview(0);
+  const p = svc.preview("w1", 0);
   assert.equal(p.wouldSend, true);
   assert.match(p.message.title, /2 cards/);
   assert.equal(p.lastSentAt, null);

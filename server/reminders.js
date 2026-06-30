@@ -59,8 +59,10 @@ export function webhookNotifier(url, fetchImpl = fetch) {
 
 /**
  * Build the reminder service.
+ * Reminders are workspace-scoped: the due summary, throttle state, and polling
+ * are all keyed by workspace id.
  * @param {object} opts
- * @param {{dueSummary: (now?:number)=>object}} opts.store
+ * @param {{dueSummary:(ws:string,now?:number)=>object, listWorkspaceIds:()=>string[]}} opts.store
  * @param {(msg:object)=>Promise<any>} opts.notify
  * @param {{minDue?:number, minIntervalMs?:number, pollMs?:number}} [opts.config]
  */
@@ -68,41 +70,45 @@ export function createReminderService({ store, notify, config = {} }) {
   const minDue = config.minDue ?? 1;
   const minIntervalMs = config.minIntervalMs ?? 12 * 60 * 60 * 1000; // twice a day max
   const pollMs = config.pollMs ?? 30 * 60 * 1000; // check every 30 min
-  let lastSentAt = null;
+  const lastSentAt = new Map(); // workspaceId -> epoch ms of last send
   let timer = null;
 
-  /** What a reminder would look like right now (no send). */
-  function preview(now = Date.now()) {
-    const summary = store.dueSummary(now);
+  /** What a reminder would look like right now for a workspace (no send). */
+  function preview(ws, now = Date.now()) {
+    const summary = store.dueSummary(ws, now);
     const message = formatReminder(summary);
+    const last = lastSentAt.get(ws) ?? null;
     return {
       message,
-      wouldSend: message != null && shouldSend(summary, lastSentAt, now, { minDue, minIntervalMs }),
-      lastSentAt,
+      wouldSend: message != null && shouldSend(summary, last, now, { minDue, minIntervalMs }),
+      lastSentAt: last,
       config: { minDue, minIntervalMs, pollMs },
     };
   }
 
   /**
-   * Evaluate the summary and send if warranted.
-   * @param {{now?:number, force?:boolean}} [o] `force` ignores the de-dupe gate.
+   * Evaluate a workspace's summary and send if warranted.
+   * @param {{workspaceId:string, now?:number, force?:boolean}} o `force` ignores the de-dupe gate.
    */
-  async function run({ now = Date.now(), force = false } = {}) {
-    const summary = store.dueSummary(now);
+  async function run({ workspaceId, now = Date.now(), force = false }) {
+    const summary = store.dueSummary(workspaceId, now);
     const message = formatReminder(summary);
     if (!message) return { sent: false, reason: "nothing-due" };
-    if (!force && !shouldSend(summary, lastSentAt, now, { minDue, minIntervalMs })) {
-      return { sent: false, reason: lastSentAt == null ? "below-min-due" : "throttled", message };
+    const last = lastSentAt.get(workspaceId) ?? null;
+    if (!force && !shouldSend(summary, last, now, { minDue, minIntervalMs })) {
+      return { sent: false, reason: last == null ? "below-min-due" : "throttled", message };
     }
     const result = await notify(message);
-    lastSentAt = now;
+    lastSentAt.set(workspaceId, now);
     return { sent: true, message, result };
   }
 
   function start() {
     if (timer) return;
     timer = setInterval(() => {
-      run().catch((err) => console.error("[reminder] run failed:", err.message));
+      for (const ws of store.listWorkspaceIds()) {
+        run({ workspaceId: ws }).catch((err) => console.error("[reminder] run failed:", err.message));
+      }
     }, pollMs);
     if (timer.unref) timer.unref(); // don't keep the process alive on its own
   }

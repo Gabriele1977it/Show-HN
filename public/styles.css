@@ -36,6 +36,11 @@ body {
   padding: 7px 14px; border-radius: 999px; cursor: pointer; font-size: 14px;
 }
 .tab.is-active { color: var(--ink); background: var(--panel-2); border-color: var(--line); }
+#ws-btn { color: var(--accent); }
+.ws-panel { position: absolute; top: 58px; right: 14px; width: 320px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px; box-shadow: 0 14px 40px rgba(0,0,0,.4); z-index: 30; }
+.ws-panel h3 { margin: 0 0 10px; font-size: 15px; }
+.ws-panel hr { border: none; border-top: 1px solid var(--line); margin: 14px 0; }
+.ws-panel input { font-size: 12.5px; }
 
 main { max-width: 1080px; margin: 0 auto; padding: 22px; }
 .view { display: none; }

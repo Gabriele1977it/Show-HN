@@ -7,7 +7,7 @@ import { createStore } from "../server/store.js";
 import { createApp } from "../server/app.js";
 import { createReminderService } from "../server/reminders.js";
 
-let server, base, tmp, sentReminders;
+let server, base, tmp, sentReminders, realFetch, wsKey;
 
 before(async () => {
   tmp = mkdtempSync(join(tmpdir(), "echodeck-"));
@@ -21,14 +21,60 @@ before(async () => {
   const app = createApp({ store, uploadsDir: join(tmp, "uploads"), reminders });
   await new Promise((res) => { server = app.listen(0, res); });
   base = `http://127.0.0.1:${server.address().port}`;
+
+  // Default workspace for the suite; auto-inject its key on scoped /api calls so
+  // existing test bodies don't have to thread auth headers everywhere.
+  wsKey = store.createWorkspace({ name: "Test WS" }).key;
+  realFetch = globalThis.fetch;
+  globalThis.fetch = (url, opts = {}) => {
+    const scoped = typeof url === "string" && url.startsWith(base) &&
+      url.includes("/api/") && !url.includes("/api/shared") && !url.includes("/api/workspaces");
+    if (scoped) opts = { ...opts, headers: { ...(opts.headers || {}), Authorization: `Bearer ${wsKey}` } };
+    return realFetch(url, opts);
+  };
 });
 
 after(() => {
+  if (realFetch) globalThis.fetch = realFetch;
   server?.close();
   rmSync(tmp, { recursive: true, force: true });
 });
 
 const j = (r) => r.json();
+
+test("API requires a valid workspace key", async () => {
+  // realFetch bypasses the auto-auth wrapper, so no Authorization header.
+  const noKey = await realFetch(`${base}/api/decks`);
+  assert.equal(noKey.status, 401);
+  const badKey = await realFetch(`${base}/api/decks`, { headers: { Authorization: "Bearer nope" } });
+  assert.equal(badKey.status, 401);
+});
+
+test("workspaces are isolated: one cannot see or touch another's decks", async () => {
+  // Create a deck in the suite's default workspace.
+  const mine = await fetch(`${base}/api/decks`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title: "Mine", transcript: "[00:00] secret" }),
+  }).then(j);
+
+  // A second workspace with its own key.
+  const other = await realFetch(`${base}/api/workspaces`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name: "Other" }),
+  }).then(j);
+  const auth = { Authorization: `Bearer ${other.key}` };
+
+  // Other workspace sees an empty deck list and 404s on my deck.
+  const otherDecks = await realFetch(`${base}/api/decks`, { headers: auth }).then(j);
+  assert.ok(!otherDecks.find((d) => d.id === mine.id), "other workspace cannot list my deck");
+  assert.equal((await realFetch(`${base}/api/decks/${mine.id}`, { headers: auth })).status, 404);
+  assert.equal((await realFetch(`${base}/api/decks/${mine.id}`, { method: "DELETE", headers: auth })).status, 404);
+
+  // My deck is still intact from my workspace.
+  assert.equal((await fetch(`${base}/api/decks/${mine.id}`)).status, 200);
+});
 
 test("build a deck from a timestamped transcript", async () => {
   const r = await fetch(`${base}/api/decks`, {

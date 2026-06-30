@@ -18,7 +18,22 @@
         <button class="tab" data-view="study">Study</button>
         <button class="tab" data-view="alerts">Alerts <span id="alert-badge" class="badge hidden">0</span></button>
         <button class="tab" data-view="stats">Stats</button>
+        <button id="ws-btn" class="tab" title="Workspace">⌂ <span id="ws-name">Workspace</span></button>
       </nav>
+
+      <div id="ws-panel" class="ws-panel hidden">
+        <h3>Workspace</h3>
+        <label>Invite teammates with this key
+          <div class="row"><input id="ws-key" readonly /><button id="ws-copy" class="ghost small">Copy</button></div>
+        </label>
+        <p class="muted small">Anyone with this key can read and edit this workspace's decks.</p>
+        <hr />
+        <label>Join another workspace
+          <div class="row"><input id="ws-join-key" placeholder="paste a key…" /><button id="ws-join" class="ghost small">Join</button></div>
+        </label>
+        <button id="ws-new" class="ghost small" style="margin-top:10px">Create a new empty workspace</button>
+        <p id="ws-msg" class="error"></p>
+      </div>
     </header>
 
     <main>

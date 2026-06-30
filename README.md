@@ -43,8 +43,12 @@ already uses (Anki, spreadsheets, JSON).
   reveal-meaning, export) with no access to your private review schedule; one
   click to unshare revokes it.
 - **Export** to Anki (`.tsv`), CSV, or full-fidelity JSON.
+- **Team workspaces** — every deck lives in a workspace, isolated from others.
+  A workspace is identified by an access key; share the key to let teammates
+  read and edit the same decks, or keep one to yourself. The web client creates
+  a personal workspace automatically on first visit.
 - **Zero external services** — runs locally with a single JSON data file; no
-  API keys, no database server.
+  database server, no third-party auth.
 
 ## Quick start
 
@@ -77,10 +81,15 @@ straight into the transcript box.
 
 ## API
 
-The web UI is a thin client over a small REST API:
+The web UI is a thin client over a small REST API. **Every `/api` route is
+workspace-scoped** and requires an `Authorization: Bearer <workspace-key>`
+header — the only exceptions are `POST /api/workspaces` (bootstrap) and the
+public `/api/shared/...` endpoints.
 
 | Method | Path | Purpose |
 |--------|------|---------|
+| `POST` | `/api/workspaces` | Create a workspace; returns its `id`, `name`, and `key`. No auth. |
+| `GET` | `/api/workspace` | Identify the current workspace (validates the key). |
 | `POST` | `/api/decks` | Create a deck from `{ title, language, audioUrl, transcript, maxChars }`. |
 | `GET` | `/api/decks` | List decks with card and due counts. |
 | `GET` | `/api/alerts` | Cross-deck review summary: `totalDue`, per-deck due counts, and the next due time. |
@@ -115,10 +124,11 @@ credentials:
 - **Email** — a relay such as Zapier / Make / Mailgun that turns the POST into an email.
 
 When no webhook is set, reminders are logged to the console so the surface is
-always inspectable. Sends are throttled (at most once per `REMINDER_MIN_INTERVAL_MS`,
-default 12h) and only fire when at least `REMINDER_MIN_DUE` cards are due. Set
-`REMINDER_ENABLED=1` to turn on background polling; the **Alerts** tab can also
-preview and force-send a test at any time.
+always inspectable. Sends are throttled **per workspace** (at most once per
+`REMINDER_MIN_INTERVAL_MS`, default 12h) and only fire when at least
+`REMINDER_MIN_DUE` cards are due. Set `REMINDER_ENABLED=1` to turn on background
+polling (which checks every workspace); the **Alerts** tab can also preview and
+force-send a test at any time.
 
 ## Configuration
 
@@ -154,7 +164,7 @@ test/            node:test suites
 
 - Auto-transcription of uploaded audio (Whisper-class model) so creators can
   skip the manual transcript step.
-- Team workspaces and accounts (sharing today is per-deck, unlisted links).
+- User accounts / SSO on top of workspace keys, and per-member roles.
 - Per-user / per-deck reminder schedules and quiet hours (current reminders are
   a single global webhook).
 
