@@ -43,25 +43,68 @@ export function createStore(filePath) {
   };
   const decksOf = (ws) => Object.values(state.decks).filter((d) => d.workspaceId === ws);
 
+  const ROLES = new Set(["admin", "editor", "viewer"]);
+  const newMember = (name, role) => ({ id: nanoid(8), name: name?.trim() || "Member", role, key: nanoid(24), createdAt: Date.now() });
+
   const api = {
-    // --- workspaces ----------------------------------------------------
+    ROLES,
+
+    // --- workspaces & members ------------------------------------------
+    // A workspace owns a list of members; each member has a role and an access
+    // key. The creator is the first admin.
     createWorkspace({ name } = {}) {
       const id = nanoid(10);
-      const ws = { id, name: name?.trim() || "My workspace", key: nanoid(24), createdAt: Date.now() };
-      state.workspaces[id] = ws;
+      const owner = newMember("Owner", "admin");
+      state.workspaces[id] = { id, name: name?.trim() || "My workspace", createdAt: Date.now(), members: [owner] };
       persist();
-      return ws;
+      return { id, name: state.workspaces[id].name, key: owner.key, role: "admin", memberId: owner.id };
     },
 
-    getWorkspaceByKey(key) {
+    // Resolve a key to its member + workspace, or null.
+    getMemberByKey(key) {
       if (!key) return null;
-      return Object.values(state.workspaces).find((w) => w.key === key) ?? null;
+      for (const ws of Object.values(state.workspaces)) {
+        const m = (ws.members ?? []).find((x) => x.key === key);
+        if (m) return { workspaceId: ws.id, memberId: m.id, role: m.role, name: m.name };
+      }
+      return null;
     },
 
-    // Public-safe workspace info (no key).
+    // Public-safe workspace info (no keys).
     getWorkspace(id) {
       const w = state.workspaces[id];
-      return w ? { id: w.id, name: w.name, createdAt: w.createdAt } : null;
+      return w ? { id: w.id, name: w.name, createdAt: w.createdAt, memberCount: (w.members ?? []).length } : null;
+    },
+
+    // Member list without keys (safe to show in the UI).
+    listMembers(ws) {
+      const w = state.workspaces[ws];
+      if (!w) return [];
+      return (w.members ?? []).map((m) => ({ id: m.id, name: m.name, role: m.role, createdAt: m.createdAt }));
+    },
+
+    // Mint a new member key with a role. Returns the member incl. its key (once).
+    addMember(ws, { name, role }) {
+      const w = state.workspaces[ws];
+      if (!w) return null;
+      if (!ROLES.has(role)) return { error: "invalid-role" };
+      const m = newMember(name, role);
+      w.members.push(m);
+      persist();
+      return { id: m.id, name: m.name, role: m.role, key: m.key, createdAt: m.createdAt };
+    },
+
+    // Remove a member. Refuses to remove the workspace's last admin.
+    removeMember(ws, memberId) {
+      const w = state.workspaces[ws];
+      if (!w) return { error: "not-found" };
+      const member = w.members.find((m) => m.id === memberId);
+      if (!member) return { error: "not-found" };
+      const admins = w.members.filter((m) => m.role === "admin");
+      if (member.role === "admin" && admins.length === 1) return { error: "last-admin" };
+      w.members = w.members.filter((m) => m.id !== memberId);
+      persist();
+      return { ok: true };
     },
 
     listWorkspaceIds() {

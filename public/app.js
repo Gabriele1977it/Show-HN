@@ -582,6 +582,67 @@ function setWorkspace(key, name) {
   location.reload();
 }
 
+let wsRole = "admin";
+let wsMemberId = null;
+
+$("#ws-madd").addEventListener("click", async () => {
+  const name = $("#ws-mname").value.trim();
+  const role = $("#ws-mrole").value;
+  $("#ws-msg").textContent = "";
+  try {
+    const m = await api.post("/api/members", { name, role });
+    $("#ws-mname").value = "";
+    $("#ws-newkey-val").value = m.key;
+    $("#ws-newkey").classList.remove("hidden");
+    loadMembers();
+  } catch (err) { $("#ws-msg").textContent = err.message; }
+});
+$("#ws-newkey-copy").addEventListener("click", async () => {
+  try { await navigator.clipboard.writeText($("#ws-newkey-val").value); flash($("#ws-newkey-copy"), "Copied ✓"); } catch {}
+});
+
+async function loadMembers() {
+  let members;
+  try { members = await api.get("/api/members"); } catch { return; }
+  const ul = $("#ws-members");
+  ul.innerHTML = "";
+  for (const m of members) {
+    const li = document.createElement("li");
+    li.innerHTML = `<span>${esc(m.name)}<span class="role">${m.role}</span>${m.id === wsMemberId ? " <span class='muted small'>(you)</span>" : ""}</span>`;
+    if (m.id !== wsMemberId) {
+      const btn = document.createElement("button");
+      btn.className = "revoke";
+      btn.title = "Revoke";
+      btn.textContent = "✕";
+      btn.addEventListener("click", async () => {
+        $("#ws-msg").textContent = "";
+        try { await api.del(`/api/members/${m.id}`); loadMembers(); }
+        catch { $("#ws-msg").textContent = "Couldn't revoke (cannot remove the last admin)."; }
+      });
+      li.appendChild(btn);
+    }
+    ul.appendChild(li);
+  }
+}
+
+async function loadWorkspaceInfo() {
+  try {
+    const w = await api.get("/api/workspace");
+    wsRole = w.role;
+    wsMemberId = w.memberId;
+    localStorage.setItem(WS_NAME, w.name);
+    $("#ws-name").textContent = w.name;
+    $("#ws-panel-name").textContent = w.name;
+    $("#ws-role").textContent = w.role;
+    $("#ws-key").value = wsKey;
+    const isAdmin = w.role === "admin";
+    $("#ws-admin").classList.toggle("hidden", !isAdmin);
+    // Viewers see a read-only UI (the server enforces this regardless).
+    document.body.classList.toggle("readonly", w.role === "viewer");
+    if (isAdmin) loadMembers();
+  } catch {}
+}
+
 async function ensureWorkspace() {
   if (!wsKey) {
     // First visit: spin up a personal workspace automatically.
@@ -592,8 +653,7 @@ async function ensureWorkspace() {
     localStorage.setItem(WS_KEY, ws.key);
     localStorage.setItem(WS_NAME, ws.name);
   }
-  $("#ws-name").textContent = localStorage.getItem(WS_NAME) || "Workspace";
-  $("#ws-key").value = wsKey;
+  await loadWorkspaceInfo();
 }
 
 (async function start() {

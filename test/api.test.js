@@ -76,6 +76,46 @@ test("workspaces are isolated: one cannot see or touch another's decks", async (
   assert.equal((await fetch(`${base}/api/decks/${mine.id}`)).status, 200);
 });
 
+test("member roles: viewers are read-only, members are admin-managed", async () => {
+  const hdr = (key, json) => ({ Authorization: `Bearer ${key}`, ...(json ? { "Content-Type": "application/json" } : {}) });
+  const admin = await realFetch(`${base}/api/workspaces`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: "Roles WS" }),
+  }).then(j);
+
+  // Admin mints an editor and a viewer key.
+  const editor = await realFetch(`${base}/api/members`, {
+    method: "POST", headers: hdr(admin.key, true), body: JSON.stringify({ name: "Ed", role: "editor" }),
+  }).then(j);
+  const viewer = await realFetch(`${base}/api/members`, {
+    method: "POST", headers: hdr(admin.key, true), body: JSON.stringify({ name: "Vi", role: "viewer" }),
+  }).then(j);
+  assert.ok(editor.key && viewer.key);
+  assert.equal(editor.role, "editor");
+
+  const makeDeck = (key) => realFetch(`${base}/api/decks`, {
+    method: "POST", headers: hdr(key, true), body: JSON.stringify({ title: "T", transcript: "[00:00] x" }),
+  });
+
+  // Viewer: GET works, writes are 403.
+  assert.equal((await realFetch(`${base}/api/decks`, { headers: hdr(viewer.key) })).status, 200);
+  assert.equal((await makeDeck(viewer.key)).status, 403);
+
+  // Editor: can write decks but cannot manage members.
+  assert.equal((await makeDeck(editor.key)).status, 201);
+  const editorAddsMember = await realFetch(`${base}/api/members`, {
+    method: "POST", headers: hdr(editor.key, true), body: JSON.stringify({ name: "X", role: "viewer" }),
+  });
+  assert.equal(editorAddsMember.status, 403);
+
+  // Admin: lists 3 members, removes the viewer, but cannot remove the last admin.
+  const members = await realFetch(`${base}/api/members`, { headers: hdr(admin.key) }).then(j);
+  assert.equal(members.length, 3);
+  assert.ok(!members.some((m) => "key" in m), "member list never leaks keys");
+  assert.equal((await realFetch(`${base}/api/members/${viewer.id}`, { method: "DELETE", headers: hdr(admin.key) })).status, 204);
+  const owner = members.find((m) => m.role === "admin");
+  assert.equal((await realFetch(`${base}/api/members/${owner.id}`, { method: "DELETE", headers: hdr(admin.key) })).status, 409);
+});
+
 test("build a deck from a timestamped transcript", async () => {
   const r = await fetch(`${base}/api/decks`, {
     method: "POST",

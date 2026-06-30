@@ -51,22 +51,50 @@ export function createApp({ store, uploadsDir, reminders }) {
     if (req.method === "POST" && req.path === "/workspaces") return next();
     if (req.path.startsWith("/shared/")) return next();
     const key = (req.get("authorization") || "").replace(/^Bearer\s+/i, "").trim();
-    const ws = store.getWorkspaceByKey(key);
-    if (!ws) return res.status(401).json({ error: "Missing or invalid workspace key." });
-    req.ws = ws.id;
+    const member = store.getMemberByKey(key);
+    if (!member) return res.status(401).json({ error: "Missing or invalid workspace key." });
+    req.ws = member.workspaceId;
+    req.role = member.role;
+    req.memberId = member.memberId;
+    // Viewers get read-only access to everything.
+    if (req.role === "viewer" && req.method !== "GET") {
+      return res.status(403).json({ error: "Your role (viewer) is read-only." });
+    }
     next();
   });
 
+  // Guard for admin-only routes (member management).
+  const requireAdmin = (req, res, next) =>
+    req.role === "admin" ? next() : res.status(403).json({ error: "Admin role required." });
+
   // --- workspaces ------------------------------------------------------
-  // Create a workspace and receive its access key (show once, store client-side).
+  // Create a workspace and receive your admin access key (show once, store client-side).
   app.post("/api/workspaces", (req, res) => {
     const ws = store.createWorkspace({ name: req.body?.name });
-    res.status(201).json({ id: ws.id, name: ws.name, key: ws.key });
+    res.status(201).json({ id: ws.id, name: ws.name, key: ws.key, role: ws.role });
   });
 
-  // Identify the current workspace (validates the key).
+  // Identify the current workspace and the caller's role.
   app.get("/api/workspace", (req, res) => {
-    res.json(store.getWorkspace(req.ws));
+    res.json({ ...store.getWorkspace(req.ws), role: req.role, memberId: req.memberId });
+  });
+
+  // --- members ---------------------------------------------------------
+  app.get("/api/members", (req, res) => {
+    res.json(store.listMembers(req.ws));
+  });
+
+  app.post("/api/members", requireAdmin, (req, res) => {
+    const result = store.addMember(req.ws, { name: req.body?.name, role: req.body?.role });
+    if (result?.error === "invalid-role") return res.status(400).json({ error: "role must be admin, editor, or viewer" });
+    res.status(201).json(result);
+  });
+
+  app.delete("/api/members/:id", requireAdmin, (req, res) => {
+    const result = store.removeMember(req.ws, req.params.id);
+    if (result?.error === "not-found") return res.status(404).json({ error: "Member not found" });
+    if (result?.error === "last-admin") return res.status(409).json({ error: "Cannot remove the last admin." });
+    res.status(204).end();
   });
 
   // --- audio upload ----------------------------------------------------

@@ -41,6 +41,22 @@ body {
 .ws-panel h3 { margin: 0 0 10px; font-size: 15px; }
 .ws-panel hr { border: none; border-top: 1px solid var(--line); margin: 14px 0; }
 .ws-panel input { font-size: 12.5px; }
+.ws-panel select { width: auto; font-size: 12.5px; }
+.member-list { list-style: none; margin: 0 0 10px; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.member-list li { display: flex; align-items: center; justify-content: space-between; background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; font-size: 13px; }
+.member-list .role { font-size: 11px; color: var(--accent); margin-left: 6px; }
+.member-list .revoke { background: transparent; border: none; color: var(--muted); font-size: 15px; }
+.member-list .revoke:hover { color: var(--danger); }
+
+/* Read-only viewers: hide write affordances (server enforces too). */
+body.readonly #view-build,
+body.readonly #cloze-btn,
+body.readonly #share-btn,
+body.readonly #review-btn,
+body.readonly .save,
+body.readonly .cloze-x,
+body.readonly #build-form { display: none !important; }
+body.readonly .back-input { pointer-events: none; opacity: .7; }
 
 main { max-width: 1080px; margin: 0 auto; padding: 22px; }
 .view { display: none; }

@@ -43,10 +43,12 @@ already uses (Anki, spreadsheets, JSON).
   reveal-meaning, export) with no access to your private review schedule; one
   click to unshare revokes it.
 - **Export** to Anki (`.tsv`), CSV, or full-fidelity JSON.
-- **Team workspaces** — every deck lives in a workspace, isolated from others.
-  A workspace is identified by an access key; share the key to let teammates
-  read and edit the same decks, or keep one to yourself. The web client creates
-  a personal workspace automatically on first visit.
+- **Team workspaces with roles** — every deck lives in a workspace, isolated
+  from others. Each member has their own access key and a role: **admin**
+  (manage members), **editor** (read + write decks/cards), or **viewer**
+  (read-only). Admins invite members from the Workspace panel and get a
+  one-time key to hand over. The web client creates a personal workspace
+  (as admin) automatically on first visit.
 - **Zero external services** — runs locally with a single JSON data file; no
   database server, no third-party auth.
 
@@ -82,14 +84,18 @@ straight into the transcript box.
 ## API
 
 The web UI is a thin client over a small REST API. **Every `/api` route is
-workspace-scoped** and requires an `Authorization: Bearer <workspace-key>`
-header — the only exceptions are `POST /api/workspaces` (bootstrap) and the
-public `/api/shared/...` endpoints.
+workspace-scoped** and requires an `Authorization: Bearer <member-key>` header —
+the only exceptions are `POST /api/workspaces` (bootstrap) and the public
+`/api/shared/...` endpoints. Viewers may only call `GET`; member management is
+admin-only.
 
 | Method | Path | Purpose |
 |--------|------|---------|
-| `POST` | `/api/workspaces` | Create a workspace; returns its `id`, `name`, and `key`. No auth. |
-| `GET` | `/api/workspace` | Identify the current workspace (validates the key). |
+| `POST` | `/api/workspaces` | Create a workspace; returns `id`, `name`, your admin `key`, and `role`. No auth. |
+| `GET` | `/api/workspace` | Identify the current workspace and the caller's role. |
+| `GET` | `/api/members` | List members (no keys). |
+| `POST` | `/api/members` | (admin) Invite a member `{name, role}`; returns the new key once. |
+| `DELETE` | `/api/members/:id` | (admin) Revoke a member (cannot remove the last admin). |
 | `POST` | `/api/decks` | Create a deck from `{ title, language, audioUrl, transcript, maxChars }`. |
 | `GET` | `/api/decks` | List decks with card and due counts. |
 | `GET` | `/api/alerts` | Cross-deck review summary: `totalDue`, per-deck due counts, and the next due time. |
@@ -164,7 +170,7 @@ test/            node:test suites
 
 - Auto-transcription of uploaded audio (Whisper-class model) so creators can
   skip the manual transcript step.
-- User accounts / SSO on top of workspace keys, and per-member roles.
+- Named user accounts / SSO on top of member keys.
 - Per-user / per-deck reminder schedules and quiet hours (current reminders are
   a single global webhook).
 

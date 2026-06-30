@@ -23,10 +23,28 @@
 
       <div id="ws-panel" class="ws-panel hidden">
         <h3>Workspace</h3>
-        <label>Invite teammates with this key
+        <p class="muted small">You are <strong id="ws-role">—</strong> in <strong id="ws-panel-name">—</strong>.</p>
+        <label>Your access key
           <div class="row"><input id="ws-key" readonly /><button id="ws-copy" class="ghost small">Copy</button></div>
         </label>
-        <p class="muted small">Anyone with this key can read and edit this workspace's decks.</p>
+
+        <div id="ws-admin" class="hidden">
+          <hr />
+          <h3>Members</h3>
+          <ul id="ws-members" class="member-list"></ul>
+          <label>Invite a member
+            <div class="row">
+              <input id="ws-mname" placeholder="name" />
+              <select id="ws-mrole"><option value="editor">editor</option><option value="viewer">viewer</option><option value="admin">admin</option></select>
+              <button id="ws-madd" class="ghost small">Add</button>
+            </div>
+          </label>
+          <div id="ws-newkey" class="hidden">
+            <p class="muted small" style="margin:8px 0 4px">New member key (copy now — shown once):</p>
+            <div class="row"><input id="ws-newkey-val" readonly /><button id="ws-newkey-copy" class="ghost small">Copy</button></div>
+          </div>
+        </div>
+
         <hr />
         <label>Join another workspace
           <div class="row"><input id="ws-join-key" placeholder="paste a key…" /><button id="ws-join" class="ghost small">Join</button></div>
