@@ -106,6 +106,8 @@ from the workspace member key in `Authorization`).
 | `POST` | `/api/auth/signup` | Create an account `{email,password}`; makes a workspace, returns a session `token` + keychain. |
 | `POST` | `/api/auth/login` | Log in; returns a session `token` and the account keychain. |
 | `POST` | `/api/auth/logout` | Invalidate the current session (`X-Session`). |
+| `POST` | `/api/auth/request-reset` | Email a password-reset link (always 200; dev mode returns the link). |
+| `POST` | `/api/auth/reset` | Set a new password from a reset token; invalidates the user's sessions. |
 | `GET` | `/api/account` | The signed-in account's email + keychain (`X-Session`). |
 | `POST` | `/api/account/keys` | Save a member key to the account keychain. |
 | `GET` | `/api/plans` | Public plan catalog (Free / Pro / Team with limits + features). |
@@ -178,6 +180,7 @@ webhook at `POST /api/billing/webhook` (events: `checkout.session.completed`,
 | `STRIPE_PRICE_TEAM` | Price ID for the Team subscription. |
 | `STRIPE_WEBHOOK_SECRET` | Signing secret for webhook verification. |
 | `OWNER_EMAILS` | Comma-separated emails auto-comped to the Team plan (e.g. the developer's own account). |
+| `EMAIL_WEBHOOK_URL` | Outbound webhook for transactional email (password resets). Point at a provider relay (Resend/Postmark/SendGrid) or Zapier/Make. Logs to console if unset. |
 
 ## Configuration
 
@@ -212,7 +215,8 @@ server/
   segment.js     transcript → segments
   srs.js         SM-2 spaced repetition
   cloze.js       fill-in-the-blank term suggestion + masking
-  auth.js        password hashing (scrypt) + session tokens
+  auth.js        password hashing (scrypt) + session/reset tokens
+  email.js       transactional email (webhook provider, dev-mode fallback)
   plans.js       plan tiers + entitlement/limit helpers
   billing.js     Stripe checkout + portal + webhook verification (dev-mode fallback)
   security.js    rate limiting + hardening headers
@@ -250,7 +254,7 @@ docker run -p 3000:3000 --env-file .env -v echodeck-data:/data echodeck
 
 - Auto-transcription of uploaded audio (Whisper-class model) so creators can
   skip the manual transcript step.
-- SSO / OAuth sign-in and password reset on top of the accounts layer.
+- SSO / OAuth sign-in on top of the accounts layer.
 - Per-user / per-deck reminder schedules and quiet hours (current reminders are
   a single global webhook).
 

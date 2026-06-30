@@ -784,6 +784,15 @@ const acctJson = (url, opts = {}) =>
 
 $("#acct-signup").addEventListener("click", () => authSubmit("/api/auth/signup"));
 $("#acct-login").addEventListener("click", () => authSubmit("/api/auth/login"));
+$("#acct-forgot").addEventListener("click", async () => {
+  const email = $("#acct-email").value.trim() || prompt("Enter your account email:");
+  if (!email) return;
+  const r = await (await fetch("/api/auth/request-reset", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email }) })).json().catch(() => ({}));
+  // Same message whether or not the account exists (no email enumeration).
+  $("#acct-msg").style.color = "var(--muted)";
+  $("#acct-msg").textContent = "If that email has an account, a reset link is on its way.";
+  if (r.devLink) { $("#acct-msg").innerHTML += ` <a href="${r.devLink}">Open reset link (dev)</a>`; }
+});
 $("#acct-logout").addEventListener("click", async () => {
   await acctJson("/api/auth/logout", { method: "POST" }).catch(() => {});
   sessionToken = "";

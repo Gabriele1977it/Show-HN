@@ -12,11 +12,12 @@ import { nanoid } from "nanoid";
 import { freshSrs, review, isDue } from "./srs.js";
 import { computeStats } from "./stats.js";
 import { suggestCloze } from "./cloze.js";
-import { hashPassword, verifyPassword, newToken } from "./auth.js";
+import { hashPassword, verifyPassword, newToken, hashToken } from "./auth.js";
 
-const EMPTY = { users: {}, sessions: {}, workspaces: {}, decks: {}, cards: {}, reviewLog: [] };
+const EMPTY = { users: {}, sessions: {}, resets: {}, workspaces: {}, decks: {}, cards: {}, reviewLog: [] };
 
 const SESSION_TTL = 30 * 24 * 60 * 60 * 1000; // 30 days
+const RESET_TTL = 60 * 60 * 1000; // 1 hour
 
 // Cap the review log so the JSON document stays small. The stats dashboard only
 // looks back a couple of weeks, so older raw events can be dropped safely.
@@ -190,6 +191,43 @@ export function createStore(filePath) {
         delete state.sessions[token];
         persist();
       }
+    },
+
+    // Create a password-reset token for an email (if the account exists). The
+    // raw token is returned (to email); only its hash is stored.
+    createPasswordReset(email, now = Date.now()) {
+      const e = (email ?? "").trim().toLowerCase();
+      const user = Object.values(state.users).find((u) => u.email === e);
+      if (!user) return null;
+      const token = newToken();
+      state.resets[hashToken(token)] = { userId: user.id, expiresAt: now + RESET_TTL };
+      persist();
+      return { token, email: user.email };
+    },
+
+    // Consume a reset token and set a new password. Invalidates the token and
+    // all of the user's sessions.
+    resetPassword(token, newPasswordValue, now = Date.now()) {
+      const key = hashToken(token);
+      const rec = state.resets[key];
+      if (!rec) return { error: "invalid" };
+      if (rec.expiresAt <= now) {
+        delete state.resets[key];
+        persist();
+        return { error: "expired" };
+      }
+      const user = state.users[rec.userId];
+      if (!user) return { error: "invalid" };
+      const { salt, hash } = hashPassword(newPasswordValue);
+      user.salt = salt;
+      user.hash = hash;
+      delete state.resets[key];
+      // Log the user out everywhere after a password change.
+      for (const [tok, s] of Object.entries(state.sessions)) {
+        if (s.userId === user.id) delete state.sessions[tok];
+      }
+      persist();
+      return { ok: true, email: user.email };
     },
 
     // Save a member key to a user's keychain (deduped). Validates the key.
@@ -455,6 +493,7 @@ function load(filePath) {
       return {
         users: parsed.users ?? {},
         sessions: parsed.sessions ?? {},
+        resets: parsed.resets ?? {},
         workspaces: parsed.workspaces ?? {},
         decks: parsed.decks ?? {},
         cards: parsed.cards ?? {},

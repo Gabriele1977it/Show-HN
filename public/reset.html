@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Reset password — EchoDeck</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <style>
+      .auth-wrap { max-width: 400px; margin: 8vh auto; padding: 0 20px; }
+      .auth-card { background: #fff; border: 1px solid var(--line); border-radius: 16px; padding: 28px; box-shadow: var(--shadow-md); }
+      .auth-card h1 { font-size: 22px; margin: 6px 0 4px; }
+      .brand.head { display: flex; align-items: center; gap: 8px; justify-content: center; margin-bottom: 18px; }
+      .ok { color: var(--accent-2); font-weight: 600; }
+    </style>
+  </head>
+  <body>
+    <div class="auth-wrap">
+      <div class="auth-card">
+        <a class="brand head" href="/" style="text-decoration:none;color:inherit"><span class="logo">◈</span> EchoDeck</a>
+        <h1>Set a new password</h1>
+        <p class="muted small" id="hint">Choose a new password for your account.</p>
+        <form id="form">
+          <label>New password<input id="pw" type="password" placeholder="at least 6 characters" autocomplete="new-password" /></label>
+          <button class="primary wide" style="margin-top:16px" type="submit">Reset password</button>
+        </form>
+        <p id="msg" class="error"></p>
+      </div>
+    </div>
+    <script type="module">
+      const $ = (s) => document.querySelector(s);
+      const token = new URLSearchParams(location.search).get("token");
+      if (!token) { $("#hint").textContent = "This reset link is missing its token."; $("#form").style.display = "none"; }
+      $("#form").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        $("#msg").textContent = "";
+        const password = $("#pw").value;
+        const r = await fetch("/api/auth/reset", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token, password }) });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) { $("#msg").textContent = data.error || "Could not reset password."; return; }
+        $("#form").style.display = "none";
+        $("#hint").innerHTML = '<span class="ok">✓ Password updated.</span> You can now <a href="/app">sign in</a>.';
+      });
+    </script>
+  </body>
+</html>

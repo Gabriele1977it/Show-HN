@@ -7,6 +7,7 @@ import { createStore } from "../server/store.js";
 import { createApp } from "../server/app.js";
 import { createReminderService } from "../server/reminders.js";
 import { createBilling } from "../server/billing.js";
+import { createMailer } from "../server/email.js";
 
 let server, base, tmp, sentReminders, realFetch, wsKey;
 
@@ -20,8 +21,9 @@ before(async () => {
     config: { minIntervalMs: 1e9 },
   });
   const billing = createBilling({ store, config: {} }); // dev mode (no Stripe keys)
+  const mailer = createMailer({ log: () => {} }); // dev mode (no email provider)
   const ownerEmails = new Set(["owner@echodeck.app"]);
-  const app = createApp({ store, uploadsDir: join(tmp, "uploads"), reminders, billing, ownerEmails });
+  const app = createApp({ store, uploadsDir: join(tmp, "uploads"), reminders, billing, mailer, ownerEmails });
   await new Promise((res) => { server = app.listen(0, res); });
   base = `http://127.0.0.1:${server.address().port}`;
 
@@ -264,6 +266,52 @@ test("plans catalog is public", async () => {
   const plans = await realFetch(`${base}/api/plans`).then(j);
   assert.deepEqual(plans.map((p) => p.id), ["free", "pro", "team"]);
   assert.equal(plans.find((p) => p.id === "pro").features.sharing, true);
+});
+
+test("password reset: request → reset → new password works, sessions invalidated", async () => {
+  const signup = await realFetch(`${base}/api/auth/signup`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email: "reset-me@example.com", password: "oldpassword" }),
+  }).then(j);
+  const oldSession = signup.token;
+
+  // Unknown email: still 200, but no dev link (no enumeration).
+  const ghost = await realFetch(`${base}/api/auth/request-reset`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: "nobody@example.com" }),
+  }).then(j);
+  assert.equal(ghost.ok, true);
+  assert.equal(ghost.devLink, undefined);
+
+  // Real email: dev mode returns the link so we can extract the token.
+  const req = await realFetch(`${base}/api/auth/request-reset`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: "reset-me@example.com" }),
+  }).then(j);
+  assert.ok(req.devLink);
+  const token = new URL(req.devLink).searchParams.get("token");
+
+  // Too-short password is rejected.
+  assert.equal((await realFetch(`${base}/api/auth/reset`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token, password: "x" }),
+  })).status, 400);
+
+  // Valid reset succeeds.
+  assert.equal((await realFetch(`${base}/api/auth/reset`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token, password: "newpassword" }),
+  })).status, 200);
+
+  // Old password fails; new one works; the token can't be reused.
+  assert.equal((await realFetch(`${base}/api/auth/login`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: "reset-me@example.com", password: "oldpassword" }),
+  })).status, 401);
+  assert.equal((await realFetch(`${base}/api/auth/login`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: "reset-me@example.com", password: "newpassword" }),
+  })).status, 200);
+  assert.equal((await realFetch(`${base}/api/auth/reset`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token, password: "anotherpw" }),
+  })).status, 400);
+
+  // The pre-reset session was invalidated.
+  assert.equal((await realFetch(`${base}/api/account`, { headers: { "X-Session": oldSession } })).status, 401);
 });
 
 test("member roles: viewers are read-only, members are admin-managed", async () => {

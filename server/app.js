@@ -28,7 +28,7 @@ function sendExport(res, deck, cards, format) {
   res.send(body);
 }
 
-export function createApp({ store, uploadsDir, reminders, billing, ownerEmails = new Set(), rateLimits = {} }) {
+export function createApp({ store, uploadsDir, reminders, billing, mailer, ownerEmails = new Set(), rateLimits = {} }) {
   const app = express();
   app.set("trust proxy", 1); // behind a host's load balancer; lets req.ip work
   app.use(securityHeaders);
@@ -115,6 +115,34 @@ export function createApp({ store, uploadsDir, reminders, billing, ownerEmails =
   app.post("/api/auth/logout", (req, res) => {
     store.deleteSession((req.get("x-session") || "").trim());
     res.status(204).end();
+  });
+
+  // Request a password-reset link. Always responds the same way so the endpoint
+  // can't be used to discover which emails have accounts.
+  app.post("/api/auth/request-reset", authLimiter, async (req, res) => {
+    const email = req.body?.email;
+    const reset = normalizeEmail(email) ? store.createPasswordReset(email) : null;
+    const response = { ok: true };
+    if (reset) {
+      const link = `${req.protocol}://${req.get("host")}/reset?token=${reset.token}`;
+      const text = `Reset your EchoDeck password:\n\n${link}\n\nThis link expires in 1 hour. If you didn't request it, ignore this email.`;
+      try {
+        await mailer?.send({ to: reset.email, subject: "Reset your EchoDeck password", text, html: `<p><a href="${link}">Reset your EchoDeck password</a> (expires in 1 hour).</p>` });
+      } catch (err) {
+        console.error("[reset] email failed:", err.message);
+      }
+      // In dev (no email provider) hand the link back so the flow is testable.
+      if (!mailer?.enabled) response.devLink = link;
+    }
+    res.json(response);
+  });
+
+  app.post("/api/auth/reset", authLimiter, (req, res) => {
+    const { token, password } = req.body ?? {};
+    if (!password || String(password).length < 6) return res.status(400).json({ error: "Password must be at least 6 characters." });
+    const result = store.resetPassword(token, password);
+    if (result.error) return res.status(400).json({ error: "This reset link is invalid or has expired." });
+    res.json({ ok: true });
   });
 
   app.get("/api/account", (req, res) => {
@@ -390,6 +418,7 @@ export function createApp({ store, uploadsDir, reminders, billing, ownerEmails =
   app.get("/app", (_req, res) => res.sendFile(join(PUBLIC_DIR, "index.html")));
   app.get("/terms", (_req, res) => res.sendFile(join(PUBLIC_DIR, "terms.html")));
   app.get("/privacy", (_req, res) => res.sendFile(join(PUBLIC_DIR, "privacy.html")));
+  app.get("/reset", (_req, res) => res.sendFile(join(PUBLIC_DIR, "reset.html")));
 
   // --- static ----------------------------------------------------------
   app.use("/uploads", express.static(uploadsDir));

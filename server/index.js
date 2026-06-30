@@ -11,6 +11,7 @@ import { createStore } from "./store.js";
 import { createApp } from "./app.js";
 import { createReminderService, webhookNotifier, consoleNotifier } from "./reminders.js";
 import { createBilling } from "./billing.js";
+import { createMailer } from "./email.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, "..");
@@ -56,7 +57,10 @@ const ownerEmails = new Set(
     .filter(Boolean),
 );
 
-const app = createApp({ store, uploadsDir: UPLOADS_DIR, reminders, billing, ownerEmails });
+// Email: POST to EMAIL_WEBHOOK_URL when set (provider relay), else log (dev).
+const mailer = createMailer({ webhookUrl: process.env.EMAIL_WEBHOOK_URL });
+
+const app = createApp({ store, uploadsDir: UPLOADS_DIR, reminders, billing, mailer, ownerEmails });
 
 const server = app.listen(PORT, () => {
   console.log(`EchoDeck running on http://localhost:${PORT}`);

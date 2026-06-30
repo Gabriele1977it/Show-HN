@@ -3,7 +3,7 @@
 // Self-contained, no external deps: scrypt for password hashing (per-user salt)
 // and a random token for sessions. Comparison is constant-time.
 
-import { scryptSync, randomBytes, timingSafeEqual } from "node:crypto";
+import { scryptSync, randomBytes, timingSafeEqual, createHash } from "node:crypto";
 
 const KEYLEN = 32;
 
@@ -25,6 +25,11 @@ export function verifyPassword(password, salt, hash) {
 /** Opaque random session token. */
 export function newToken() {
   return randomBytes(24).toString("hex");
+}
+
+/** SHA-256 of a token — store this, not the raw token, so a DB leak isn't usable. */
+export function hashToken(token) {
+  return createHash("sha256").update(String(token)).digest("hex");
 }
 
 /** Light email sanity check (not RFC-perfect, just enough to reject junk). */
