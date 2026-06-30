@@ -2,6 +2,11 @@
 
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { loadEnv } from "./env.js";
+
+// Load .env from the project root before reading any configuration.
+loadEnv(join(dirname(fileURLToPath(import.meta.url)), "..", ".env"));
+
 import { createStore } from "./store.js";
 import { createApp } from "./app.js";
 import { createReminderService, webhookNotifier, consoleNotifier } from "./reminders.js";

@@ -178,6 +178,16 @@ webhook at `POST /api/billing/webhook` (events: `checkout.session.completed`,
 
 ## Configuration
 
+Copy `.env.example` to `.env` and fill in your values, then just run `npm start`
+— the server loads `.env` from the project root on boot (no dependency). `.env`
+is gitignored, so keep your real keys there rather than in the shell. Shell
+variables still override the file (`PORT=3200 npm start`).
+
+```bash
+cp .env.example .env   # then edit .env
+npm start
+```
+
 | Env var | Default | Meaning |
 |---------|---------|---------|
 | `PORT` | `3000` | HTTP port. |
