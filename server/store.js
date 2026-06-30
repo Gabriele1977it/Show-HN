@@ -141,6 +141,10 @@ export function createStore(filePath) {
       return w?.id ?? null;
     },
 
+    getBilling(ws) {
+      return state.workspaces[ws]?.billing ?? null;
+    },
+
     // --- accounts ------------------------------------------------------
     // Named user accounts sit on top of member keys: an account stores a
     // "keychain" of the member keys it has access to, so a user can log in and

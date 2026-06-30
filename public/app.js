@@ -526,12 +526,26 @@ function highlight(text, q) {
 // ---- pricing & upgrades ----
 $("#ws-upgrade").addEventListener("click", () => { $("#ws-panel").classList.add("hidden"); showView("pricing"); loadPricing(); });
 
+$("#manage-btn").addEventListener("click", async () => {
+  const btn = $("#manage-btn");
+  btn.disabled = true;
+  try {
+    const r = await api.post("/api/billing/portal", {});
+    if (r.dev) { $("#pricing-msg").textContent = "Subscription cancelled (dev mode)."; await loadWorkspaceInfo(); loadPricing(); }
+    else if (r.url) window.location.href = r.url;
+  } catch (err) {
+    btn.disabled = false;
+    $("#pricing-msg").textContent = err.status === 403 ? "Only an admin can manage billing." : err.message;
+  }
+});
+
 let currentPlan = "free";
 async function loadPricing() {
   let plans, ws;
   try { [plans, ws] = await Promise.all([api.get("/api/plans"), api.get("/api/workspace")]); } catch { return; }
   currentPlan = ws.plan;
   $("#pricing-current").textContent = `You're on the ${ws.planInfo.name} plan · ${ws.usage.decks} decks · ${ws.usage.cards} cards`;
+  $("#manage-btn").classList.toggle("hidden", ws.plan === "free");
   $("#pricing-msg").textContent = "";
   const host = $("#pricing-cards");
   host.innerHTML = "";

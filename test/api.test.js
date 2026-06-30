@@ -218,6 +218,36 @@ test("owner accounts are auto-comped to the Team plan", async () => {
   assert.equal((await realFetch(`${base}/api/workspace`, { headers: hdr(ws2.key) }).then(j)).plan, "team");
 });
 
+test("billing portal cancels a subscription (dev mode) back to Free", async () => {
+  const hdr = (key, json) => ({ Authorization: `Bearer ${key}`, ...(json ? { "Content-Type": "application/json" } : {}) });
+  const ws = await realFetch(`${base}/api/workspaces`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: "Cancel WS" }),
+  }).then(j);
+  await realFetch(`${base}/api/billing/checkout`, { method: "POST", headers: hdr(ws.key, true), body: JSON.stringify({ plan: "pro" }) });
+  assert.equal((await realFetch(`${base}/api/workspace`, { headers: hdr(ws.key) }).then(j)).plan, "pro");
+
+  const portal = await realFetch(`${base}/api/billing/portal`, { method: "POST", headers: hdr(ws.key) }).then(j);
+  assert.equal(portal.dev, true);
+  assert.equal((await realFetch(`${base}/api/workspace`, { headers: hdr(ws.key) }).then(j)).plan, "free");
+});
+
+test("security headers and JSON 404 for unknown API routes", async () => {
+  const r = await fetch(`${base}/api/plans`);
+  assert.equal(r.headers.get("x-content-type-options"), "nosniff");
+  assert.ok(r.headers.get("content-security-policy"));
+  const nf = await fetch(`${base}/api/does-not-exist`);
+  assert.equal(nf.status, 404);
+  assert.equal((await nf.json()).error, "Not found");
+});
+
+test("legal pages are served", async () => {
+  for (const p of ["/terms", "/privacy"]) {
+    const r = await realFetch(`${base}${p}`);
+    assert.equal(r.status, 200);
+    assert.match(r.headers.get("content-type"), /html/);
+  }
+});
+
 test("landing page is served at / and the app at /app", async () => {
   const landing = await realFetch(`${base}/`);
   assert.equal(landing.status, 200);

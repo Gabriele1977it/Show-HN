@@ -45,6 +45,30 @@ export function createBilling({ store, config = {}, fetchImpl = fetch }) {
     return { url: data.url, id: data.id };
   }
 
+  /**
+   * Open the Stripe billing portal so a customer can manage / cancel. In dev
+   * mode (no keys) there's nothing to manage, so we simulate a cancellation by
+   * downgrading the workspace to Free.
+   */
+  async function createPortal({ workspaceId, returnUrl }) {
+    if (!enabled) {
+      store.setWorkspacePlan(workspaceId, "free", { provider: "dev", status: "canceled" });
+      return { url: returnUrl, dev: true };
+    }
+    const billingState = store.getBilling(workspaceId);
+    const customer = billingState?.customerId;
+    if (!customer) throw new Error("No Stripe customer for this workspace");
+    const body = new URLSearchParams({ customer, return_url: returnUrl });
+    const res = await fetchImpl("https://api.stripe.com/v1/billing_portal/sessions", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${config.secretKey}`, "Content-Type": "application/x-www-form-urlencoded" },
+      body: body.toString(),
+    });
+    if (!res.ok) throw new Error(`Stripe portal failed (${res.status})`);
+    const data = await res.json();
+    return { url: data.url };
+  }
+
   /** Verify a Stripe webhook signature (t=…,v1=… HMAC-SHA256 scheme). */
   function verifyWebhook(payload, sigHeader, secret = config.webhookSecret) {
     if (!secret || !sigHeader) return false;
@@ -85,5 +109,5 @@ export function createBilling({ store, config = {}, fetchImpl = fetch }) {
     }
   }
 
-  return { enabled, createCheckout, verifyWebhook, applyEvent };
+  return { enabled, createCheckout, createPortal, verifyWebhook, applyEvent };
 }

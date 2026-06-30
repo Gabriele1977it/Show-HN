@@ -13,6 +13,7 @@ import { segmentTranscript } from "./segment.js";
 import { exportDeck } from "./exporters.js";
 import { normalizeEmail } from "./auth.js";
 import { canAdd, hasFeature, planPublic, listPlans } from "./plans.js";
+import { createRateLimiter, rateLimit, securityHeaders } from "./security.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = join(__dirname, "..", "public");
@@ -27,8 +28,12 @@ function sendExport(res, deck, cards, format) {
   res.send(body);
 }
 
-export function createApp({ store, uploadsDir, reminders, billing, ownerEmails = new Set() }) {
+export function createApp({ store, uploadsDir, reminders, billing, ownerEmails = new Set(), rateLimits = {} }) {
   const app = express();
+  app.set("trust proxy", 1); // behind a host's load balancer; lets req.ip work
+  app.use(securityHeaders);
+  // Throttle auth endpoints to blunt credential stuffing / signup spam.
+  const authLimiter = rateLimit(createRateLimiter(rateLimits.auth ?? { windowMs: 15 * 60 * 1000, max: 40 }));
   // Owner allowlist: these accounts get the top (Team) plan automatically.
   const isOwner = (email) => Boolean(email) && ownerEmails.has(String(email).toLowerCase());
   const compOwnerWorkspaces = (userId) => {
@@ -84,7 +89,7 @@ export function createApp({ store, uploadsDir, reminders, billing, ownerEmails =
   // workspace member key in Authorization).
   const sessionUser = (req) => store.getUserBySession((req.get("x-session") || "").trim());
 
-  app.post("/api/auth/signup", (req, res) => {
+  app.post("/api/auth/signup", authLimiter, (req, res) => {
     const { email, password } = req.body ?? {};
     if (!normalizeEmail(email)) return res.status(400).json({ error: "Enter a valid email." });
     if (!password || String(password).length < 6) return res.status(400).json({ error: "Password must be at least 6 characters." });
@@ -98,7 +103,7 @@ export function createApp({ store, uploadsDir, reminders, billing, ownerEmails =
     res.status(201).json({ token, email: created.email, key: ws.key, account: store.getAccount(created.id) });
   });
 
-  app.post("/api/auth/login", (req, res) => {
+  app.post("/api/auth/login", authLimiter, (req, res) => {
     const { email, password } = req.body ?? {};
     const user = store.authenticateUser(email, password);
     if (!user) return res.status(401).json({ error: "Wrong email or password." });
@@ -194,6 +199,17 @@ export function createApp({ store, uploadsDir, reminders, billing, ownerEmails =
       res.json(result);
     } catch (err) {
       res.status(502).json({ error: `Checkout failed: ${err.message}` });
+    }
+  });
+
+  // Open the billing portal to manage / cancel the subscription (admin-only).
+  app.post("/api/billing/portal", requireAdmin, async (req, res) => {
+    const origin = `${req.protocol}://${req.get("host")}`;
+    try {
+      const result = await billing.createPortal({ workspaceId: req.ws, returnUrl: `${origin}/app` });
+      res.json(result);
+    } catch (err) {
+      res.status(502).json({ error: `Couldn't open billing portal: ${err.message}` });
     }
   });
 
@@ -372,11 +388,23 @@ export function createApp({ store, uploadsDir, reminders, billing, ownerEmails =
   // Marketing landing page at the root; the app itself lives at /app.
   app.get("/", (_req, res) => res.sendFile(join(PUBLIC_DIR, "landing.html")));
   app.get("/app", (_req, res) => res.sendFile(join(PUBLIC_DIR, "index.html")));
+  app.get("/terms", (_req, res) => res.sendFile(join(PUBLIC_DIR, "terms.html")));
+  app.get("/privacy", (_req, res) => res.sendFile(join(PUBLIC_DIR, "privacy.html")));
 
   // --- static ----------------------------------------------------------
   app.use("/uploads", express.static(uploadsDir));
   app.use(express.static(PUBLIC_DIR, { index: false }));
   app.get("/health", (_req, res) => res.json({ ok: true }));
+
+  // Unmatched API routes return JSON, not the SPA shell.
+  app.use("/api", (_req, res) => res.status(404).json({ error: "Not found" }));
+
+  // Central error handler — never leak stack traces to clients.
+  app.use((err, _req, res, _next) => {
+    console.error("[error]", err?.message || err);
+    if (res.headersSent) return;
+    res.status(err?.status || 500).json({ error: "Something went wrong." });
+  });
 
   return app;
 }

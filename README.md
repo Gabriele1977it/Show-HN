@@ -110,6 +110,7 @@ from the workspace member key in `Authorization`).
 | `POST` | `/api/account/keys` | Save a member key to the account keychain. |
 | `GET` | `/api/plans` | Public plan catalog (Free / Pro / Team with limits + features). |
 | `POST` | `/api/billing/checkout` | (admin) Start an upgrade `{plan}`; returns a Stripe Checkout URL (or applies it in dev mode). |
+| `POST` | `/api/billing/portal` | (admin) Open the Stripe billing portal to manage / cancel (dev mode cancels directly). |
 | `POST` | `/api/billing/webhook` | Stripe webhook (raw body, signature-verified) to sync subscription status. |
 | `POST` | `/api/workspaces` | Create a workspace; returns `id`, `name`, your admin `key`, and `role`. No auth. |
 | `GET` | `/api/workspace` | Identify the current workspace and the caller's role. |
@@ -213,13 +214,37 @@ server/
   cloze.js       fill-in-the-blank term suggestion + masking
   auth.js        password hashing (scrypt) + session tokens
   plans.js       plan tiers + entitlement/limit helpers
-  billing.js     Stripe checkout + webhook verification (dev-mode fallback)
+  billing.js     Stripe checkout + portal + webhook verification (dev-mode fallback)
+  security.js    rate limiting + hardening headers
+  env.js         .env loader
   exporters.js   Anki / CSV / JSON exporters
   reminders.js   due-review reminders + webhook delivery
   stats.js       study dashboard aggregation (history, streak, forecast)
-public/          landing.html (marketing) + index.html (app) + share.html (public viewer)
+public/          landing.html, index.html (app), share.html, terms.html, privacy.html
 test/            node:test suites
 ```
+
+## Deploying to production
+
+The app is a single Node process serving its own HTML + JSON API.
+
+```bash
+docker build -t echodeck .
+docker run -p 3000:3000 --env-file .env -v echodeck-data:/data echodeck
+```
+
+- A `Procfile` is included for Heroku-style buildpacks (Render, Railway, Fly.io).
+- **Persist `/data`** (a mounted volume) — that's where the JSON store and uploads
+  live. Without a persistent volume, data is lost on every restart.
+- Put it behind **HTTPS** (your host's TLS) so the Stripe webhook has a public URL.
+- Hardening included: security headers (incl. CSP), auth rate limiting, JSON 404s,
+  a central error handler, and graceful shutdown on SIGTERM/SIGINT.
+- `Terms` (`/terms`) and `Privacy` (`/privacy`) pages are starter templates —
+  **have them reviewed by a lawyer** before launch.
+
+> **Scaling note:** the JSON store is fine for a single instance / modest traffic.
+> For multiple instances or higher load, migrate to a real database (e.g. SQLite
+> or Postgres) and a shared rate-limit store.
 
 ## Roadmap (post-MVP)
 

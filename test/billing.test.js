@@ -10,6 +10,7 @@ function fakeStore() {
     plans,
     setWorkspacePlan: (ws, plan, billing) => { plans[ws] = { plan, billing }; },
     getWorkspacePlan: (ws) => plans[ws]?.plan ?? "free",
+    getBilling: (ws) => plans[ws]?.billing ?? null,
     findWorkspaceBySubscription: (sub) => Object.keys(plans).find((ws) => plans[ws]?.billing?.subscriptionId === sub) ?? null,
   };
 }
@@ -41,6 +42,25 @@ test("with a key, createCheckout calls Stripe with the right payload", async () 
 test("createCheckout rejects unknown plans", async () => {
   const billing = createBilling({ store: fakeStore(), config: {} });
   await assert.rejects(billing.createCheckout({ workspaceId: "w", plan: "gold", successUrl: "/", cancelUrl: "/" }), /Unknown plan/);
+});
+
+test("createPortal: dev mode cancels (downgrades to free); live mode calls Stripe", async () => {
+  const store = fakeStore();
+  store.setWorkspacePlan("w1", "pro", { provider: "dev" });
+  const dev = createBilling({ store, config: {} });
+  const r = await dev.createPortal({ workspaceId: "w1", returnUrl: "/app" });
+  assert.equal(r.dev, true);
+  assert.equal(store.getWorkspacePlan("w1"), "free");
+
+  const store2 = fakeStore();
+  store2.setWorkspacePlan("w2", "pro", { customerId: "cus_42" });
+  const calls = [];
+  const fetchImpl = async (url, opts) => { calls.push({ url, opts }); return { ok: true, json: async () => ({ url: "https://portal" }) }; };
+  const live = createBilling({ store: store2, config: { secretKey: "sk_test" }, fetchImpl });
+  const lr = await live.createPortal({ workspaceId: "w2", returnUrl: "/app" });
+  assert.equal(lr.url, "https://portal");
+  assert.match(calls[0].url, /billing_portal\/sessions/);
+  assert.match(calls[0].opts.body, /customer=cus_42/);
 });
 
 test("verifyWebhook accepts a correctly signed payload and rejects tampering", () => {

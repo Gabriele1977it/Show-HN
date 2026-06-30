@@ -58,7 +58,7 @@ const ownerEmails = new Set(
 
 const app = createApp({ store, uploadsDir: UPLOADS_DIR, reminders, billing, ownerEmails });
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`EchoDeck running on http://localhost:${PORT}`);
   console.log(billing.enabled ? "Stripe billing enabled." : "Billing in dev mode (no Stripe keys).");
   // Background polling only runs when explicitly enabled.
@@ -67,3 +67,12 @@ app.listen(PORT, () => {
     console.log("Reminder polling enabled.");
   }
 });
+
+// Graceful shutdown so hosts can restart/deploy cleanly.
+for (const sig of ["SIGTERM", "SIGINT"]) {
+  process.on(sig, () => {
+    console.log(`${sig} received, shutting down…`);
+    server.close(() => process.exit(0));
+    setTimeout(() => process.exit(0), 5000).unref();
+  });
+}
