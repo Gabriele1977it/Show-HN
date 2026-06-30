@@ -159,8 +159,8 @@ force-send a test at any time.
 ## Billing (Stripe)
 
 Plans are **Free** (3 decks, 100 cards, solo, no sharing/reminders/stats),
-**Pro** ($8/mo: unlimited decks/cards + all features, solo) and **Team**
-($20/mo: Pro + up to 10 members). Limits and feature gates are enforced
+**Pro** ($7.99/mo: unlimited decks/cards + all features, solo) and **Team**
+($19.99/mo: Pro + up to 10 members). Limits and feature gates are enforced
 server-side; over-limit writes return **HTTP 402** with `{ upgrade: true }`, and
 the client shows an upgrade prompt linking to the in-app pricing page.
 

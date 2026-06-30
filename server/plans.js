@@ -15,13 +15,13 @@ export const PLANS = {
     blurb: "Try it out — a few decks to get going.",
   },
   pro: {
-    id: "pro", name: "Pro", price: 8,
+    id: "pro", name: "Pro", price: 7.99,
     maxDecks: Infinity, maxCards: Infinity, maxMembers: 1,
     features: { sharing: true, reminders: true, stats: true },
     blurb: "For serious solo creators: unlimited decks, sharing, reminders, stats.",
   },
   team: {
-    id: "team", name: "Team", price: 20,
+    id: "team", name: "Team", price: 19.99,
     maxDecks: Infinity, maxCards: Infinity, maxMembers: 10,
     features: { sharing: true, reminders: true, stats: true },
     blurb: "Everything in Pro, plus up to 10 teammates with roles.",
