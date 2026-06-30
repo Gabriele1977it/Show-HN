@@ -20,7 +20,8 @@ before(async () => {
     config: { minIntervalMs: 1e9 },
   });
   const billing = createBilling({ store, config: {} }); // dev mode (no Stripe keys)
-  const app = createApp({ store, uploadsDir: join(tmp, "uploads"), reminders, billing });
+  const ownerEmails = new Set(["owner@echodeck.app"]);
+  const app = createApp({ store, uploadsDir: join(tmp, "uploads"), reminders, billing, ownerEmails });
   await new Promise((res) => { server = app.listen(0, res); });
   base = `http://127.0.0.1:${server.address().port}`;
 
@@ -189,6 +190,32 @@ test("Free plan enforces limits; upgrading lifts them", async () => {
   const after = await realFetch(`${base}/api/workspace`, { headers: hdr(key) }).then(j);
   assert.equal(after.plan, "pro");
   assert.equal(after.planInfo.maxDecks, null); // unlimited
+});
+
+test("owner accounts are auto-comped to the Team plan", async () => {
+  const hdr = (key) => ({ Authorization: `Bearer ${key}` });
+  // A normal signup lands on Free.
+  const normal = await realFetch(`${base}/api/auth/signup`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email: "normal@example.com", password: "passw0rd" }),
+  }).then(j);
+  assert.equal((await realFetch(`${base}/api/workspace`, { headers: hdr(normal.key) }).then(j)).plan, "free");
+
+  // The owner email is comped to Team on signup (case-insensitive).
+  const owner = await realFetch(`${base}/api/auth/signup`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email: "Owner@EchoDeck.app", password: "passw0rd" }),
+  }).then(j);
+  const ownerWs = await realFetch(`${base}/api/workspace`, { headers: hdr(owner.key) }).then(j);
+  assert.equal(ownerWs.plan, "team");
+  assert.equal(ownerWs.planInfo.maxMembers, 10);
+
+  // A new workspace the owner creates while signed in is also comped.
+  const ws2 = await realFetch(`${base}/api/workspaces`, {
+    method: "POST", headers: { "Content-Type": "application/json", "X-Session": owner.token },
+    body: JSON.stringify({ name: "Second" }),
+  }).then(j);
+  assert.equal((await realFetch(`${base}/api/workspace`, { headers: hdr(ws2.key) }).then(j)).plan, "team");
 });
 
 test("plans catalog is public", async () => {

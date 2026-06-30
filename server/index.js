@@ -47,7 +47,16 @@ const billing = createBilling({
   },
 });
 
-const app = createApp({ store, uploadsDir: UPLOADS_DIR, reminders, billing });
+// Owner allowlist (comma-separated emails) — these accounts get the Team plan
+// for free. Set OWNER_EMAILS in your .env.
+const ownerEmails = new Set(
+  (process.env.OWNER_EMAILS || "")
+    .split(",")
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean),
+);
+
+const app = createApp({ store, uploadsDir: UPLOADS_DIR, reminders, billing, ownerEmails });
 
 app.listen(PORT, () => {
   console.log(`EchoDeck running on http://localhost:${PORT}`);

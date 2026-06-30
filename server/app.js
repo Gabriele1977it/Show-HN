@@ -27,8 +27,13 @@ function sendExport(res, deck, cards, format) {
   res.send(body);
 }
 
-export function createApp({ store, uploadsDir, reminders, billing }) {
+export function createApp({ store, uploadsDir, reminders, billing, ownerEmails = new Set() }) {
   const app = express();
+  // Owner allowlist: these accounts get the top (Team) plan automatically.
+  const isOwner = (email) => Boolean(email) && ownerEmails.has(String(email).toLowerCase());
+  const compOwnerWorkspaces = (userId) => {
+    for (const k of store.getAccount(userId)?.keychain ?? []) store.setWorkspacePlan(k.workspaceId, "team");
+  };
   // Stripe webhooks need the raw body for signature verification, so skip JSON
   // parsing on that one route.
   app.use((req, res, next) =>
@@ -88,6 +93,7 @@ export function createApp({ store, uploadsDir, reminders, billing }) {
     // Give the new account a personal workspace and remember its key.
     const ws = store.createWorkspace({ name: `${created.email.split("@")[0]}'s workspace` });
     store.addKeyToAccount(created.id, ws.key);
+    if (isOwner(created.email)) store.setWorkspacePlan(ws.id, "team"); // comp owner accounts
     const token = store.createSession(created.id);
     res.status(201).json({ token, email: created.email, key: ws.key, account: store.getAccount(created.id) });
   });
@@ -96,6 +102,7 @@ export function createApp({ store, uploadsDir, reminders, billing }) {
     const { email, password } = req.body ?? {};
     const user = store.authenticateUser(email, password);
     if (!user) return res.status(401).json({ error: "Wrong email or password." });
+    if (isOwner(user.email)) compOwnerWorkspaces(user.id); // keep owner workspaces on Team
     const token = store.createSession(user.id);
     res.json({ token, email: user.email, account: store.getAccount(user.id) });
   });
@@ -124,6 +131,8 @@ export function createApp({ store, uploadsDir, reminders, billing }) {
   // Create a workspace and receive your admin access key (show once, store client-side).
   app.post("/api/workspaces", (req, res) => {
     const ws = store.createWorkspace({ name: req.body?.name });
+    const u = sessionUser(req);
+    if (u && isOwner(u.email)) store.setWorkspacePlan(ws.id, "team"); // owner's new workspaces are comped
     res.status(201).json({ id: ws.id, name: ws.name, key: ws.key, role: ws.role });
   });
 

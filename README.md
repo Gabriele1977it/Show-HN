@@ -175,6 +175,7 @@ webhook at `POST /api/billing/webhook` (events: `checkout.session.completed`,
 | `STRIPE_PRICE_PRO` | Price ID for the Pro subscription. |
 | `STRIPE_PRICE_TEAM` | Price ID for the Team subscription. |
 | `STRIPE_WEBHOOK_SECRET` | Signing secret for webhook verification. |
+| `OWNER_EMAILS` | Comma-separated emails auto-comped to the Team plan (e.g. the developer's own account). |
 
 ## Configuration
 
