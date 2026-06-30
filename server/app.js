@@ -54,6 +54,11 @@ export function createApp({ store, uploadsDir }) {
     res.json(store.listDecks());
   });
 
+  // Cross-deck review alert (drives the Alerts tab and any future push/email).
+  app.get("/api/alerts", (_req, res) => {
+    res.json(store.dueSummary());
+  });
+
   app.get("/api/decks/:id", (req, res) => {
     const deck = store.getDeck(req.params.id);
     if (!deck) return res.status(404).json({ error: "Deck not found" });

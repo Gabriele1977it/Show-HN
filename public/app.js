@@ -43,6 +43,7 @@ $$(".tab").forEach((t) =>
   t.addEventListener("click", () => {
     $$(".tab").forEach((x) => x.classList.toggle("is-active", x === t));
     $$(".view").forEach((v) => v.classList.toggle("is-active", v.id === `view-${t.dataset.view}`));
+    if (t.dataset.view === "alerts") loadAlerts();
   }),
 );
 function goStudy() {
@@ -139,6 +140,7 @@ async function loadDecks() {
     });
     ul.appendChild(li);
   }
+  refreshBadge();
 }
 
 // ---- deck detail ----
@@ -146,6 +148,7 @@ async function openDeck(id) {
   state.deck = await api.get(`/api/decks/${id}`);
   goStudy();
   renderDeck();
+  refreshBadge();
 }
 function resetStudy() {
   state.deck = null;
@@ -270,6 +273,58 @@ function closeReview(done) {
   if (loopStop) loopStop();
   $("#review-overlay").classList.add("hidden");
   if (done) renderDeck();
+}
+
+// ---- alerts ----
+$("#alert-refresh").addEventListener("click", loadAlerts);
+
+async function refreshBadge() {
+  try {
+    const s = await api.get("/api/alerts");
+    const badge = $("#alert-badge");
+    badge.textContent = s.totalDue;
+    badge.classList.toggle("hidden", s.totalDue === 0);
+    return s;
+  } catch { return null; }
+}
+
+async function loadAlerts() {
+  const s = await refreshBadge();
+  const list = $("#alert-list");
+  const summary = $("#alert-summary");
+  if (!s) { summary.textContent = "Could not load alerts."; return; }
+
+  if (s.totalDue > 0) {
+    summary.innerHTML = `<strong>${s.totalDue}</strong> card${s.totalDue === 1 ? "" : "s"} due across ${s.decksDue.length} deck${s.decksDue.length === 1 ? "" : "s"}.`;
+  } else if (s.nextDue) {
+    summary.textContent = `All caught up — next card due ${fmtDue(s.nextDue)}.`;
+  } else if (s.deckCount === 0) {
+    summary.textContent = "No decks yet. Build one to start studying.";
+  } else {
+    summary.textContent = "All caught up — nothing scheduled.";
+  }
+
+  list.innerHTML = "";
+  for (const d of s.decksDue) {
+    const li = document.createElement("li");
+    li.className = "deck-item";
+    li.innerHTML = `
+      <div>
+        <div class="title">${esc(d.title)}</div>
+        <div class="sub">${esc(d.language || "—")} · ${d.cardCount} cards</div>
+      </div>
+      <div class="row">
+        <span class="pill">${d.dueCount} due</span>
+        <button class="open">Review ▸</button>
+      </div>`;
+    $(".open", li).addEventListener("click", () => reviewDeck(d.id));
+    list.appendChild(li);
+  }
+}
+
+async function reviewDeck(id) {
+  await openDeck(id);
+  startReview();
 }
 
 // ---- helpers ----

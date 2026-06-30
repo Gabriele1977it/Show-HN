@@ -25,6 +25,10 @@ already uses (Anki, spreadsheets, JSON).
 - **Spaced repetition** — an SM-2 scheduler surfaces a daily *due* queue so
   study sessions stay short and effective.
 - **Inline editing** — add the translation / meaning to the back of each card.
+- **Review alerts** — an *Alerts* tab (and `/api/alerts` endpoint) summarises
+  how many cards are due across every deck and when the next card comes up, with
+  one-click jump straight into a review session. This is the surface a daily
+  push/email reminder would hang off.
 - **Export** to Anki (`.tsv`), CSV, or full-fidelity JSON.
 - **Zero external services** — runs locally with a single JSON data file; no
   API keys, no database server.
@@ -66,6 +70,7 @@ The web UI is a thin client over a small REST API:
 |--------|------|---------|
 | `POST` | `/api/decks` | Create a deck from `{ title, language, audioUrl, transcript, maxChars }`. |
 | `GET` | `/api/decks` | List decks with card and due counts. |
+| `GET` | `/api/alerts` | Cross-deck review summary: `totalDue`, per-deck due counts, and the next due time. |
 | `GET` | `/api/decks/:id` | Deck with all cards. |
 | `DELETE` | `/api/decks/:id` | Delete a deck and its cards. |
 | `POST` | `/api/decks/:id/cards` | Append more cards from extra transcript text. |
@@ -102,7 +107,8 @@ test/            node:test suites
 - Auto-transcription of uploaded audio (Whisper-class model) so creators can
   skip the manual transcript step.
 - Team workspaces and shareable read-only decks.
-- Email / push alerts when a deck has cards due (mobile-first surface).
+- Wire the existing `/api/alerts` summary to email / push so reminders reach a
+  mobile device (the data surface is already in place).
 
 ## Validation notes
 

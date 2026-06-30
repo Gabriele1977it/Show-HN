@@ -15,6 +15,7 @@
       <nav class="tabs">
         <button class="tab is-active" data-view="build">Build</button>
         <button class="tab" data-view="study">Study</button>
+        <button class="tab" data-view="alerts">Alerts <span id="alert-badge" class="badge hidden">0</span></button>
       </nav>
     </header>
 
@@ -103,6 +104,18 @@ Subtitle text here"></textarea>
         </div>
       </section>
     </main>
+
+      <!-- ALERTS VIEW -->
+      <section id="view-alerts" class="view">
+        <div class="panel alert-head">
+          <div>
+            <h2>Review alerts</h2>
+            <p class="muted small" id="alert-summary">Loading…</p>
+          </div>
+          <button id="alert-refresh" class="ghost small">Refresh</button>
+        </div>
+        <ul id="alert-list" class="deck-list"></ul>
+      </section>
 
     <!-- Review overlay -->
     <div id="review-overlay" class="overlay hidden">

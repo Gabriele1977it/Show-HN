@@ -88,6 +88,8 @@ button { cursor: pointer; font: inherit; border-radius: 10px; border: 1px solid 
 .study-actions select { width: auto; }
 .badge { background: #0b0e1c; color: var(--ink); border-radius: 999px; padding: 0 7px; font-size: 12px; margin-left: 4px; }
 
+.alert-head { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 14px; }
+
 .card-list { display: flex; flex-direction: column; gap: 10px; }
 .scard { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px; }
 .scard .front { font-size: 17px; }

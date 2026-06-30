@@ -100,6 +100,38 @@ test("invalid grade is rejected; unknown ids 404", async () => {
   assert.equal((await fetch(`${base}/api/decks/missing`)).status, 404);
 });
 
+test("alerts summary counts due cards and clears them after review", async () => {
+  const before = await fetch(`${base}/api/alerts`).then(j);
+
+  const deck = await fetch(`${base}/api/decks`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title: "Alert deck", transcript: "[00:00] a\n[00:04] b" }),
+  }).then(j);
+
+  const after = await fetch(`${base}/api/alerts`).then(j);
+  assert.equal(after.totalDue, before.totalDue + 2, "two fresh cards become due");
+  const entry = after.decksDue.find((d) => d.id === deck.id);
+  assert.ok(entry && entry.dueCount === 2);
+  // decksDue is sorted by dueCount descending.
+  for (let i = 1; i < after.decksDue.length; i++) {
+    assert.ok(after.decksDue[i - 1].dueCount >= after.decksDue[i].dueCount);
+  }
+
+  for (const card of deck.cards) {
+    await fetch(`${base}/api/cards/${card.id}/review`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ grade: "good" }),
+    });
+  }
+
+  const done = await fetch(`${base}/api/alerts`).then(j);
+  assert.equal(done.totalDue, before.totalDue, "reviewed cards leave the due total");
+  assert.ok(!done.decksDue.find((d) => d.id === deck.id), "deck no longer in alert list");
+  assert.ok(done.nextDue > Date.now(), "next-due time points to the scheduled cards");
+});
+
 test("deleting a deck removes it and its cards", async () => {
   const created = await fetch(`${base}/api/decks`, {
     method: "POST",

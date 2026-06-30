@@ -56,6 +56,31 @@ export function createStore(filePath) {
       return { ...deck, cards };
     },
 
+    // Cross-deck review alert: what's due now and when the next card comes up.
+    // This is the surface a creator (or a mobile push) checks each day.
+    dueSummary(now = Date.now()) {
+      const decks = Object.values(state.decks).map((d) => {
+        const cards = d.cardOrder.map((cid) => state.cards[cid]).filter(Boolean);
+        const dueCount = cards.filter((c) => isDue(c.srs, now)).length;
+        const nextDue = cards.length ? Math.min(...cards.map((c) => c.srs.due)) : null;
+        return { id: d.id, title: d.title, language: d.language, cardCount: cards.length, dueCount, nextDue };
+      });
+      const decksDue = decks
+        .filter((d) => d.dueCount > 0)
+        .sort((a, b) => b.dueCount - a.dueCount);
+      const upcoming = decks
+        .map((d) => d.nextDue)
+        .filter((t) => t != null && t > now)
+        .sort((a, b) => a - b);
+      return {
+        totalDue: decksDue.reduce((sum, d) => sum + d.dueCount, 0),
+        deckCount: decks.length,
+        decksDue,
+        nextDue: upcoming[0] ?? null,
+        generatedAt: now,
+      };
+    },
+
     deleteDeck(id) {
       const deck = state.decks[id];
       if (!deck) return false;
