@@ -5,7 +5,9 @@ const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 // --- workspace auth ---
 const WS_KEY = "echodeck_ws_key";
 const WS_NAME = "echodeck_ws_name";
+const SESSION = "echodeck_session";
 let wsKey = localStorage.getItem(WS_KEY) || "";
+let sessionToken = localStorage.getItem(SESSION) || "";
 const authHeaders = (extra = {}) => (wsKey ? { Authorization: `Bearer ${wsKey}`, ...extra } : extra);
 
 const api = {
@@ -566,12 +568,14 @@ $("#ws-join").addEventListener("click", async () => {
   const r = await fetch("/api/workspace", { headers: { Authorization: `Bearer ${key}` } });
   if (!r.ok) { $("#ws-msg").textContent = "That key isn't valid."; return; }
   const ws = await r.json();
+  await rememberKey(key);
   setWorkspace(key, ws.name);
 });
 $("#ws-new").addEventListener("click", async () => {
   const ws = await (await fetch("/api/workspaces", {
     method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: "New workspace" }),
   })).json();
+  await rememberKey(ws.key);
   setWorkspace(ws.key, ws.name);
 });
 
@@ -656,7 +660,72 @@ async function ensureWorkspace() {
   await loadWorkspaceInfo();
 }
 
+// ---- accounts ----
+const acctJson = (url, opts = {}) =>
+  fetch(url, { ...opts, headers: { "Content-Type": "application/json", ...(sessionToken ? { "X-Session": sessionToken } : {}), ...(opts.headers || {}) } });
+
+$("#acct-signup").addEventListener("click", () => authSubmit("/api/auth/signup"));
+$("#acct-login").addEventListener("click", () => authSubmit("/api/auth/login"));
+$("#acct-logout").addEventListener("click", async () => {
+  await acctJson("/api/auth/logout", { method: "POST" }).catch(() => {});
+  sessionToken = "";
+  localStorage.removeItem(SESSION);
+  renderSignedOut();
+});
+
+async function authSubmit(url) {
+  $("#acct-msg").textContent = "";
+  const email = $("#acct-email").value.trim();
+  const password = $("#acct-pass").value;
+  const r = await acctJson(url, { method: "POST", body: JSON.stringify({ email, password }) });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) { $("#acct-msg").textContent = data.error || "Could not authenticate."; return; }
+  sessionToken = data.token;
+  localStorage.setItem(SESSION, data.token);
+  // Land in a workspace from the account: the new one (signup) or the first key.
+  const key = data.key || data.account?.keychain?.[0]?.memberKey;
+  if (key) { wsKey = key; localStorage.setItem(WS_KEY, key); }
+  location.reload();
+}
+
+async function loadAccount() {
+  if (!sessionToken) return renderSignedOut();
+  const r = await acctJson("/api/account");
+  if (!r.ok) { sessionToken = ""; localStorage.removeItem(SESSION); return renderSignedOut(); }
+  renderSignedIn(await r.json());
+}
+function renderSignedOut() {
+  $("#acct-out").classList.remove("hidden");
+  $("#acct-in").classList.add("hidden");
+}
+function renderSignedIn(account) {
+  $("#acct-out").classList.add("hidden");
+  $("#acct-in").classList.remove("hidden");
+  $("#acct-who").textContent = account.email;
+  const ul = $("#acct-keychain");
+  ul.innerHTML = "";
+  for (const k of account.keychain) {
+    const li = document.createElement("li");
+    const current = k.memberKey === wsKey;
+    li.innerHTML = `<span>${esc(k.workspaceName)}<span class="role">${k.role}</span>${current ? " <span class='muted small'>(current)</span>" : ""}</span>`;
+    if (!current) {
+      const btn = document.createElement("button");
+      btn.className = "ghost small";
+      btn.textContent = "Open";
+      btn.addEventListener("click", () => setWorkspace(k.memberKey, k.workspaceName));
+      li.appendChild(btn);
+    }
+    ul.appendChild(li);
+  }
+}
+// When signed in, persist a workspace key to the account so it appears next login.
+async function rememberKey(key) {
+  if (!sessionToken) return;
+  await acctJson("/api/account/keys", { method: "POST", body: JSON.stringify({ memberKey: key }) }).catch(() => {});
+}
+
 (async function start() {
   await ensureWorkspace();
+  await loadAccount();
   loadDecks();
 })();

@@ -43,6 +43,10 @@ already uses (Anki, spreadsheets, JSON).
   reveal-meaning, export) with no access to your private review schedule; one
   click to unshare revokes it.
 - **Export** to Anki (`.tsv`), CSV, or full-fidelity JSON.
+- **User accounts** — sign up with email + password (scrypt-hashed) and log in
+  from any device to retrieve your workspaces, instead of pasting raw keys. An
+  account keeps a keychain of the member keys it can access and a session token
+  for account management. Anonymous use still works — accounts are optional.
 - **Team workspaces with roles** — every deck lives in a workspace, isolated
   from others. Each member has their own access key and a role: **admin**
   (manage members), **editor** (read + write decks/cards), or **viewer**
@@ -89,8 +93,16 @@ the only exceptions are `POST /api/workspaces` (bootstrap) and the public
 `/api/shared/...` endpoints. Viewers may only call `GET`; member management is
 admin-only.
 
+Account endpoints use a session token in an `X-Session` header (kept separate
+from the workspace member key in `Authorization`).
+
 | Method | Path | Purpose |
 |--------|------|---------|
+| `POST` | `/api/auth/signup` | Create an account `{email,password}`; makes a workspace, returns a session `token` + keychain. |
+| `POST` | `/api/auth/login` | Log in; returns a session `token` and the account keychain. |
+| `POST` | `/api/auth/logout` | Invalidate the current session (`X-Session`). |
+| `GET` | `/api/account` | The signed-in account's email + keychain (`X-Session`). |
+| `POST` | `/api/account/keys` | Save a member key to the account keychain. |
 | `POST` | `/api/workspaces` | Create a workspace; returns `id`, `name`, your admin `key`, and `role`. No auth. |
 | `GET` | `/api/workspace` | Identify the current workspace and the caller's role. |
 | `GET` | `/api/members` | List members (no keys). |
@@ -159,6 +171,7 @@ server/
   segment.js     transcript → segments
   srs.js         SM-2 spaced repetition
   cloze.js       fill-in-the-blank term suggestion + masking
+  auth.js        password hashing (scrypt) + session tokens
   exporters.js   Anki / CSV / JSON exporters
   reminders.js   due-review reminders + webhook delivery
   stats.js       study dashboard aggregation (history, streak, forecast)
@@ -170,7 +183,7 @@ test/            node:test suites
 
 - Auto-transcription of uploaded audio (Whisper-class model) so creators can
   skip the manual transcript step.
-- Named user accounts / SSO on top of member keys.
+- SSO / OAuth sign-in and password reset on top of the accounts layer.
 - Per-user / per-deck reminder schedules and quiet hours (current reminders are
   a single global webhook).
 

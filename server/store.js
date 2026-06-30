@@ -12,8 +12,11 @@ import { nanoid } from "nanoid";
 import { freshSrs, review, isDue } from "./srs.js";
 import { computeStats } from "./stats.js";
 import { suggestCloze } from "./cloze.js";
+import { hashPassword, verifyPassword, newToken } from "./auth.js";
 
-const EMPTY = { workspaces: {}, decks: {}, cards: {}, reviewLog: [] };
+const EMPTY = { users: {}, sessions: {}, workspaces: {}, decks: {}, cards: {}, reviewLog: [] };
+
+const SESSION_TTL = 30 * 24 * 60 * 60 * 1000; // 30 days
 
 // Cap the review log so the JSON document stays small. The stats dashboard only
 // looks back a couple of weeks, so older raw events can be dropped safely.
@@ -109,6 +112,81 @@ export function createStore(filePath) {
 
     listWorkspaceIds() {
       return Object.keys(state.workspaces);
+    },
+
+    // --- accounts ------------------------------------------------------
+    // Named user accounts sit on top of member keys: an account stores a
+    // "keychain" of the member keys it has access to, so a user can log in and
+    // retrieve their workspaces instead of pasting raw keys.
+    createUser({ email, password }) {
+      const e = (email ?? "").trim().toLowerCase();
+      if (Object.values(state.users).some((u) => u.email === e)) return { error: "exists" };
+      const id = nanoid(10);
+      const { salt, hash } = hashPassword(password);
+      state.users[id] = { id, email: e, salt, hash, keychain: [], createdAt: Date.now() };
+      persist();
+      return { id, email: e };
+    },
+
+    authenticateUser(email, password) {
+      const e = (email ?? "").trim().toLowerCase();
+      const user = Object.values(state.users).find((u) => u.email === e);
+      if (!user || !verifyPassword(password, user.salt, user.hash)) return null;
+      return { id: user.id, email: user.email };
+    },
+
+    createSession(userId) {
+      const token = newToken();
+      state.sessions[token] = { userId, createdAt: Date.now(), expiresAt: Date.now() + SESSION_TTL };
+      persist();
+      return token;
+    },
+
+    getUserBySession(token) {
+      const s = token && state.sessions[token];
+      if (!s) return null;
+      if (s.expiresAt <= Date.now()) {
+        delete state.sessions[token];
+        persist();
+        return null;
+      }
+      const user = state.users[s.userId];
+      return user ? { id: user.id, email: user.email } : null;
+    },
+
+    deleteSession(token) {
+      if (token && state.sessions[token]) {
+        delete state.sessions[token];
+        persist();
+      }
+    },
+
+    // Save a member key to a user's keychain (deduped). Validates the key.
+    addKeyToAccount(userId, memberKey) {
+      const user = state.users[userId];
+      if (!user) return { error: "no-user" };
+      const member = api.getMemberByKey(memberKey);
+      if (!member) return { error: "invalid-key" };
+      if (!user.keychain.some((k) => k.memberKey === memberKey)) {
+        user.keychain.push({ memberKey });
+        persist();
+      }
+      return { ok: true };
+    },
+
+    // The account's keychain resolved to current workspace name + role; drops
+    // keys that have since been revoked.
+    getAccount(userId) {
+      const user = state.users[userId];
+      if (!user) return null;
+      const keychain = [];
+      for (const k of user.keychain) {
+        const member = api.getMemberByKey(k.memberKey);
+        if (!member) continue;
+        const ws = state.workspaces[member.workspaceId];
+        keychain.push({ workspaceId: member.workspaceId, workspaceName: ws?.name ?? "Workspace", role: member.role, memberKey: k.memberKey });
+      }
+      return { email: user.email, keychain };
     },
 
     // --- decks ---------------------------------------------------------
@@ -344,6 +422,8 @@ function load(filePath) {
     if (existsSync(filePath)) {
       const parsed = JSON.parse(readFileSync(filePath, "utf8"));
       return {
+        users: parsed.users ?? {},
+        sessions: parsed.sessions ?? {},
         workspaces: parsed.workspaces ?? {},
         decks: parsed.decks ?? {},
         cards: parsed.cards ?? {},

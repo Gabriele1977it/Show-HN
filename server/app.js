@@ -11,6 +11,7 @@ import { existsSync, mkdirSync } from "node:fs";
 import { nanoid } from "nanoid";
 import { segmentTranscript } from "./segment.js";
 import { exportDeck } from "./exporters.js";
+import { normalizeEmail } from "./auth.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = join(__dirname, "..", "public");
@@ -50,6 +51,7 @@ export function createApp({ store, uploadsDir, reminders }) {
   app.use("/api", (req, res, next) => {
     if (req.method === "POST" && req.path === "/workspaces") return next();
     if (req.path.startsWith("/shared/")) return next();
+    if (req.path.startsWith("/auth/") || req.path.startsWith("/account")) return next();
     const key = (req.get("authorization") || "").replace(/^Bearer\s+/i, "").trim();
     const member = store.getMemberByKey(key);
     if (!member) return res.status(401).json({ error: "Missing or invalid workspace key." });
@@ -66,6 +68,52 @@ export function createApp({ store, uploadsDir, reminders }) {
   // Guard for admin-only routes (member management).
   const requireAdmin = (req, res, next) =>
     req.role === "admin" ? next() : res.status(403).json({ error: "Admin role required." });
+
+  // --- accounts --------------------------------------------------------
+  // Session is carried in an X-Session header (kept distinct from the
+  // workspace member key in Authorization).
+  const sessionUser = (req) => store.getUserBySession((req.get("x-session") || "").trim());
+
+  app.post("/api/auth/signup", (req, res) => {
+    const { email, password } = req.body ?? {};
+    if (!normalizeEmail(email)) return res.status(400).json({ error: "Enter a valid email." });
+    if (!password || String(password).length < 6) return res.status(400).json({ error: "Password must be at least 6 characters." });
+    const created = store.createUser({ email, password });
+    if (created.error === "exists") return res.status(409).json({ error: "An account with that email already exists." });
+    // Give the new account a personal workspace and remember its key.
+    const ws = store.createWorkspace({ name: `${created.email.split("@")[0]}'s workspace` });
+    store.addKeyToAccount(created.id, ws.key);
+    const token = store.createSession(created.id);
+    res.status(201).json({ token, email: created.email, key: ws.key, account: store.getAccount(created.id) });
+  });
+
+  app.post("/api/auth/login", (req, res) => {
+    const { email, password } = req.body ?? {};
+    const user = store.authenticateUser(email, password);
+    if (!user) return res.status(401).json({ error: "Wrong email or password." });
+    const token = store.createSession(user.id);
+    res.json({ token, email: user.email, account: store.getAccount(user.id) });
+  });
+
+  app.post("/api/auth/logout", (req, res) => {
+    store.deleteSession((req.get("x-session") || "").trim());
+    res.status(204).end();
+  });
+
+  app.get("/api/account", (req, res) => {
+    const user = sessionUser(req);
+    if (!user) return res.status(401).json({ error: "Not signed in." });
+    res.json(store.getAccount(user.id));
+  });
+
+  // Save the member key the client is currently using to the account keychain.
+  app.post("/api/account/keys", (req, res) => {
+    const user = sessionUser(req);
+    if (!user) return res.status(401).json({ error: "Not signed in." });
+    const result = store.addKeyToAccount(user.id, req.body?.memberKey);
+    if (result.error) return res.status(400).json({ error: "Invalid member key." });
+    res.json(store.getAccount(user.id));
+  });
 
   // --- workspaces ------------------------------------------------------
   // Create a workspace and receive your admin access key (show once, store client-side).

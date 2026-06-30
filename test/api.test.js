@@ -76,6 +76,76 @@ test("workspaces are isolated: one cannot see or touch another's decks", async (
   assert.equal((await fetch(`${base}/api/decks/${mine.id}`)).status, 200);
 });
 
+test("accounts: signup creates a workspace, login returns the keychain", async () => {
+  const signup = await realFetch(`${base}/api/auth/signup`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email: "Creator@Example.com", password: "supersecret" }),
+  });
+  assert.equal(signup.status, 201);
+  const s = await signup.json();
+  assert.ok(s.token && s.key);
+  assert.equal(s.email, "creator@example.com"); // normalised
+  assert.equal(s.account.keychain.length, 1);
+  assert.equal(s.account.keychain[0].role, "admin");
+
+  // The returned member key works against the deck API.
+  const decks = await realFetch(`${base}/api/decks`, { headers: { Authorization: `Bearer ${s.key}` } });
+  assert.equal(decks.status, 200);
+
+  // Duplicate signup is rejected; weak inputs are rejected.
+  assert.equal((await realFetch(`${base}/api/auth/signup`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email: "creator@example.com", password: "anotherpw" }),
+  })).status, 409);
+  assert.equal((await realFetch(`${base}/api/auth/signup`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email: "bad", password: "x" }),
+  })).status, 400);
+
+  // Login with the right and wrong password.
+  const login = await realFetch(`${base}/api/auth/login`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email: "creator@example.com", password: "supersecret" }),
+  }).then(j);
+  assert.ok(login.token);
+  assert.equal(login.account.keychain.length, 1);
+  assert.equal((await realFetch(`${base}/api/auth/login`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email: "creator@example.com", password: "nope" }),
+  })).status, 401);
+
+  // Session-scoped account access; logout invalidates it.
+  const sess = { "X-Session": login.token };
+  assert.equal((await realFetch(`${base}/api/account`, { headers: sess })).status, 200);
+  assert.equal((await realFetch(`${base}/api/account`)).status, 401);
+  assert.equal((await realFetch(`${base}/api/auth/logout`, { method: "POST", headers: sess })).status, 204);
+  assert.equal((await realFetch(`${base}/api/account`, { headers: sess })).status, 401);
+});
+
+test("accounts: keychain accumulates joined workspaces", async () => {
+  const s = await realFetch(`${base}/api/auth/signup`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email: "joiner@example.com", password: "passw0rd" }),
+  }).then(j);
+  // A separate workspace whose key the user joins.
+  const other = await realFetch(`${base}/api/workspaces`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: "Shared studio" }),
+  }).then(j);
+
+  const saved = await realFetch(`${base}/api/account/keys`, {
+    method: "POST", headers: { "Content-Type": "application/json", "X-Session": s.token },
+    body: JSON.stringify({ memberKey: other.key }),
+  }).then(j);
+  assert.equal(saved.keychain.length, 2);
+  assert.ok(saved.keychain.some((k) => k.workspaceName === "Shared studio"));
+
+  // Garbage key is rejected.
+  assert.equal((await realFetch(`${base}/api/account/keys`, {
+    method: "POST", headers: { "Content-Type": "application/json", "X-Session": s.token },
+    body: JSON.stringify({ memberKey: "garbage" }),
+  })).status, 400);
+});
+
 test("member roles: viewers are read-only, members are admin-managed", async () => {
   const hdr = (key, json) => ({ Authorization: `Bearer ${key}`, ...(json ? { "Content-Type": "application/json" } : {}) });
   const admin = await realFetch(`${base}/api/workspaces`, {

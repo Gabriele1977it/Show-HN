@@ -22,6 +22,26 @@
       </nav>
 
       <div id="ws-panel" class="ws-panel hidden">
+        <div id="acct-out">
+          <h3>Account</h3>
+          <label>Email<input id="acct-email" type="email" placeholder="you@example.com" /></label>
+          <label>Password<input id="acct-pass" type="password" placeholder="at least 6 characters" /></label>
+          <div class="row" style="margin-top:8px">
+            <button id="acct-login" class="ghost small">Log in</button>
+            <button id="acct-signup" class="primary small">Sign up</button>
+          </div>
+          <p id="acct-msg" class="error"></p>
+          <hr />
+        </div>
+
+        <div id="acct-in" class="hidden">
+          <h3>Account</h3>
+          <p class="muted small">Signed in as <strong id="acct-who">—</strong> · <button id="acct-logout" class="ghost small">Log out</button></p>
+          <p class="muted small" style="margin:8px 0 4px">Your workspaces</p>
+          <ul id="acct-keychain" class="member-list"></ul>
+          <hr />
+        </div>
+
         <h3>Workspace</h3>
         <p class="muted small">You are <strong id="ws-role">—</strong> in <strong id="ws-panel-name">—</strong>.</p>
         <label>Your access key
