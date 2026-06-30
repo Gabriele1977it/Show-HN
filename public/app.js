@@ -629,6 +629,8 @@ async function loadMembers() {
   }
 }
 
+// Returns true when the current key resolves to a workspace, false otherwise
+// (e.g. a stale key left over from a previous database).
 async function loadWorkspaceInfo() {
   try {
     const w = await api.get("/api/workspace");
@@ -644,20 +646,28 @@ async function loadWorkspaceInfo() {
     // Viewers see a read-only UI (the server enforces this regardless).
     document.body.classList.toggle("readonly", w.role === "viewer");
     if (isAdmin) loadMembers();
-  } catch {}
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function createWorkspace(name = "My workspace") {
+  const ws = await (await fetch("/api/workspaces", {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name }),
+  })).json();
+  wsKey = ws.key;
+  localStorage.setItem(WS_KEY, ws.key);
+  localStorage.setItem(WS_NAME, ws.name);
 }
 
 async function ensureWorkspace() {
-  if (!wsKey) {
-    // First visit: spin up a personal workspace automatically.
-    const ws = await (await fetch("/api/workspaces", {
-      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: "My workspace" }),
-    })).json();
-    wsKey = ws.key;
-    localStorage.setItem(WS_KEY, ws.key);
-    localStorage.setItem(WS_NAME, ws.name);
+  // Use the stored key only if it still resolves; otherwise (first visit or a
+  // stale key from an old database) provision a fresh workspace.
+  if (!wsKey || !(await loadWorkspaceInfo())) {
+    await createWorkspace();
+    await loadWorkspaceInfo();
   }
-  await loadWorkspaceInfo();
 }
 
 // ---- accounts ----
