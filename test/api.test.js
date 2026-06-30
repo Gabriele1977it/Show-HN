@@ -153,6 +153,17 @@ test("reminder preview reflects due cards; test endpoint force-sends", async () 
   assert.match(sentReminders.at(-1).title, /EchoDeck/);
 });
 
+test("stats endpoint reflects review activity", async () => {
+  // Earlier tests reviewed at least one card, so today's activity is non-zero.
+  const s = await fetch(`${base}/api/stats`).then(j);
+  assert.equal(s.daily.length, 14);
+  assert.equal(s.forecast.length, 7);
+  assert.ok(s.totalReviews >= 1, "reviews were logged");
+  assert.ok(s.reviewedToday >= 1, "today's reviews counted");
+  assert.ok(s.totalCards >= 1);
+  assert.ok(s.retentionRate === null || (s.retentionRate >= 0 && s.retentionRate <= 100));
+});
+
 test("deleting a deck removes it and its cards", async () => {
   const created = await fetch(`${base}/api/decks`, {
     method: "POST",

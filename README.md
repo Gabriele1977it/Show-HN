@@ -25,6 +25,9 @@ already uses (Anki, spreadsheets, JSON).
 - **Spaced repetition** — an SM-2 scheduler surfaces a daily *due* queue so
   study sessions stay short and effective.
 - **Inline editing** — add the translation / meaning to the back of each card.
+- **Study dashboard** — a *Stats* tab (and `/api/stats` endpoint) tracks review
+  history: cards in study, reviews today, 14-day retention rate, study streak, a
+  14-day activity chart, and a 7-day due forecast.
 - **Review alerts** — an *Alerts* tab (and `/api/alerts` endpoint) summarises
   how many cards are due across every deck and when the next card comes up, with
   one-click jump straight into a review session. This is the surface a daily
@@ -71,6 +74,7 @@ The web UI is a thin client over a small REST API:
 | `POST` | `/api/decks` | Create a deck from `{ title, language, audioUrl, transcript, maxChars }`. |
 | `GET` | `/api/decks` | List decks with card and due counts. |
 | `GET` | `/api/alerts` | Cross-deck review summary: `totalDue`, per-deck due counts, and the next due time. |
+| `GET` | `/api/stats` | Study dashboard data: totals, retention, streak, 14-day activity, 7-day due forecast. |
 | `GET` | `/api/reminders/preview` | The reminder message that would be sent now, plus whether it would fire. |
 | `POST` | `/api/reminders/test` | Force-send a reminder now (ignores the throttle). |
 | `GET` | `/api/decks/:id` | Deck with all cards. |
@@ -123,6 +127,7 @@ server/
   srs.js         SM-2 spaced repetition
   exporters.js   Anki / CSV / JSON exporters
   reminders.js   due-review reminders + webhook delivery
+  stats.js       study dashboard aggregation (history, streak, forecast)
 public/          single-page web client (no build step)
 test/            node:test suites
 ```

@@ -44,6 +44,7 @@ $$(".tab").forEach((t) =>
     $$(".tab").forEach((x) => x.classList.toggle("is-active", x === t));
     $$(".view").forEach((v) => v.classList.toggle("is-active", v.id === `view-${t.dataset.view}`));
     if (t.dataset.view === "alerts") loadAlerts();
+    if (t.dataset.view === "stats") loadStats();
   }),
 );
 function goStudy() {
@@ -369,6 +370,40 @@ async function loadAlerts() {
 async function reviewDeck(id) {
   await openDeck(id);
   startReview();
+}
+
+// ---- stats dashboard ----
+$("#stats-refresh").addEventListener("click", loadStats);
+
+async function loadStats() {
+  let s;
+  try { s = await api.get("/api/stats"); } catch { return; }
+
+  const metrics = [
+    { value: s.totalCards, label: "Cards in study" },
+    { value: s.reviewedToday, label: "Reviewed today" },
+    { value: s.retentionRate == null ? "—" : s.retentionRate, unit: s.retentionRate == null ? "" : "%", label: "Retention (14d)" },
+    { value: s.streakDays, unit: s.streakDays === 1 ? "day" : "days", label: "Study streak" },
+  ];
+  $("#metric-row").innerHTML = metrics
+    .map((m) => `<div class="metric"><div class="value">${m.value}${m.unit ? `<span class="unit">${m.unit}</span>` : ""}</div><div class="label">${m.label}</div></div>`)
+    .join("");
+
+  renderBars($("#chart-reviews"), s.daily.map((d) => ({ n: d.count, lbl: d.date.slice(5) })), "");
+  renderBars($("#chart-forecast"), s.forecast.map((d) => ({ n: d.due, lbl: d.date.slice(5) })), "forecast");
+}
+
+function renderBars(host, points, cls) {
+  const max = Math.max(1, ...points.map((p) => p.n));
+  host.innerHTML = points
+    .map((p) => {
+      const h = p.n === 0 ? 2 : Math.round((p.n / max) * 100);
+      return `<div class="bar-col">
+        <div class="bar ${cls}" style="height:${h === 2 ? "2px" : h + "%"}">${p.n ? `<span class="n">${p.n}</span>` : ""}</div>
+        <span class="lbl">${p.lbl}</span>
+      </div>`;
+    })
+    .join("");
 }
 
 // ---- helpers ----

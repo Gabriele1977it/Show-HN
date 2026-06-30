@@ -8,8 +8,13 @@ import { readFileSync, writeFileSync, renameSync, existsSync, mkdirSync } from "
 import { dirname } from "node:path";
 import { nanoid } from "nanoid";
 import { freshSrs, review, isDue } from "./srs.js";
+import { computeStats } from "./stats.js";
 
-const EMPTY = { decks: {}, cards: {} };
+const EMPTY = { decks: {}, cards: {}, reviewLog: [] };
+
+// Cap the review log so the JSON document stays small. The stats dashboard only
+// looks back a couple of weeks, so older raw events can be dropped safely.
+const MAX_LOG = 5000;
 
 export function createStore(filePath) {
   let state = load(filePath);
@@ -148,6 +153,11 @@ export function createStore(filePath) {
       const card = state.cards[id];
       if (!card) return null;
       card.srs = review(card.srs, grade, now);
+      // Record the event for the stats dashboard (graded value is normalised).
+      state.reviewLog.push({ cardId: id, deckId: card.deckId, grade: card.srs.lastGrade, at: now });
+      if (state.reviewLog.length > MAX_LOG) {
+        state.reviewLog = state.reviewLog.slice(-MAX_LOG);
+      }
       persist();
       return card;
     },
@@ -159,6 +169,11 @@ export function createStore(filePath) {
         .map((cid) => state.cards[cid])
         .filter((c) => c && isDue(c.srs, now))
         .sort((a, b) => a.srs.due - b.srs.due);
+    },
+
+    // Aggregated study statistics for the dashboard.
+    stats(now = Date.now()) {
+      return computeStats(state.reviewLog, Object.values(state.cards), now);
     },
 
     // For tests / inspection.
@@ -176,7 +191,7 @@ function load(filePath) {
   try {
     if (existsSync(filePath)) {
       const parsed = JSON.parse(readFileSync(filePath, "utf8"));
-      return { decks: parsed.decks ?? {}, cards: parsed.cards ?? {} };
+      return { decks: parsed.decks ?? {}, cards: parsed.cards ?? {}, reviewLog: parsed.reviewLog ?? [] };
     }
   } catch {
     // Corrupt or unreadable file: start clean rather than crash.

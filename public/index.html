@@ -16,6 +16,7 @@
         <button class="tab is-active" data-view="build">Build</button>
         <button class="tab" data-view="study">Study</button>
         <button class="tab" data-view="alerts">Alerts <span id="alert-badge" class="badge hidden">0</span></button>
+        <button class="tab" data-view="stats">Stats</button>
       </nav>
     </header>
 
@@ -123,6 +124,23 @@ Subtitle text here"></textarea>
           </div>
           <p class="muted small" id="reminder-status">Checking reminder configuration…</p>
           <pre id="reminder-preview" class="reminder-preview hidden"></pre>
+        </div>
+      </section>
+
+      <!-- STATS VIEW -->
+      <section id="view-stats" class="view">
+        <div class="alert-head" style="padding:0">
+          <h2>Study dashboard</h2>
+          <button id="stats-refresh" class="ghost small">Refresh</button>
+        </div>
+        <div class="metric-row" id="metric-row"></div>
+        <div class="panel chart-panel">
+          <h2>Reviews — last 14 days</h2>
+          <div class="chart" id="chart-reviews"></div>
+        </div>
+        <div class="panel chart-panel">
+          <h2>Due — next 7 days</h2>
+          <div class="chart" id="chart-forecast"></div>
         </div>
       </section>
 

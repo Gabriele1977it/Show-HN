@@ -59,6 +59,11 @@ export function createApp({ store, uploadsDir, reminders }) {
     res.json(store.dueSummary());
   });
 
+  // Study statistics for the dashboard.
+  app.get("/api/stats", (_req, res) => {
+    res.json(store.stats());
+  });
+
   // --- reminders -------------------------------------------------------
   // Preview what a reminder would say and whether one would fire right now.
   app.get("/api/reminders/preview", (_req, res) => {
