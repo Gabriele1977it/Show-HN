@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { createStore } from "../server/store.js";
 import { createApp } from "../server/app.js";
 import { createReminderService } from "../server/reminders.js";
+import { createBilling } from "../server/billing.js";
 
 let server, base, tmp, sentReminders, realFetch, wsKey;
 
@@ -18,13 +19,17 @@ before(async () => {
     notify: async (msg) => { sentReminders.push(msg); return { ok: true }; },
     config: { minIntervalMs: 1e9 },
   });
-  const app = createApp({ store, uploadsDir: join(tmp, "uploads"), reminders });
+  const billing = createBilling({ store, config: {} }); // dev mode (no Stripe keys)
+  const app = createApp({ store, uploadsDir: join(tmp, "uploads"), reminders, billing });
   await new Promise((res) => { server = app.listen(0, res); });
   base = `http://127.0.0.1:${server.address().port}`;
 
   // Default workspace for the suite; auto-inject its key on scoped /api calls so
-  // existing test bodies don't have to thread auth headers everywhere.
-  wsKey = store.createWorkspace({ name: "Test WS" }).key;
+  // existing test bodies don't have to thread auth headers everywhere. Put it on
+  // the Team plan so feature/limit gates don't interfere with feature tests.
+  const ws = store.createWorkspace({ name: "Test WS" });
+  wsKey = ws.key;
+  store.setWorkspacePlan(ws.id, "team");
   realFetch = globalThis.fetch;
   globalThis.fetch = (url, opts = {}) => {
     const scoped = typeof url === "string" && url.startsWith(base) &&
@@ -146,11 +151,61 @@ test("accounts: keychain accumulates joined workspaces", async () => {
   })).status, 400);
 });
 
+test("Free plan enforces limits; upgrading lifts them", async () => {
+  const hdr = (key, json) => ({ Authorization: `Bearer ${key}`, ...(json ? { "Content-Type": "application/json" } : {}) });
+  const ws = await realFetch(`${base}/api/workspaces`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: "Free WS" }),
+  }).then(j);
+  const key = ws.key;
+  const mkDeck = (n) => realFetch(`${base}/api/decks`, {
+    method: "POST", headers: hdr(key, true), body: JSON.stringify({ title: n, transcript: "[00:00] a" }),
+  });
+
+  // Free allows 3 decks; the 4th is blocked with 402 + upgrade flag.
+  for (let i = 0; i < 3; i++) assert.equal((await mkDeck(`d${i}`)).status, 201);
+  const blocked = await mkDeck("d4");
+  assert.equal(blocked.status, 402);
+  assert.equal((await blocked.json()).upgrade, true);
+
+  // Paid-only features are gated on Free.
+  const decks = await realFetch(`${base}/api/decks`, { headers: hdr(key) }).then(j);
+  assert.equal((await realFetch(`${base}/api/decks/${decks[0].id}/share`, { method: "POST", headers: hdr(key) })).status, 402);
+  assert.equal((await realFetch(`${base}/api/stats`, { headers: hdr(key) })).status, 402);
+  assert.equal((await realFetch(`${base}/api/members`, { method: "POST", headers: hdr(key, true), body: JSON.stringify({ name: "x", role: "viewer" }) })).status, 402);
+
+  // workspace endpoint reports the plan + usage.
+  const info = await realFetch(`${base}/api/workspace`, { headers: hdr(key) }).then(j);
+  assert.equal(info.plan, "free");
+  assert.equal(info.usage.decks, 3);
+  assert.equal(info.planInfo.maxDecks, 3);
+
+  // Upgrade via dev-mode checkout, then the limits/features open up.
+  const checkout = await realFetch(`${base}/api/billing/checkout`, {
+    method: "POST", headers: hdr(key, true), body: JSON.stringify({ plan: "pro" }),
+  }).then(j);
+  assert.equal(checkout.dev, true);
+  assert.equal((await mkDeck("d5")).status, 201); // 4th+ deck now allowed
+  assert.equal((await realFetch(`${base}/api/stats`, { headers: hdr(key) })).status, 200);
+  const after = await realFetch(`${base}/api/workspace`, { headers: hdr(key) }).then(j);
+  assert.equal(after.plan, "pro");
+  assert.equal(after.planInfo.maxDecks, null); // unlimited
+});
+
+test("plans catalog is public", async () => {
+  const plans = await realFetch(`${base}/api/plans`).then(j);
+  assert.deepEqual(plans.map((p) => p.id), ["free", "pro", "team"]);
+  assert.equal(plans.find((p) => p.id === "pro").features.sharing, true);
+});
+
 test("member roles: viewers are read-only, members are admin-managed", async () => {
   const hdr = (key, json) => ({ Authorization: `Bearer ${key}`, ...(json ? { "Content-Type": "application/json" } : {}) });
   const admin = await realFetch(`${base}/api/workspaces`, {
     method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: "Roles WS" }),
   }).then(j);
+  // Upgrade to Team (dev-mode checkout applies immediately) so members are allowed.
+  await realFetch(`${base}/api/billing/checkout`, {
+    method: "POST", headers: hdr(admin.key, true), body: JSON.stringify({ plan: "team" }),
+  });
 
   // Admin mints an editor and a viewer key.
   const editor = await realFetch(`${base}/api/members`, {

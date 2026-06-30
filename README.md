@@ -43,6 +43,10 @@ already uses (Anki, spreadsheets, JSON).
   reveal-meaning, export) with no access to your private review schedule; one
   click to unshare revokes it.
 - **Export** to Anki (`.tsv`), CSV, or full-fidelity JSON.
+- **Plans & billing (Stripe)** — Free / Pro / Team tiers with server-enforced
+  limits (decks, cards, members) and feature gates (sharing, reminders, stats).
+  An in-app pricing page drives upgrades through Stripe Checkout; without Stripe
+  keys it runs in dev mode (upgrade applies immediately) so the flow is testable.
 - **User accounts** — sign up with email + password (scrypt-hashed) and log in
   from any device to retrieve your workspaces, instead of pasting raw keys. An
   account keeps a keychain of the member keys it can access and a session token
@@ -103,6 +107,9 @@ from the workspace member key in `Authorization`).
 | `POST` | `/api/auth/logout` | Invalidate the current session (`X-Session`). |
 | `GET` | `/api/account` | The signed-in account's email + keychain (`X-Session`). |
 | `POST` | `/api/account/keys` | Save a member key to the account keychain. |
+| `GET` | `/api/plans` | Public plan catalog (Free / Pro / Team with limits + features). |
+| `POST` | `/api/billing/checkout` | (admin) Start an upgrade `{plan}`; returns a Stripe Checkout URL (or applies it in dev mode). |
+| `POST` | `/api/billing/webhook` | Stripe webhook (raw body, signature-verified) to sync subscription status. |
 | `POST` | `/api/workspaces` | Create a workspace; returns `id`, `name`, your admin `key`, and `role`. No auth. |
 | `GET` | `/api/workspace` | Identify the current workspace and the caller's role. |
 | `GET` | `/api/members` | List members (no keys). |
@@ -148,6 +155,27 @@ always inspectable. Sends are throttled **per workspace** (at most once per
 polling (which checks every workspace); the **Alerts** tab can also preview and
 force-send a test at any time.
 
+## Billing (Stripe)
+
+Plans are **Free** (3 decks, 100 cards, solo, no sharing/reminders/stats),
+**Pro** ($8/mo: unlimited decks/cards + all features, solo) and **Team**
+($20/mo: Pro + up to 10 members). Limits and feature gates are enforced
+server-side; over-limit writes return **HTTP 402** with `{ upgrade: true }`, and
+the client shows an upgrade prompt linking to the in-app pricing page.
+
+Without Stripe keys the app runs in **dev mode**: clicking *Upgrade* applies the
+plan immediately (no payment) so you can exercise the flow. To go live, set the
+env vars below and create two recurring Stripe Prices, then point a Stripe
+webhook at `POST /api/billing/webhook` (events: `checkout.session.completed`,
+`customer.subscription.updated`, `customer.subscription.deleted`).
+
+| Env var | Meaning |
+|---------|---------|
+| `STRIPE_SECRET_KEY` | Stripe secret key — enables real Checkout. |
+| `STRIPE_PRICE_PRO` | Price ID for the Pro subscription. |
+| `STRIPE_PRICE_TEAM` | Price ID for the Team subscription. |
+| `STRIPE_WEBHOOK_SECRET` | Signing secret for webhook verification. |
+
 ## Configuration
 
 | Env var | Default | Meaning |
@@ -172,6 +200,8 @@ server/
   srs.js         SM-2 spaced repetition
   cloze.js       fill-in-the-blank term suggestion + masking
   auth.js        password hashing (scrypt) + session tokens
+  plans.js       plan tiers + entitlement/limit helpers
+  billing.js     Stripe checkout + webhook verification (dev-mode fallback)
   exporters.js   Anki / CSV / JSON exporters
   reminders.js   due-review reminders + webhook delivery
   stats.js       study dashboard aggregation (history, streak, forecast)

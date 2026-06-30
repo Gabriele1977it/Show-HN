@@ -6,6 +6,8 @@
 // chat (Slack / Discord), and email-relay services (Zapier, Make, Mailgun),
 // so no provider credentials are baked into the app.
 
+import { hasFeature } from "./plans.js";
+
 /**
  * Format a due summary into a reminder message, or null when nothing is due.
  * @param {{totalDue:number, decksDue:Array<{title:string,dueCount:number}>, nextDue:number|null}} summary
@@ -91,6 +93,10 @@ export function createReminderService({ store, notify, config = {} }) {
    * @param {{workspaceId:string, now?:number, force?:boolean}} o `force` ignores the de-dupe gate.
    */
   async function run({ workspaceId, now = Date.now(), force = false }) {
+    // Reminders are a paid feature; skip workspaces whose plan doesn't include them.
+    if (store.getWorkspacePlan && !hasFeature(store.getWorkspacePlan(workspaceId), "reminders")) {
+      return { sent: false, reason: "plan" };
+    }
     const summary = store.dueSummary(workspaceId, now);
     const message = formatReminder(summary);
     if (!message) return { sent: false, reason: "nothing-due" };

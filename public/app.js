@@ -22,9 +22,12 @@ const api = {
 };
 async function handle(r) {
   if (!r.ok) {
-    let msg = "Request failed";
-    try { msg = (await r.json()).error || msg; } catch {}
-    throw new Error(msg);
+    let data = {};
+    try { data = await r.json(); } catch {}
+    const err = new Error(data.error || "Request failed");
+    err.status = r.status;
+    err.upgrade = Boolean(data.upgrade) || r.status === 402;
+    throw err;
   }
   return r.status === 204 ? null : r.json();
 }
@@ -53,6 +56,7 @@ $$(".tab").forEach((t) =>
     $$(".view").forEach((v) => v.classList.toggle("is-active", v.id === `view-${t.dataset.view}`));
     if (t.dataset.view === "alerts") loadAlerts();
     if (t.dataset.view === "stats") loadStats();
+    if (t.dataset.view === "pricing") loadPricing();
   }),
 );
 function goStudy() {
@@ -117,9 +121,21 @@ $("#build-form").addEventListener("submit", async (e) => {
     await loadDecks();
     openDeck(deck.id);
   } catch (err) {
-    $("#build-error").textContent = err.message;
+    showBuildError(err);
   }
 });
+
+function showBuildError(err) {
+  const el = $("#build-error");
+  el.innerHTML = "";
+  el.append(err.message + " ");
+  if (err.upgrade) {
+    const a = document.createElement("a");
+    a.href = "#"; a.textContent = "See plans →"; a.style.color = "var(--accent-2)";
+    a.addEventListener("click", (e) => { e.preventDefault(); showView("pricing"); loadPricing(); });
+    el.append(a);
+  }
+}
 
 // ---- deck list ----
 async function loadDecks() {
@@ -507,6 +523,76 @@ function highlight(text, q) {
   return safe.replace(re, "<mark>$1</mark>");
 }
 
+// ---- pricing & upgrades ----
+$("#ws-upgrade").addEventListener("click", () => { $("#ws-panel").classList.add("hidden"); showView("pricing"); loadPricing(); });
+
+let currentPlan = "free";
+async function loadPricing() {
+  let plans, ws;
+  try { [plans, ws] = await Promise.all([api.get("/api/plans"), api.get("/api/workspace")]); } catch { return; }
+  currentPlan = ws.plan;
+  $("#pricing-current").textContent = `You're on the ${ws.planInfo.name} plan · ${ws.usage.decks} decks · ${ws.usage.cards} cards`;
+  $("#pricing-msg").textContent = "";
+  const host = $("#pricing-cards");
+  host.innerHTML = "";
+  const featLabel = { sharing: "Public deck sharing", reminders: "Review reminders", stats: "Study dashboard" };
+  for (const p of plans) {
+    const isCurrent = p.id === currentPlan;
+    const card = document.createElement("div");
+    card.className = `plan-card${isCurrent ? " current" : ""}${p.id === "pro" ? " featured" : ""}`;
+    const limit = (v, unit) => (v === null ? `Unlimited ${unit}` : `${v} ${unit}`);
+    const feats = Object.keys(featLabel)
+      .map((f) => `<li class="${p.features[f] ? "" : "off"}">${featLabel[f]}</li>`)
+      .join("");
+    card.innerHTML = `
+      ${p.id === "pro" ? '<span class="plan-badge">Most popular</span>' : ""}
+      <h3>${p.name}</h3>
+      <div class="price">${p.price === 0 ? "Free" : "$" + p.price}<span>${p.price === 0 ? "" : "/mo"}</span></div>
+      <div class="blurb">${esc(p.blurb)}</div>
+      <ul>
+        <li>${limit(p.maxDecks, "decks")}</li>
+        <li>${limit(p.maxCards, "cards")}</li>
+        <li>${limit(p.maxMembers, p.maxMembers === 1 ? "member" : "members")}</li>
+        ${feats}
+      </ul>
+      <div class="cta"></div>`;
+    const cta = card.querySelector(".cta");
+    if (isCurrent) {
+      cta.innerHTML = `<button class="ghost" disabled>Current plan</button>`;
+    } else if (p.id === "free") {
+      cta.innerHTML = `<button class="ghost" disabled>—</button>`;
+    } else {
+      const btn = document.createElement("button");
+      btn.className = "primary";
+      btn.textContent = `Upgrade to ${p.name}`;
+      btn.addEventListener("click", () => startUpgrade(p.id, btn));
+      cta.appendChild(btn);
+    }
+    host.appendChild(card);
+  }
+}
+
+async function startUpgrade(plan, btn) {
+  btn.disabled = true;
+  btn.textContent = "Starting…";
+  $("#pricing-msg").textContent = "";
+  try {
+    const r = await api.post("/api/billing/checkout", { plan });
+    if (r.dev) {
+      // No Stripe configured: the upgrade already applied — reflect it.
+      $("#pricing-msg").textContent = "Upgraded (dev mode — no payment taken).";
+      await loadWorkspaceInfo();
+      loadPricing();
+    } else if (r.url) {
+      window.location.href = r.url; // off to Stripe Checkout
+    }
+  } catch (err) {
+    btn.disabled = false;
+    btn.textContent = `Upgrade to ${plan}`;
+    $("#pricing-msg").textContent = err.status === 403 ? "Only an admin can upgrade this workspace." : err.message;
+  }
+}
+
 // ---- stats dashboard ----
 $("#stats-refresh").addEventListener("click", loadStats);
 
@@ -641,6 +727,14 @@ async function loadWorkspaceInfo() {
     $("#ws-panel-name").textContent = w.name;
     $("#ws-role").textContent = w.role;
     $("#ws-key").value = wsKey;
+    if (w.planInfo) {
+      currentPlan = w.plan;
+      $("#ws-plan").textContent = w.planInfo.name;
+      const dl = w.planInfo.maxDecks == null ? "∞" : w.planInfo.maxDecks;
+      const cl = w.planInfo.maxCards == null ? "∞" : w.planInfo.maxCards;
+      $("#ws-usage").textContent = `${w.usage.decks}/${dl} decks · ${w.usage.cards}/${cl} cards · ${w.usage.members} member${w.usage.members === 1 ? "" : "s"}`;
+      $("#ws-upgrade").classList.toggle("hidden", w.plan !== "free");
+    }
     const isAdmin = w.role === "admin";
     $("#ws-admin").classList.toggle("hidden", !isAdmin);
     // Viewers see a read-only UI (the server enforces this regardless).

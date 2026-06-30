@@ -12,6 +12,7 @@ import { nanoid } from "nanoid";
 import { segmentTranscript } from "./segment.js";
 import { exportDeck } from "./exporters.js";
 import { normalizeEmail } from "./auth.js";
+import { canAdd, hasFeature, planPublic, listPlans } from "./plans.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = join(__dirname, "..", "public");
@@ -26,9 +27,12 @@ function sendExport(res, deck, cards, format) {
   res.send(body);
 }
 
-export function createApp({ store, uploadsDir, reminders }) {
+export function createApp({ store, uploadsDir, reminders, billing }) {
   const app = express();
-  app.use(express.json({ limit: "4mb" }));
+  // Stripe webhooks need the raw body for signature verification, so skip JSON
+  // parsing on that one route.
+  app.use((req, res, next) =>
+    req.path === "/api/billing/webhook" ? next() : express.json({ limit: "4mb" })(req, res, next));
 
   if (!existsSync(uploadsDir)) mkdirSync(uploadsDir, { recursive: true });
 
@@ -52,6 +56,7 @@ export function createApp({ store, uploadsDir, reminders }) {
     if (req.method === "POST" && req.path === "/workspaces") return next();
     if (req.path.startsWith("/shared/")) return next();
     if (req.path.startsWith("/auth/") || req.path.startsWith("/account")) return next();
+    if (req.path === "/billing/webhook" || req.path === "/plans") return next();
     const key = (req.get("authorization") || "").replace(/^Bearer\s+/i, "").trim();
     const member = store.getMemberByKey(key);
     if (!member) return res.status(401).json({ error: "Missing or invalid workspace key." });
@@ -122,9 +127,17 @@ export function createApp({ store, uploadsDir, reminders }) {
     res.status(201).json({ id: ws.id, name: ws.name, key: ws.key, role: ws.role });
   });
 
-  // Identify the current workspace and the caller's role.
+  // Identify the current workspace, the caller's role, and the plan + usage.
   app.get("/api/workspace", (req, res) => {
-    res.json({ ...store.getWorkspace(req.ws), role: req.role, memberId: req.memberId });
+    const plan = store.getWorkspacePlan(req.ws);
+    res.json({
+      ...store.getWorkspace(req.ws),
+      role: req.role,
+      memberId: req.memberId,
+      plan,
+      planInfo: planPublic(plan),
+      usage: store.workspaceUsage(req.ws),
+    });
   });
 
   // --- members ---------------------------------------------------------
@@ -133,6 +146,9 @@ export function createApp({ store, uploadsDir, reminders }) {
   });
 
   app.post("/api/members", requireAdmin, (req, res) => {
+    if (!canAdd(planOf(req), "members", store.workspaceUsage(req.ws).members)) {
+      return upgrade(res, `Your plan doesn't allow more members. Upgrade to the Team plan to invite teammates.`);
+    }
     const result = store.addMember(req.ws, { name: req.body?.name, role: req.body?.role });
     if (result?.error === "invalid-role") return res.status(400).json({ error: "role must be admin, editor, or viewer" });
     res.status(201).json(result);
@@ -145,6 +161,47 @@ export function createApp({ store, uploadsDir, reminders }) {
     res.status(204).end();
   });
 
+  // --- plans & billing -------------------------------------------------
+  // Entitlement helpers: 402 (Payment Required) signals "upgrade to continue".
+  const planOf = (req) => store.getWorkspacePlan(req.ws);
+  const upgrade = (res, msg) => res.status(402).json({ error: msg, upgrade: true });
+  const featureGate = (feature, label) => (req, res, next) =>
+    hasFeature(planOf(req), feature) ? next() : upgrade(res, `${label} is a paid feature — upgrade your plan.`);
+
+  app.get("/api/plans", (_req, res) => res.json(listPlans()));
+
+  // Start an upgrade. Admin-only; returns a checkout URL (Stripe) or applies the
+  // plan immediately in dev mode.
+  app.post("/api/billing/checkout", requireAdmin, async (req, res) => {
+    const plan = req.body?.plan;
+    if (plan !== "pro" && plan !== "team") return res.status(400).json({ error: "Choose the pro or team plan." });
+    const origin = `${req.protocol}://${req.get("host")}`;
+    try {
+      const result = await billing.createCheckout({
+        workspaceId: req.ws, plan,
+        successUrl: `${origin}/?upgraded=${plan}`,
+        cancelUrl: `${origin}/?upgrade=cancelled`,
+      });
+      res.json(result);
+    } catch (err) {
+      res.status(502).json({ error: `Checkout failed: ${err.message}` });
+    }
+  });
+
+  // Stripe webhook (raw body, signature-verified, no workspace auth).
+  app.post("/api/billing/webhook", express.raw({ type: "*/*" }), (req, res) => {
+    const payload = req.body instanceof Buffer ? req.body.toString("utf8") : "";
+    if (!billing.verifyWebhook(payload, req.get("stripe-signature"))) {
+      return res.status(400).json({ error: "Invalid signature" });
+    }
+    try {
+      billing.applyEvent(JSON.parse(payload));
+    } catch {
+      return res.status(400).json({ error: "Bad payload" });
+    }
+    res.json({ received: true });
+  });
+
   // --- audio upload ----------------------------------------------------
   app.post("/api/upload", upload.single("audio"), (req, res) => {
     if (!req.file) return res.status(400).json({ error: "No audio file (field 'audio') accepted." });
@@ -154,8 +211,15 @@ export function createApp({ store, uploadsDir, reminders }) {
   // --- decks -----------------------------------------------------------
   app.post("/api/decks", (req, res) => {
     const { title, language, audioUrl, transcript, maxChars } = req.body ?? {};
-    const deck = store.createDeck(req.ws, { title, language, audioUrl });
+    const use = store.workspaceUsage(req.ws);
+    if (!canAdd(planOf(req), "decks", use.decks)) {
+      return upgrade(res, `You've reached the deck limit on the Free plan. Upgrade for unlimited decks.`);
+    }
     const segments = segmentTranscript(transcript ?? "", { maxChars: Number(maxChars) || undefined });
+    if (!canAdd(planOf(req), "cards", use.cards, segments.length)) {
+      return upgrade(res, `This would exceed your card limit. Upgrade for unlimited cards.`);
+    }
+    const deck = store.createDeck(req.ws, { title, language, audioUrl });
     const cards = store.addCards(deck.id, segments, req.ws);
     res.status(201).json({ ...store.getDeck(deck.id, req.ws), cards });
   });
@@ -169,8 +233,8 @@ export function createApp({ store, uploadsDir, reminders }) {
     res.json(store.dueSummary(req.ws));
   });
 
-  // Study statistics for the dashboard.
-  app.get("/api/stats", (req, res) => {
+  // Study statistics for the dashboard (paid feature).
+  app.get("/api/stats", featureGate("stats", "The study dashboard"), (req, res) => {
     res.json(store.stats(req.ws));
   });
 
@@ -189,7 +253,7 @@ export function createApp({ store, uploadsDir, reminders }) {
 
   // Force-send a reminder now (ignores the de-dupe gate). Used by the UI's
   // "Send test reminder" button and for ops verification.
-  app.post("/api/reminders/test", async (req, res) => {
+  app.post("/api/reminders/test", featureGate("reminders", "Reminders"), async (req, res) => {
     if (!reminders) return res.status(400).json({ error: "Reminders are not configured." });
     try {
       const result = await reminders.run({ workspaceId: req.ws, force: true });
@@ -214,6 +278,9 @@ export function createApp({ store, uploadsDir, reminders }) {
   app.post("/api/decks/:id/cards", (req, res) => {
     const { transcript, maxChars } = req.body ?? {};
     const segments = segmentTranscript(transcript ?? "", { maxChars: Number(maxChars) || undefined });
+    if (!canAdd(planOf(req), "cards", store.workspaceUsage(req.ws).cards, segments.length)) {
+      return upgrade(res, `This would exceed your card limit. Upgrade for unlimited cards.`);
+    }
     const cards = store.addCards(req.params.id, segments, req.ws);
     if (cards === null) return res.status(404).json({ error: "Deck not found" });
     res.status(201).json(cards);
@@ -241,7 +308,7 @@ export function createApp({ store, uploadsDir, reminders }) {
 
   // --- sharing ---------------------------------------------------------
   // Publish a deck to an unguessable public link (or return the existing one).
-  app.post("/api/decks/:id/share", (req, res) => {
+  app.post("/api/decks/:id/share", featureGate("sharing", "Public sharing"), (req, res) => {
     const deck = store.publishDeck(req.params.id, req.ws);
     if (!deck) return res.status(404).json({ error: "Deck not found" });
     res.json({ shareId: deck.shareId, shareUrl: `${req.protocol}://${req.get("host")}/s/${deck.shareId}` });

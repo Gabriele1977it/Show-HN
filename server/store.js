@@ -58,7 +58,7 @@ export function createStore(filePath) {
     createWorkspace({ name } = {}) {
       const id = nanoid(10);
       const owner = newMember("Owner", "admin");
-      state.workspaces[id] = { id, name: name?.trim() || "My workspace", createdAt: Date.now(), members: [owner] };
+      state.workspaces[id] = { id, name: name?.trim() || "My workspace", createdAt: Date.now(), members: [owner], plan: "free", billing: null };
       persist();
       return { id, name: state.workspaces[id].name, key: owner.key, role: "admin", memberId: owner.id };
     },
@@ -112,6 +112,33 @@ export function createStore(filePath) {
 
     listWorkspaceIds() {
       return Object.keys(state.workspaces);
+    },
+
+    // --- plans / billing -----------------------------------------------
+    getWorkspacePlan(ws) {
+      return state.workspaces[ws]?.plan || "free";
+    },
+
+    setWorkspacePlan(ws, plan, billing = null) {
+      const w = state.workspaces[ws];
+      if (!w) return null;
+      w.plan = plan;
+      if (billing) w.billing = { ...(w.billing ?? {}), ...billing, updatedAt: Date.now() };
+      persist();
+      return { id: w.id, plan: w.plan, billing: w.billing };
+    },
+
+    // Current consumption, for limit checks and the usage meter.
+    workspaceUsage(ws) {
+      const decks = decksOf(ws);
+      const cards = decks.reduce((n, d) => n + d.cardOrder.length, 0);
+      const members = (state.workspaces[ws]?.members ?? []).length;
+      return { decks: decks.length, cards, members };
+    },
+
+    findWorkspaceBySubscription(subId) {
+      const w = Object.values(state.workspaces).find((x) => x.billing?.subscriptionId === subId);
+      return w?.id ?? null;
     },
 
     // --- accounts ------------------------------------------------------

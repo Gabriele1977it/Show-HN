@@ -18,6 +18,7 @@
         <button class="tab" data-view="study">Study</button>
         <button class="tab" data-view="alerts">Alerts <span id="alert-badge" class="badge hidden">0</span></button>
         <button class="tab" data-view="stats">Stats</button>
+        <button class="tab" data-view="pricing" id="pricing-tab">✦ Upgrade</button>
         <button id="ws-btn" class="tab" title="Workspace">⌂ <span id="ws-name">Workspace</span></button>
       </nav>
 
@@ -44,6 +45,12 @@
 
         <h3>Workspace</h3>
         <p class="muted small">You are <strong id="ws-role">—</strong> in <strong id="ws-panel-name">—</strong>.</p>
+        <div class="plan-line">
+          <span>Plan: <strong id="ws-plan">Free</strong></span>
+          <button id="ws-upgrade" class="primary small">Upgrade</button>
+        </div>
+        <p class="muted small" id="ws-usage"></p>
+        <hr />
         <label>Your access key
           <div class="row"><input id="ws-key" readonly /><button id="ws-copy" class="ghost small">Copy</button></div>
         </label>
@@ -199,6 +206,16 @@ Subtitle text here"></textarea>
           <button id="search-clear" class="ghost small">Clear</button>
         </div>
         <div id="search-results" class="card-list"></div>
+      </section>
+
+      <!-- PRICING VIEW -->
+      <section id="view-pricing" class="view">
+        <div class="alert-head" style="padding:0">
+          <h2>Plans &amp; pricing</h2>
+          <p class="muted small" id="pricing-current">—</p>
+        </div>
+        <div id="pricing-cards" class="pricing-grid"></div>
+        <p id="pricing-msg" class="muted small"></p>
       </section>
 
       <!-- STATS VIEW -->

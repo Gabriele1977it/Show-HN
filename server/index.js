@@ -5,6 +5,7 @@ import { dirname, join } from "node:path";
 import { createStore } from "./store.js";
 import { createApp } from "./app.js";
 import { createReminderService, webhookNotifier, consoleNotifier } from "./reminders.js";
+import { createBilling } from "./billing.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, "..");
@@ -29,10 +30,23 @@ const reminders = createReminderService({
   },
 });
 
-const app = createApp({ store, uploadsDir: UPLOADS_DIR, reminders });
+// Billing: real Stripe checkout when STRIPE_SECRET_KEY is set, otherwise dev
+// mode (the upgrade applies immediately so the flow works without live keys).
+const billing = createBilling({
+  store,
+  config: {
+    secretKey: process.env.STRIPE_SECRET_KEY,
+    pricePro: process.env.STRIPE_PRICE_PRO,
+    priceTeam: process.env.STRIPE_PRICE_TEAM,
+    webhookSecret: process.env.STRIPE_WEBHOOK_SECRET,
+  },
+});
+
+const app = createApp({ store, uploadsDir: UPLOADS_DIR, reminders, billing });
 
 app.listen(PORT, () => {
   console.log(`EchoDeck running on http://localhost:${PORT}`);
+  console.log(billing.enabled ? "Stripe billing enabled." : "Billing in dev mode (no Stripe keys).");
   // Background polling only runs when explicitly enabled.
   if (process.env.REMINDER_ENABLED === "1" || process.env.REMINDER_ENABLED === "true") {
     reminders.start();
