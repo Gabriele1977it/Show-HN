@@ -69,6 +69,20 @@ $("#audioFile").addEventListener("change", async (e) => {
   }
 });
 
+// ---- subtitle import (reads file text straight into the transcript box) ----
+$("#subBtn").addEventListener("click", () => $("#subFile").click());
+$("#subFile").addEventListener("change", async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const text = await file.text();
+  const ta = $("#build-form").transcript;
+  ta.value = ta.value.trim() ? ta.value.trimEnd() + "\n\n" + text : text;
+  if (!$("#build-form").title.value.trim()) {
+    $("#build-form").title.value = file.name.replace(/\.[^.]+$/, "");
+  }
+  e.target.value = "";
+});
+
 // ---- build deck ----
 $("#build-form").addEventListener("submit", async (e) => {
   e.preventDefault();

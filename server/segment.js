@@ -3,29 +3,59 @@
 // Turns a raw transcript (with or without timestamps) into an ordered list of
 // study segments. Each segment becomes one flashcard / shadowing loop.
 //
-// Supported timestamp prefixes at the start of a line:
-//   [00:12]      -> 12s
-//   [01:02]      -> 62s
-//   [00:12.5]    -> 12.5s
-//   [1:02:33]    -> 3753s
-//   00:12        -> 12s   (bare, no brackets)
-//   00:12 -->    -> 12s   (WebVTT / SRT style arrow, end time ignored if line has text after)
+// Three input shapes are recognised, in priority order:
 //
-// When no timestamps are present the text is split into sentences and grouped
-// so that every card holds at most `maxChars` characters of text.
+// 1. Subtitle cues (SRT / WebVTT) — any block containing a `-->` range.
+//    Both the start and end of each cue are captured, so shadowing loops use
+//    the real cue boundaries rather than a guess.
+//      1
+//      00:00:01,000 --> 00:00:04,000   (SRT, comma milliseconds)
+//      Hello there
+//
+//      00:04.000 --> 00:07.000         (WebVTT, dot milliseconds)
+//      Second line
+//
+// 2. Leading timestamps on each line (end derived from the next line's start):
+//      [00:12]   [01:02]   [00:12.5]   [1:02:33]   00:12 (bare)
+//
+// 3. Plain text — split into sentences and grouped so every card holds at most
+//    `maxChars` characters.
 
-const TS = String.raw`\d{1,2}:\d{2}(?::\d{2})?(?:\.\d{1,3})?`;
+const TS = String.raw`\d{1,2}:\d{2}(?::\d{2})?(?:[.,]\d{1,3})?`;
 // Matches an optional leading timestamp token, bracketed or bare.
 const LEADING_TS = new RegExp(`^\\s*(?:\\[\\s*(${TS})\\s*\\]|(${TS}))\\s*`);
+// Matches a subtitle cue range like `00:00:01,000 --> 00:00:04,000`.
+const CUE_RANGE = new RegExp(`(${TS})\\s*-->\\s*(${TS})`);
 
-/** Convert a `mm:ss(.ms)` or `hh:mm:ss(.ms)` token into seconds. */
+/** Convert a `mm:ss(.ms)` or `hh:mm:ss(.ms)` token into seconds. Accepts `,` ms. */
 export function parseTimestamp(token) {
   if (token == null) return null;
-  const parts = String(token).trim().split(":").map((p) => parseFloat(p));
+  const parts = String(token).trim().replace(",", ".").split(":").map((p) => parseFloat(p));
   if (parts.some((n) => Number.isNaN(n))) return null;
   let seconds = 0;
   for (const part of parts) seconds = seconds * 60 + part;
   return seconds;
+}
+
+/**
+ * Parse SRT / WebVTT cue blocks into segments with real start and end times.
+ * Index lines, the `WEBVTT` header, `NOTE` blocks, and cue settings after the
+ * timing line are ignored.
+ * @returns {Array<{text: string, start: number|null, end: number|null}>}
+ */
+export function parseCues(text) {
+  const blocks = (text ?? "").replace(/\r\n?/g, "\n").split(/\n{2,}/);
+  const segs = [];
+  for (const block of blocks) {
+    const lines = block.split("\n").map((l) => l.trim()).filter(Boolean);
+    const tIdx = lines.findIndex((l) => CUE_RANGE.test(l));
+    if (tIdx === -1) continue; // header / note / stray block
+    const m = CUE_RANGE.exec(lines[tIdx]);
+    const body = lines.slice(tIdx + 1).join(" ").trim();
+    if (!body) continue;
+    segs.push({ text: body, start: parseTimestamp(m[1]), end: parseTimestamp(m[2]) });
+  }
+  return segs;
 }
 
 function splitSentences(text) {
@@ -49,6 +79,14 @@ function splitSentences(text) {
 export function segmentTranscript(transcript, opts = {}) {
   const maxChars = opts.maxChars ?? 180;
   const raw = (transcript ?? "").replace(/\r\n?/g, "\n");
+
+  // Subtitle files (SRT / WebVTT) take priority: a `-->` range gives us both
+  // ends of every cue directly.
+  if (CUE_RANGE.test(raw)) {
+    const cues = parseCues(raw);
+    if (cues.length) return cues;
+  }
+
   const lines = raw.split("\n").map((l) => l.trim()).filter(Boolean);
 
   // Detect whether any line carries a leading timestamp.

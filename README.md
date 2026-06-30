@@ -17,8 +17,9 @@ already uses (Anki, spreadsheets, JSON).
 
 ## Features
 
-- **Ingest** a transcript with timestamps (`[00:12]`, `1:02:33`, bare `00:12`,
-  or SRT/VTT cues). Plain text without timestamps is split into sentence cards.
+- **Ingest** a transcript with timestamps (`[00:12]`, `1:02:33`, bare `00:12`),
+  or import a subtitle file (`.srt` / `.vtt`) — cue ranges give every card its
+  real start **and** end time. Plain text is split into sentence cards.
 - **Shadowing player** — each timestamped card becomes a loop with adjustable
   playback speed (0.6× / 0.75× / 1×) for repeat-after-me practice.
 - **Spaced repetition** — an SM-2 scheduler surfaces a daily *due* queue so
@@ -48,10 +49,14 @@ npm run dev        # auto-restart on file changes
 
 | Input | Result |
 |-------|--------|
+| SRT / WebVTT cues (`00:00:01,000 --> 00:00:04,000`) | One card per cue with the real start **and** end time. Index lines, the `WEBVTT` header, `NOTE` blocks, and cue settings are ignored. |
 | `[00:00] こんにちは` / `[00:04] …` | One card per line; each card's end = next card's start (used for the shadowing loop). |
 | `00:00 hello` (bare timestamp) | Same as above. |
-| Plain paragraph text | Split on sentence punctuation (incl. CJW `。！？`), packed into cards up to *Max card length* characters. |
+| Plain paragraph text | Split on sentence punctuation (incl. CJK `。！？`), packed into cards up to *Max card length* characters. |
 | Lines with no leading timestamp after a timed cue | Appended to the previous cue. |
+
+Use the **Import .srt / .vtt** button on the Build tab to load a subtitle file
+straight into the transcript box.
 
 ## API
 
@@ -98,7 +103,6 @@ test/            node:test suites
   skip the manual transcript step.
 - Team workspaces and shareable read-only decks.
 - Email / push alerts when a deck has cards due (mobile-first surface).
-- Bulk import of SRT/VTT subtitle files.
 
 ## Validation notes
 

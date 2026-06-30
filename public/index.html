@@ -42,10 +42,21 @@
               <span id="uploadStatus" class="muted small"></span>
             </label>
 
-            <label>Transcript
+            <label>
+              <span class="row between">
+                <span>Transcript</span>
+                <span>
+                  <input type="file" id="subFile" accept=".srt,.vtt,.txt,text/*" hidden />
+                  <button type="button" id="subBtn" class="ghost small">Import .srt / .vtt</button>
+                </span>
+              </span>
               <textarea name="transcript" rows="10" placeholder="[00:00] こんにちは、今日のニュースです。
 [00:04] 天気は晴れ、気温は二十五度です。
-…"></textarea>
+
+…or paste an SRT/VTT block:
+1
+00:00:01,000 --> 00:00:04,000
+Subtitle text here"></textarea>
             </label>
 
             <div class="row between">
