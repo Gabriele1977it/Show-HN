@@ -166,6 +166,9 @@ function renderDeck() {
   $("#due-badge").textContent = dueCount;
   if (d.audioUrl) state.player.src = d.audioUrl;
 
+  if (d.shareId) showShareBar(`${location.origin}/s/${d.shareId}`);
+  else $("#share-bar").classList.add("hidden");
+
   const list = $("#card-list");
   list.innerHTML = "";
   d.cards.forEach((c, i) => list.appendChild(renderCard(c, i)));
@@ -221,6 +224,31 @@ $("#export-btn").addEventListener("click", () => {
   const fmt = $("#export-format").value;
   window.location.href = `/api/decks/${state.deck.id}/export?format=${fmt}`;
 });
+
+// ---- sharing ----
+$("#share-btn").addEventListener("click", async () => {
+  if (!state.deck) return;
+  const { shareUrl } = await api.post(`/api/decks/${state.deck.id}/share`, {});
+  state.deck.shareId = shareUrl.split("/").pop();
+  showShareBar(shareUrl);
+});
+$("#share-off").addEventListener("click", async () => {
+  if (!state.deck) return;
+  await api.del(`/api/decks/${state.deck.id}/share`);
+  state.deck.shareId = null;
+  $("#share-bar").classList.add("hidden");
+});
+$("#share-copy").addEventListener("click", async () => {
+  const input = $("#share-url");
+  try { await navigator.clipboard.writeText(input.value); flash($("#share-copy"), "Copied ✓"); }
+  catch { input.select(); document.execCommand("copy"); flash($("#share-copy"), "Copied ✓"); }
+});
+
+function showShareBar(url) {
+  $("#share-url").value = url;
+  $("#share-open").href = url;
+  $("#share-bar").classList.remove("hidden");
+}
 
 // ---- review session ----
 const review = { queue: [], idx: 0 };

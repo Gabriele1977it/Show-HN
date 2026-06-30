@@ -107,6 +107,10 @@ button { cursor: pointer; font: inherit; border-radius: 10px; border: 1px solid 
 .reminder-panel { margin-top: 16px; }
 .reminder-preview { background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; padding: 12px; white-space: pre-wrap; font-size: 13px; margin: 10px 0 0; color: var(--ink); }
 
+.share-bar { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
+.share-bar input { flex: 1; margin: 0; font-size: 13px; }
+.share-bar a.ghost { display: inline-flex; align-items: center; }
+
 .card-list { display: flex; flex-direction: column; gap: 10px; }
 .scard { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px; }
 .scard .front { font-size: 17px; }

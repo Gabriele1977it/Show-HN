@@ -38,6 +38,7 @@ export function createStore(filePath) {
         audioUrl: audioUrl || null,
         createdAt: Date.now(),
         cardOrder: [],
+        shareId: null,
       };
       state.decks[id] = deck;
       persist();
@@ -169,6 +170,41 @@ export function createStore(filePath) {
         .map((cid) => state.cards[cid])
         .filter((c) => c && isDue(c.srs, now))
         .sort((a, b) => a.srs.due - b.srs.due);
+    },
+
+    // --- sharing -------------------------------------------------------
+    // Publishing assigns an unguessable share id; the deck stays unlisted but
+    // anyone with the link can view and export it.
+    publishDeck(id) {
+      const deck = state.decks[id];
+      if (!deck) return null;
+      if (!deck.shareId) {
+        deck.shareId = nanoid(16);
+        persist();
+      }
+      return deck;
+    },
+
+    unpublishDeck(id) {
+      const deck = state.decks[id];
+      if (!deck) return null;
+      if (deck.shareId) {
+        deck.shareId = null;
+        persist();
+      }
+      return deck;
+    },
+
+    // Public, read-only view of a shared deck: card content only, no private
+    // scheduling state.
+    getSharedDeck(shareId) {
+      const deck = Object.values(state.decks).find((d) => d.shareId === shareId);
+      if (!deck) return null;
+      const cards = deck.cardOrder
+        .map((cid) => state.cards[cid])
+        .filter(Boolean)
+        .map((c) => ({ front: c.front, back: c.back, notes: c.notes, start: c.start, end: c.end, tags: c.tags }));
+      return { shareId, title: deck.title, language: deck.language, audioUrl: deck.audioUrl, cards };
     },
 
     // Aggregated study statistics for the dashboard.

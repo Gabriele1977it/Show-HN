@@ -164,6 +164,44 @@ test("stats endpoint reflects review activity", async () => {
   assert.ok(s.retentionRate === null || (s.retentionRate >= 0 && s.retentionRate <= 100));
 });
 
+test("sharing exposes a read-only public deck and revokes on unshare", async () => {
+  const deck = await fetch(`${base}/api/decks`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title: "Shared JP", language: "Japanese", audioUrl: "/a.mp3", transcript: "[00:00] one\n[00:04] two" }),
+  }).then(j);
+
+  // Publish.
+  const pub = await fetch(`${base}/api/decks/${deck.id}/share`, { method: "POST" }).then(j);
+  assert.ok(pub.shareId && pub.shareId.length >= 16);
+  assert.match(pub.shareUrl, new RegExp(`/s/${pub.shareId}$`));
+
+  // Re-publishing returns the same id (idempotent).
+  const pub2 = await fetch(`${base}/api/decks/${deck.id}/share`, { method: "POST" }).then(j);
+  assert.equal(pub2.shareId, pub.shareId);
+
+  // Public view: card content only, no SRS state, with a working viewer page.
+  const shared = await fetch(`${base}/api/shared/${pub.shareId}`).then(j);
+  assert.equal(shared.title, "Shared JP");
+  assert.equal(shared.cards.length, 2);
+  assert.equal(shared.cards[0].front, "one");
+  assert.ok(!("srs" in shared.cards[0]), "private scheduling state is not exposed");
+  assert.ok(!("id" in shared.cards[0]));
+
+  const page = await fetch(`${base}/s/${pub.shareId}`);
+  assert.equal(page.status, 200);
+  assert.match(page.headers.get("content-type"), /html/);
+
+  // Public export works.
+  const exp = await fetch(`${base}/api/shared/${pub.shareId}/export?format=anki`);
+  assert.equal(exp.status, 200);
+  assert.ok((await exp.text()).includes("\t"));
+
+  // Unshare revokes access.
+  assert.equal((await fetch(`${base}/api/decks/${deck.id}/share`, { method: "DELETE" })).status, 204);
+  assert.equal((await fetch(`${base}/api/shared/${pub.shareId}`)).status, 404);
+});
+
 test("deleting a deck removes it and its cards", async () => {
   const created = await fetch(`${base}/api/decks`, {
     method: "POST",

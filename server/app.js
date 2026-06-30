@@ -17,6 +17,14 @@ const PUBLIC_DIR = join(__dirname, "..", "public");
 
 const GRADE_MAP = { again: 2, hard: 3, good: 4, easy: 5 };
 
+function sendExport(res, deck, cards, format) {
+  const { body, type, ext } = exportDeck(deck, cards, format);
+  const safeName = (deck.title || "deck").replace(/[^a-z0-9-_]+/gi, "_").slice(0, 60) || "deck";
+  res.setHeader("Content-Type", type + "; charset=utf-8");
+  res.setHeader("Content-Disposition", `attachment; filename="${safeName}.${ext}"`);
+  res.send(body);
+}
+
 export function createApp({ store, uploadsDir, reminders }) {
   const app = express();
   app.use(express.json({ limit: "4mb" }));
@@ -113,12 +121,38 @@ export function createApp({ store, uploadsDir, reminders }) {
   app.get("/api/decks/:id/export", (req, res) => {
     const deck = store.getDeck(req.params.id);
     if (!deck) return res.status(404).json({ error: "Deck not found" });
-    const { body, type, ext } = exportDeck(deck, deck.cards, req.query.format);
-    const safeName = (deck.title || "deck").replace(/[^a-z0-9-_]+/gi, "_").slice(0, 60) || "deck";
-    res.setHeader("Content-Type", type + "; charset=utf-8");
-    res.setHeader("Content-Disposition", `attachment; filename="${safeName}.${ext}"`);
-    res.send(body);
+    sendExport(res, deck, deck.cards, req.query.format);
   });
+
+  // --- sharing ---------------------------------------------------------
+  // Publish a deck to an unguessable public link (or return the existing one).
+  app.post("/api/decks/:id/share", (req, res) => {
+    const deck = store.publishDeck(req.params.id);
+    if (!deck) return res.status(404).json({ error: "Deck not found" });
+    res.json({ shareId: deck.shareId, shareUrl: `${req.protocol}://${req.get("host")}/s/${deck.shareId}` });
+  });
+
+  app.delete("/api/decks/:id/share", (req, res) => {
+    const deck = store.unpublishDeck(req.params.id);
+    if (!deck) return res.status(404).json({ error: "Deck not found" });
+    res.status(204).end();
+  });
+
+  // Public, read-only deck data (no private scheduling state).
+  app.get("/api/shared/:shareId", (req, res) => {
+    const deck = store.getSharedDeck(req.params.shareId);
+    if (!deck) return res.status(404).json({ error: "Shared deck not found" });
+    res.json(deck);
+  });
+
+  app.get("/api/shared/:shareId/export", (req, res) => {
+    const deck = store.getSharedDeck(req.params.shareId);
+    if (!deck) return res.status(404).json({ error: "Shared deck not found" });
+    sendExport(res, deck, deck.cards, req.query.format);
+  });
+
+  // Public viewer page.
+  app.get("/s/:shareId", (_req, res) => res.sendFile(join(PUBLIC_DIR, "share.html")));
 
   // --- cards -----------------------------------------------------------
   app.patch("/api/cards/:id", (req, res) => {

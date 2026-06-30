@@ -32,6 +32,10 @@ already uses (Anki, spreadsheets, JSON).
   how many cards are due across every deck and when the next card comes up, with
   one-click jump straight into a review session. This is the surface a daily
   push/email reminder would hang off.
+- **Shareable decks** — publish any deck to an unguessable public link
+  (`/s/:shareId`). Your audience gets a read-only viewer (shadowing loops,
+  reveal-meaning, export) with no access to your private review schedule; one
+  click to unshare revokes it.
 - **Export** to Anki (`.tsv`), CSV, or full-fidelity JSON.
 - **Zero external services** — runs locally with a single JSON data file; no
   API keys, no database server.
@@ -84,6 +88,11 @@ The web UI is a thin client over a small REST API:
 | `GET` | `/api/decks/:id/export?format=anki\|csv\|json` | Download the deck. |
 | `PATCH` | `/api/cards/:id` | Update `front` / `back` / `notes` / `tags` / timing. |
 | `POST` | `/api/cards/:id/review` | Grade a card (`again`/`hard`/`good`/`easy` or `0`–`5`). |
+| `POST` | `/api/decks/:id/share` | Publish to a public link; returns `shareId` + `shareUrl`. |
+| `DELETE` | `/api/decks/:id/share` | Unpublish (revoke the link). |
+| `GET` | `/api/shared/:shareId` | Public read-only deck (card content only). |
+| `GET` | `/api/shared/:shareId/export?format=…` | Export a shared deck. |
+| `GET` | `/s/:shareId` | Public viewer page for a shared deck. |
 | `POST` | `/api/upload` | Upload an audio file (multipart field `audio`). |
 
 ## Reminders (push / email)
@@ -128,7 +137,7 @@ server/
   exporters.js   Anki / CSV / JSON exporters
   reminders.js   due-review reminders + webhook delivery
   stats.js       study dashboard aggregation (history, streak, forecast)
-public/          single-page web client (no build step)
+public/          single-page web client + share.html public viewer
 test/            node:test suites
 ```
 
@@ -136,7 +145,8 @@ test/            node:test suites
 
 - Auto-transcription of uploaded audio (Whisper-class model) so creators can
   skip the manual transcript step.
-- Team workspaces and shareable read-only decks.
+- Cross-deck search and cloze (fill-in-the-blank) card generation.
+- Team workspaces and accounts (sharing today is per-deck, unlisted links).
 - Per-user / per-deck reminder schedules and quiet hours (current reminders are
   a single global webhook).
 

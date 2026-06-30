@@ -96,8 +96,18 @@ Subtitle text here"></textarea>
                 <option value="json">JSON</option>
               </select>
               <button id="export-btn" class="ghost">Export</button>
+              <button id="share-btn" class="ghost">Share</button>
               <button id="review-btn" class="primary">Review due <span id="due-badge" class="badge">0</span></button>
             </div>
+          </div>
+
+          <!-- Share link bar -->
+          <div id="share-bar" class="panel share-bar hidden">
+            <span class="muted small">Public link:</span>
+            <input id="share-url" readonly />
+            <button id="share-copy" class="ghost small">Copy</button>
+            <a id="share-open" class="ghost small" target="_blank" rel="noopener" style="text-decoration:none">Open ↗</a>
+            <button id="share-off" class="ghost small">Unshare</button>
           </div>
 
           <!-- Shadowing / card list -->
