@@ -20,7 +20,18 @@ const PORT = process.env.PORT || 3000;
 const DATA_FILE = process.env.ECHODECK_DATA || join(ROOT, "data", "db.json");
 const UPLOADS_DIR = process.env.ECHODECK_UPLOADS || join(ROOT, "uploads");
 
-const store = createStore(DATA_FILE);
+// Storage: SQLite by default (durable, indexed), importing any existing JSON
+// data on first boot. Set STORE=json to keep the simple JSON file store.
+let store;
+if (process.env.STORE === "json") {
+  store = createStore(DATA_FILE);
+  console.log("Store: JSON file.");
+} else {
+  const { createSqliteStore } = await import("./store-sqlite.js");
+  const DB_FILE = process.env.ECHODECK_DB || join(ROOT, "data", "echodeck.db");
+  store = createSqliteStore(DB_FILE, { migrateFrom: DATA_FILE });
+  console.log(`Store: SQLite (${DB_FILE}).`);
+}
 
 // Reminders: deliver via REMINDER_WEBHOOK_URL when set (ntfy / Slack / email
 // relay), otherwise log to the console so the surface is always inspectable.

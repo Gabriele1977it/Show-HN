@@ -197,7 +197,9 @@ npm start
 | Env var | Default | Meaning |
 |---------|---------|---------|
 | `PORT` | `3000` | HTTP port. |
-| `ECHODECK_DATA` | `./data/db.json` | Path to the JSON data file. |
+| `STORE` | `sqlite` | Storage backend: `sqlite` (default) or `json`. |
+| `ECHODECK_DB` | `./data/echodeck.db` | SQLite database path (when `STORE=sqlite`). |
+| `ECHODECK_DATA` | `./data/db.json` | JSON data file (used by `STORE=json`, and as the import source on first SQLite boot). |
 | `ECHODECK_UPLOADS` | `./uploads` | Directory for uploaded audio. |
 | `REMINDER_WEBHOOK_URL` | _(unset)_ | Outbound webhook for reminders (ntfy / Slack / Discord / email relay). Logs to console if unset. |
 | `REMINDER_ENABLED` | `0` | Set to `1`/`true` to run background reminder polling. |
@@ -211,7 +213,8 @@ npm start
 server/
   index.js       entry point (listener + config)
   app.js         express app factory + routes
-  store.js       atomic JSON persistence
+  store.js       JSON persistence (STORE=json)
+  store-sqlite.js SQLite persistence — the default backend
   segment.js     transcript → segments
   srs.js         SM-2 spaced repetition
   cloze.js       fill-in-the-blank term suggestion + masking
@@ -238,17 +241,20 @@ docker run -p 3000:3000 --env-file .env -v echodeck-data:/data echodeck
 ```
 
 - A `Procfile` is included for Heroku-style buildpacks (Render, Railway, Fly.io).
-- **Persist `/data`** (a mounted volume) — that's where the JSON store and uploads
-  live. Without a persistent volume, data is lost on every restart.
+- **Persist `/data`** (a mounted volume) — that's where the SQLite database
+  (`echodeck.db`) and uploads live. Without a persistent volume, data is lost on
+  every restart. On first SQLite boot an existing `db.json` is imported
+  automatically, so upgrading from the JSON store keeps your data.
 - Put it behind **HTTPS** (your host's TLS) so the Stripe webhook has a public URL.
 - Hardening included: security headers (incl. CSP), auth rate limiting, JSON 404s,
   a central error handler, and graceful shutdown on SIGTERM/SIGINT.
 - `Terms` (`/terms`) and `Privacy` (`/privacy`) pages are starter templates —
   **have them reviewed by a lawyer** before launch.
 
-> **Scaling note:** the JSON store is fine for a single instance / modest traffic.
-> For multiple instances or higher load, migrate to a real database (e.g. SQLite
-> or Postgres) and a shared rate-limit store.
+> **Scaling note:** the default SQLite store is durable and indexed, ideal for a
+> single instance. To run multiple instances behind a load balancer you'd move to
+> a networked database (e.g. Postgres) and a shared rate-limit store — the store
+> API is isolated in `store-sqlite.js`, so that's a contained change.
 
 ## Roadmap (post-MVP)
 

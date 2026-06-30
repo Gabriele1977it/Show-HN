@@ -4,6 +4,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createStore } from "../server/store.js";
+import { createSqliteStore } from "../server/store-sqlite.js";
 import { createApp } from "../server/app.js";
 import { createReminderService } from "../server/reminders.js";
 import { createBilling } from "../server/billing.js";
@@ -13,7 +14,10 @@ let server, base, tmp, sentReminders, realFetch, wsKey;
 
 before(async () => {
   tmp = mkdtempSync(join(tmpdir(), "echodeck-"));
-  const store = createStore(join(tmp, "db.json"));
+  // Run the whole HTTP suite against either store (ECHODECK_TEST_STORE=sqlite).
+  const store = process.env.ECHODECK_TEST_STORE === "sqlite"
+    ? createSqliteStore(join(tmp, "echodeck.db"))
+    : createStore(join(tmp, "db.json"));
   sentReminders = [];
   const reminders = createReminderService({
     store,

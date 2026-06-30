@@ -1,5 +1,6 @@
-# EchoDeck production image.
-FROM node:22-alpine
+# EchoDeck production image. Debian slim (glibc) so better-sqlite3 uses its
+# prebuilt binary without needing a compiler in the image.
+FROM node:22-slim
 
 WORKDIR /app
 
