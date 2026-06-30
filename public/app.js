@@ -277,6 +277,49 @@ function closeReview(done) {
 
 // ---- alerts ----
 $("#alert-refresh").addEventListener("click", loadAlerts);
+$("#reminder-test").addEventListener("click", sendTestReminder);
+
+async function loadReminderPanel() {
+  const status = $("#reminder-status");
+  const pre = $("#reminder-preview");
+  const testBtn = $("#reminder-test");
+  try {
+    const r = await api.get("/api/reminders/preview");
+    if (!r.enabled) {
+      status.textContent = "Reminders are not configured on this server.";
+      pre.classList.add("hidden");
+      testBtn.disabled = true;
+      return;
+    }
+    testBtn.disabled = false;
+    const hrs = Math.round((r.config.minIntervalMs / 3600000) * 10) / 10;
+    if (r.message) {
+      status.innerHTML = `${r.wouldSend ? "A reminder is ready to send" : "Throttled — already sent recently"} · at most once / ${hrs}h.`;
+      pre.textContent = `${r.message.title}\n\n${r.message.body}`;
+      pre.classList.remove("hidden");
+    } else {
+      status.textContent = `Nothing due — no reminder pending. Sends at most once / ${hrs}h when cards are due.`;
+      pre.classList.add("hidden");
+    }
+  } catch {
+    status.textContent = "Could not load reminder status.";
+  }
+}
+
+async function sendTestReminder() {
+  const btn = $("#reminder-test");
+  btn.disabled = true;
+  const old = btn.textContent;
+  btn.textContent = "Sending…";
+  try {
+    const res = await api.post("/api/reminders/test", {});
+    btn.textContent = res.sent ? "Sent ✓" : "Nothing due";
+  } catch (err) {
+    btn.textContent = "Failed";
+    $("#reminder-status").textContent = err.message;
+  }
+  setTimeout(() => { btn.textContent = old; btn.disabled = false; loadReminderPanel(); }, 1400);
+}
 
 async function refreshBadge() {
   try {
@@ -289,6 +332,7 @@ async function refreshBadge() {
 }
 
 async function loadAlerts() {
+  loadReminderPanel();
   const s = await refreshBadge();
   const list = $("#alert-list");
   const summary = $("#alert-summary");

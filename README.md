@@ -71,6 +71,8 @@ The web UI is a thin client over a small REST API:
 | `POST` | `/api/decks` | Create a deck from `{ title, language, audioUrl, transcript, maxChars }`. |
 | `GET` | `/api/decks` | List decks with card and due counts. |
 | `GET` | `/api/alerts` | Cross-deck review summary: `totalDue`, per-deck due counts, and the next due time. |
+| `GET` | `/api/reminders/preview` | The reminder message that would be sent now, plus whether it would fire. |
+| `POST` | `/api/reminders/test` | Force-send a reminder now (ignores the throttle). |
 | `GET` | `/api/decks/:id` | Deck with all cards. |
 | `DELETE` | `/api/decks/:id` | Delete a deck and its cards. |
 | `POST` | `/api/decks/:id/cards` | Append more cards from extra transcript text. |
@@ -80,6 +82,23 @@ The web UI is a thin client over a small REST API:
 | `POST` | `/api/cards/:id/review` | Grade a card (`again`/`hard`/`good`/`easy` or `0`–`5`). |
 | `POST` | `/api/upload` | Upload an audio file (multipart field `audio`). |
 
+## Reminders (push / email)
+
+EchoDeck can nudge you when cards are due. The summary from `/api/alerts` is
+formatted into a message and delivered through a single outbound **webhook**, so
+one mechanism covers push, chat, and email without baking in any provider
+credentials:
+
+- **Push to phone** — point `REMINDER_WEBHOOK_URL` at an [ntfy.sh](https://ntfy.sh) topic.
+- **Chat** — a Slack or Discord incoming webhook URL.
+- **Email** — a relay such as Zapier / Make / Mailgun that turns the POST into an email.
+
+When no webhook is set, reminders are logged to the console so the surface is
+always inspectable. Sends are throttled (at most once per `REMINDER_MIN_INTERVAL_MS`,
+default 12h) and only fire when at least `REMINDER_MIN_DUE` cards are due. Set
+`REMINDER_ENABLED=1` to turn on background polling; the **Alerts** tab can also
+preview and force-send a test at any time.
+
 ## Configuration
 
 | Env var | Default | Meaning |
@@ -87,6 +106,11 @@ The web UI is a thin client over a small REST API:
 | `PORT` | `3000` | HTTP port. |
 | `ECHODECK_DATA` | `./data/db.json` | Path to the JSON data file. |
 | `ECHODECK_UPLOADS` | `./uploads` | Directory for uploaded audio. |
+| `REMINDER_WEBHOOK_URL` | _(unset)_ | Outbound webhook for reminders (ntfy / Slack / Discord / email relay). Logs to console if unset. |
+| `REMINDER_ENABLED` | `0` | Set to `1`/`true` to run background reminder polling. |
+| `REMINDER_MIN_DUE` | `1` | Minimum due cards before a reminder fires. |
+| `REMINDER_MIN_INTERVAL_MS` | `43200000` | Minimum gap between reminders (12h). |
+| `REMINDER_POLL_MS` | `1800000` | Background poll interval (30m). |
 
 ## Project layout
 
@@ -98,6 +122,7 @@ server/
   segment.js     transcript → segments
   srs.js         SM-2 spaced repetition
   exporters.js   Anki / CSV / JSON exporters
+  reminders.js   due-review reminders + webhook delivery
 public/          single-page web client (no build step)
 test/            node:test suites
 ```
@@ -107,8 +132,8 @@ test/            node:test suites
 - Auto-transcription of uploaded audio (Whisper-class model) so creators can
   skip the manual transcript step.
 - Team workspaces and shareable read-only decks.
-- Wire the existing `/api/alerts` summary to email / push so reminders reach a
-  mobile device (the data surface is already in place).
+- Per-user / per-deck reminder schedules and quiet hours (current reminders are
+  a single global webhook).
 
 ## Validation notes
 

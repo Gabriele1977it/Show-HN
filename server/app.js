@@ -17,7 +17,7 @@ const PUBLIC_DIR = join(__dirname, "..", "public");
 
 const GRADE_MAP = { again: 2, hard: 3, good: 4, easy: 5 };
 
-export function createApp({ store, uploadsDir }) {
+export function createApp({ store, uploadsDir, reminders }) {
   const app = express();
   app.use(express.json({ limit: "4mb" }));
 
@@ -57,6 +57,25 @@ export function createApp({ store, uploadsDir }) {
   // Cross-deck review alert (drives the Alerts tab and any future push/email).
   app.get("/api/alerts", (_req, res) => {
     res.json(store.dueSummary());
+  });
+
+  // --- reminders -------------------------------------------------------
+  // Preview what a reminder would say and whether one would fire right now.
+  app.get("/api/reminders/preview", (_req, res) => {
+    if (!reminders) return res.json({ enabled: false });
+    res.json({ enabled: true, ...reminders.preview() });
+  });
+
+  // Force-send a reminder now (ignores the de-dupe gate). Used by the UI's
+  // "Send test reminder" button and for ops verification.
+  app.post("/api/reminders/test", async (_req, res) => {
+    if (!reminders) return res.status(400).json({ error: "Reminders are not configured." });
+    try {
+      const result = await reminders.run({ force: true });
+      res.json(result);
+    } catch (err) {
+      res.status(502).json({ error: `Reminder delivery failed: ${err.message}` });
+    }
   });
 
   app.get("/api/decks/:id", (req, res) => {

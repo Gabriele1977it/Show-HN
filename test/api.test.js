@@ -5,13 +5,20 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createStore } from "../server/store.js";
 import { createApp } from "../server/app.js";
+import { createReminderService } from "../server/reminders.js";
 
-let server, base, tmp;
+let server, base, tmp, sentReminders;
 
 before(async () => {
   tmp = mkdtempSync(join(tmpdir(), "echodeck-"));
   const store = createStore(join(tmp, "db.json"));
-  const app = createApp({ store, uploadsDir: join(tmp, "uploads") });
+  sentReminders = [];
+  const reminders = createReminderService({
+    store,
+    notify: async (msg) => { sentReminders.push(msg); return { ok: true }; },
+    config: { minIntervalMs: 1e9 },
+  });
+  const app = createApp({ store, uploadsDir: join(tmp, "uploads"), reminders });
   await new Promise((res) => { server = app.listen(0, res); });
   base = `http://127.0.0.1:${server.address().port}`;
 });
@@ -130,6 +137,20 @@ test("alerts summary counts due cards and clears them after review", async () =>
   assert.equal(done.totalDue, before.totalDue, "reviewed cards leave the due total");
   assert.ok(!done.decksDue.find((d) => d.id === deck.id), "deck no longer in alert list");
   assert.ok(done.nextDue > Date.now(), "next-due time points to the scheduled cards");
+});
+
+test("reminder preview reflects due cards; test endpoint force-sends", async () => {
+  // At this point earlier tests have left some due cards in the store.
+  const preview = await fetch(`${base}/api/reminders/preview`).then(j);
+  assert.equal(preview.enabled, true);
+  assert.ok(preview.message, "a reminder message is pending");
+  assert.match(preview.message.title, /ready to review/);
+
+  const countBefore = sentReminders.length;
+  const sent = await fetch(`${base}/api/reminders/test`, { method: "POST" }).then(j);
+  assert.equal(sent.sent, true);
+  assert.equal(sentReminders.length, countBefore + 1);
+  assert.match(sentReminders.at(-1).title, /EchoDeck/);
 });
 
 test("deleting a deck removes it and its cards", async () => {
