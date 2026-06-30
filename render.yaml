@@ -1,0 +1,37 @@
+# Render Blueprint — deploy EchoDeck as a web service with a persistent disk.
+# In Render: New + → Blueprint → connect this repo. A persistent disk needs a
+# paid instance type (Starter+); the free tier has no disk and would lose data.
+services:
+  - type: web
+    name: echodeck
+    runtime: node
+    plan: starter
+    branch: claude/saas-media-creators-product-at4st5
+    buildCommand: npm ci
+    startCommand: node server/index.js
+    healthCheckPath: /health
+    autoDeploy: true
+    disk:
+      name: data
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: ECHODECK_DB
+        value: /data/echodeck.db
+      - key: ECHODECK_UPLOADS
+        value: /data/uploads
+      # Secrets — set these in the Render dashboard (sync:false = not in git).
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_PRICE_PRO
+        sync: false
+      - key: STRIPE_PRICE_TEAM
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: OWNER_EMAILS
+        sync: false
+      - key: EMAIL_WEBHOOK_URL
+        sync: false
