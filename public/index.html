@@ -12,6 +12,7 @@
         <span class="logo">◈</span> EchoDeck
         <span class="tagline">native audio → flashcards & shadowing</span>
       </div>
+      <input id="search-box" class="search-box" type="search" placeholder="Search all cards…" autocomplete="off" />
       <nav class="tabs">
         <button class="tab is-active" data-view="build">Build</button>
         <button class="tab" data-view="study">Study</button>
@@ -135,6 +136,15 @@ Subtitle text here"></textarea>
           <p class="muted small" id="reminder-status">Checking reminder configuration…</p>
           <pre id="reminder-preview" class="reminder-preview hidden"></pre>
         </div>
+      </section>
+
+      <!-- SEARCH VIEW -->
+      <section id="view-search" class="view">
+        <div class="alert-head" style="padding:0">
+          <h2 id="search-title">Search</h2>
+          <button id="search-clear" class="ghost small">Clear</button>
+        </div>
+        <div id="search-results" class="card-list"></div>
       </section>
 
       <!-- STATS VIEW -->

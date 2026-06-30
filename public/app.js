@@ -177,6 +177,7 @@ function renderDeck() {
 function renderCard(card, idx) {
   const el = document.createElement("div");
   el.className = "scard";
+  el.dataset.cardId = card.id;
   const hasAudio = state.deck.audioUrl && card.start != null;
   const due = card.srs.due <= Date.now();
   el.innerHTML = `
@@ -398,6 +399,70 @@ async function loadAlerts() {
 async function reviewDeck(id) {
   await openDeck(id);
   startReview();
+}
+
+// ---- cross-deck search ----
+let searchTimer = null;
+$("#search-box").addEventListener("input", (e) => {
+  const q = e.target.value;
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => runSearch(q), 200);
+});
+$("#search-clear").addEventListener("click", () => {
+  $("#search-box").value = "";
+  showView("build");
+});
+
+function showView(name) {
+  $$(".tab").forEach((x) => x.classList.toggle("is-active", x.dataset.view === name));
+  $$(".view").forEach((v) => v.classList.toggle("is-active", v.id === `view-${name}`));
+}
+
+async function runSearch(q) {
+  if (!q.trim()) { if ($("#view-search").classList.contains("is-active")) showView("build"); return; }
+  showView("search");
+  let results;
+  try { results = await api.get(`/api/search?q=${encodeURIComponent(q)}`); } catch { return; }
+  $("#search-title").textContent = `Search — ${results.length} result${results.length === 1 ? "" : "s"} for “${q}”`;
+  const host = $("#search-results");
+  host.innerHTML = "";
+  if (!results.length) {
+    host.innerHTML = `<p class="muted small">No cards match. Try a different word.</p>`;
+    return;
+  }
+  for (const r of results) {
+    const el = document.createElement("div");
+    el.className = "scard";
+    const hasAudio = r.start != null;
+    el.innerHTML = `
+      <div class="meta" style="margin-bottom:6px"><span class="deck-chip">${esc(r.deckTitle)}</span><span>${esc(r.language || "")}</span></div>
+      <div class="front">${highlight(r.front, q)}</div>
+      ${r.back ? `<div class="meta" style="margin-top:6px;color:var(--accent-2)">${highlight(r.back, q)}</div>` : ""}
+      <div class="tools"><button class="open ghost">Open in deck ▸</button></div>`;
+    el.querySelector(".open").addEventListener("click", () => openToCard(r.deckId, r.cardId));
+    host.appendChild(el);
+  }
+}
+
+async function openToCard(deckId, cardId) {
+  await openDeck(deckId);
+  requestAnimationFrame(() => {
+    const card = document.querySelector(`#card-list .scard[data-card-id="${cardId}"]`);
+    if (card) {
+      card.scrollIntoView({ behavior: "smooth", block: "center" });
+      card.classList.remove("flash-hit");
+      void card.offsetWidth; // restart animation
+      card.classList.add("flash-hit");
+    }
+  });
+}
+
+function highlight(text, q) {
+  const safe = esc(text);
+  const needle = q.trim();
+  if (!needle) return safe;
+  const re = new RegExp(`(${needle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`, "ig");
+  return safe.replace(re, "<mark>$1</mark>");
 }
 
 // ---- stats dashboard ----

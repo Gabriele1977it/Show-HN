@@ -212,6 +212,31 @@ export function createStore(filePath) {
       return computeStats(state.reviewLog, Object.values(state.cards), now);
     },
 
+    // Case-insensitive substring search across every card's front/back/notes,
+    // returning matches with their deck context. Preserves deck/card order.
+    searchCards(query, limit = 50) {
+      const q = (query ?? "").trim().toLowerCase();
+      if (!q) return [];
+      const out = [];
+      for (const deck of Object.values(state.decks)) {
+        for (const cid of deck.cardOrder) {
+          const c = state.cards[cid];
+          if (!c) continue;
+          const front = (c.front ?? "").toLowerCase();
+          const back = (c.back ?? "").toLowerCase();
+          const notes = (c.notes ?? "").toLowerCase();
+          const field = front.includes(q) ? "front" : back.includes(q) ? "back" : notes.includes(q) ? "notes" : null;
+          if (!field) continue;
+          out.push({
+            cardId: c.id, deckId: deck.id, deckTitle: deck.title, language: deck.language,
+            front: c.front, back: c.back, notes: c.notes, start: c.start, end: c.end, field,
+          });
+          if (out.length >= limit) return out;
+        }
+      }
+      return out;
+    },
+
     // For tests / inspection.
     _state: () => state,
     _reset: () => {

@@ -153,6 +153,36 @@ test("reminder preview reflects due cards; test endpoint force-sends", async () 
   assert.match(sentReminders.at(-1).title, /EchoDeck/);
 });
 
+test("search finds cards by front/back across decks, with deck context", async () => {
+  const deck = await fetch(`${base}/api/decks`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title: "Search deck", language: "Japanese", transcript: "[00:00] konnichiwa world\n[00:04] sayonara" }),
+  }).then(j);
+  const full = await fetch(`${base}/api/decks/${deck.id}`).then(j);
+  await fetch(`${base}/api/cards/${full.cards[1].id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ back: "goodbye world" }),
+  });
+
+  // Match on front.
+  const front = await fetch(`${base}/api/search?q=konnichiwa`).then(j);
+  assert.ok(front.length >= 1);
+  assert.equal(front[0].field, "front");
+  assert.equal(front[0].deckTitle, "Search deck");
+  assert.ok("cardId" in front[0] && "deckId" in front[0]);
+
+  // Match on back, case-insensitive.
+  const back = await fetch(`${base}/api/search?q=GOODBYE`).then(j);
+  assert.ok(back.find((r) => r.field === "back" && r.cardId === full.cards[1].id));
+
+  // Empty query returns nothing; limit is honoured.
+  assert.deepEqual(await fetch(`${base}/api/search?q=`).then(j), []);
+  const limited = await fetch(`${base}/api/search?q=world&limit=1`).then(j);
+  assert.equal(limited.length, 1);
+});
+
 test("stats endpoint reflects review activity", async () => {
   // Earlier tests reviewed at least one card, so today's activity is non-zero.
   const s = await fetch(`${base}/api/stats`).then(j);

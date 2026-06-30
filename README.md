@@ -25,6 +25,9 @@ already uses (Anki, spreadsheets, JSON).
 - **Spaced repetition** — an SM-2 scheduler surfaces a daily *due* queue so
   study sessions stay short and effective.
 - **Inline editing** — add the translation / meaning to the back of each card.
+- **Cross-deck search** — the topbar search box (and `/api/search`) finds any
+  card by front/back/notes across every deck, with the match highlighted and a
+  one-click jump that scrolls to and flashes the card in its deck.
 - **Study dashboard** — a *Stats* tab (and `/api/stats` endpoint) tracks review
   history: cards in study, reviews today, 14-day retention rate, study streak, a
   14-day activity chart, and a 7-day due forecast.
@@ -79,6 +82,7 @@ The web UI is a thin client over a small REST API:
 | `GET` | `/api/decks` | List decks with card and due counts. |
 | `GET` | `/api/alerts` | Cross-deck review summary: `totalDue`, per-deck due counts, and the next due time. |
 | `GET` | `/api/stats` | Study dashboard data: totals, retention, streak, 14-day activity, 7-day due forecast. |
+| `GET` | `/api/search?q=…&limit=…` | Cross-deck card search (front/back/notes), with deck context. |
 | `GET` | `/api/reminders/preview` | The reminder message that would be sent now, plus whether it would fire. |
 | `POST` | `/api/reminders/test` | Force-send a reminder now (ignores the throttle). |
 | `GET` | `/api/decks/:id` | Deck with all cards. |
@@ -145,7 +149,7 @@ test/            node:test suites
 
 - Auto-transcription of uploaded audio (Whisper-class model) so creators can
   skip the manual transcript step.
-- Cross-deck search and cloze (fill-in-the-blank) card generation.
+- Cloze (fill-in-the-blank) card generation.
 - Team workspaces and accounts (sharing today is per-deck, unlisted links).
 - Per-user / per-deck reminder schedules and quiet hours (current reminders are
   a single global webhook).

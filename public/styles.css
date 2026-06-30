@@ -27,6 +27,9 @@ body {
 .brand { font-weight: 700; font-size: 18px; letter-spacing: .2px; }
 .logo { color: var(--accent); margin-right: 4px; }
 .tagline { color: var(--muted); font-weight: 400; font-size: 12px; margin-left: 10px; }
+.search-box { width: 220px; margin: 0 0 0 auto; background: var(--panel-2); border: 1px solid var(--line); border-radius: 999px; padding: 7px 14px; font-size: 13px; }
+.search-box:focus { width: 280px; }
+@media (max-width: 700px) { .search-box { width: 120px; } .search-box:focus { width: 150px; } }
 .tabs { display: flex; gap: 6px; }
 .tab {
   background: transparent; color: var(--muted); border: 1px solid transparent;
@@ -112,6 +115,10 @@ button { cursor: pointer; font: inherit; border-radius: 10px; border: 1px solid 
 .share-bar a.ghost { display: inline-flex; align-items: center; }
 
 .card-list { display: flex; flex-direction: column; gap: 10px; }
+mark { background: rgba(108, 140, 255, .35); color: var(--ink); border-radius: 3px; padding: 0 2px; }
+.deck-chip { font-size: 11px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 999px; padding: 1px 9px; color: var(--muted); }
+.scard.flash-hit { animation: flashHit 1.6s ease; }
+@keyframes flashHit { 0%, 30% { box-shadow: 0 0 0 2px var(--accent); } 100% { box-shadow: 0 0 0 0 transparent; } }
 .scard { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px; }
 .scard .front { font-size: 17px; }
 .scard .meta { color: var(--muted); font-size: 12px; margin-top: 4px; display: flex; gap: 12px; align-items: center; }

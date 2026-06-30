@@ -72,6 +72,12 @@ export function createApp({ store, uploadsDir, reminders }) {
     res.json(store.stats());
   });
 
+  // Cross-deck card search.
+  app.get("/api/search", (req, res) => {
+    const limit = Math.min(Number(req.query.limit) || 50, 200);
+    res.json(store.searchCards(req.query.q ?? "", limit));
+  });
+
   // --- reminders -------------------------------------------------------
   // Preview what a reminder would say and whether one would fire right now.
   app.get("/api/reminders/preview", (_req, res) => {
