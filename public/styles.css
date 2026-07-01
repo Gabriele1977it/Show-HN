@@ -258,3 +258,9 @@ body.readonly #list-btn, body.readonly #mkt-bar { display: none !important; }
 .pron-listening { color: var(--accent); font-weight: 600; }
 #rev-record.recording { background: #fef2f2; border-color: #fecaca; color: var(--danger); }
 #grade-buttons button.suggested { outline: 3px solid var(--ink); outline-offset: 2px; }
+
+/* --- AI card fill --- */
+.card-notes { margin-top: 8px; font-size: 12.5px; color: var(--accent-2); background: var(--accent-2-weak); border-radius: 8px; padding: 6px 10px; }
+.card-notes.hidden { display: none; }
+.scard .ai { color: var(--accent); }
+body.readonly #ai-fill-btn, body.readonly .scard .ai { display: none !important; }

@@ -9,6 +9,7 @@ import { createApp } from "../server/app.js";
 import { createReminderService } from "../server/reminders.js";
 import { createBilling } from "../server/billing.js";
 import { createMailer } from "../server/email.js";
+import { createEnricher } from "../server/enrich.js";
 
 let server, base, tmp, sentReminders, realFetch, wsKey;
 
@@ -26,8 +27,10 @@ before(async () => {
   });
   const billing = createBilling({ store, config: {} }); // dev mode (no Stripe keys)
   const mailer = createMailer({ log: () => {} }); // dev mode (no email provider)
+  // Inject a fake generator so the AI-fill flow is exercised without a live key.
+  const enrich = createEnricher({ generate: async (front, language) => ({ back: `EN:${front}`, notes: `note(${language})` }) });
   const ownerEmails = new Set(["owner@echodeck.app"]);
-  const app = createApp({ store, uploadsDir: join(tmp, "uploads"), reminders, billing, mailer, ownerEmails });
+  const app = createApp({ store, uploadsDir: join(tmp, "uploads"), reminders, billing, mailer, enrich, ownerEmails });
   await new Promise((res) => { server = app.listen(0, res); });
   base = `http://127.0.0.1:${server.address().port}`;
 
@@ -729,4 +732,56 @@ test("pronounce: scores a shadowing attempt and can apply the grade to the SRS",
     method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ heard: "" }),
   }).then(j);
   assert.equal(empty.score, 0);
+});
+
+test("AI fill: enrich a single card and bulk-fill a deck's empty backs", async () => {
+  const deck = await fetch(`${base}/api/decks`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title: "Enrich me", language: "Japanese", transcript: "[00:00] ねこ\n[00:02] いぬ\n[00:04] とり" }),
+  }).then(j);
+
+  // The workspace endpoint advertises that AI fill is configured.
+  assert.equal((await fetch(`${base}/api/workspace`).then(j)).enrichConfigured, true);
+
+  // Single-card enrich fills back + notes from the fake generator.
+  const first = deck.cards[0];
+  const enriched = await fetch(`${base}/api/cards/${first.id}/enrich`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: "{}",
+  }).then(j);
+  assert.equal(enriched.generated.back, "EN:ねこ");
+  assert.equal(enriched.card.back, "EN:ねこ");
+  assert.equal(enriched.card.notes, "note(Japanese)");
+
+  // Without overwrite, an existing back is preserved.
+  await fetch(`${base}/api/cards/${deck.cards[1].id}`, {
+    method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ back: "kept" }),
+  });
+
+  // Bulk enrich fills only the cards still missing a back (card 0 already has one,
+  // card 1 was set manually) → only card 2 is filled.
+  const bulk = await fetch(`${base}/api/decks/${deck.id}/enrich`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: "{}",
+  }).then(j);
+  assert.equal(bulk.updated, 1);
+  const byFront = Object.fromEntries(bulk.deck.cards.map((c) => [c.front, c.back]));
+  assert.equal(byFront["いぬ"], "kept");
+  assert.equal(byFront["とり"], "EN:とり");
+
+  // Unknown card → 404.
+  assert.equal((await fetch(`${base}/api/cards/nope/enrich`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: "{}",
+  })).status, 404);
+});
+
+test("AI fill is gated on the Free plan", async () => {
+  const hdr = (key, json) => ({ Authorization: `Bearer ${key}`, ...(json ? { "Content-Type": "application/json" } : {}) });
+  const free = await realFetch(`${base}/api/workspaces`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: "Free AI" }),
+  }).then(j);
+  const deck = await realFetch(`${base}/api/decks`, {
+    method: "POST", headers: hdr(free.key, true), body: JSON.stringify({ title: "x", transcript: "[00:00] a" }),
+  }).then(j);
+  assert.equal((await realFetch(`${base}/api/cards/${deck.cards[0].id}/enrich`, {
+    method: "POST", headers: hdr(free.key, true), body: "{}",
+  })).status, 402);
 });

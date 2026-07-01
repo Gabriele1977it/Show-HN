@@ -29,7 +29,7 @@ function sendExport(res, deck, cards, format) {
   res.send(body);
 }
 
-export function createApp({ store, uploadsDir, reminders, billing, mailer, ownerEmails = new Set(), rateLimits = {} }) {
+export function createApp({ store, uploadsDir, reminders, billing, mailer, enrich, ownerEmails = new Set(), rateLimits = {} }) {
   const app = express();
   app.set("trust proxy", 1); // behind a host's load balancer; lets req.ip work
   app.use(securityHeaders);
@@ -183,6 +183,8 @@ export function createApp({ store, uploadsDir, reminders, billing, mailer, owner
       plan,
       planInfo: planPublic(plan),
       usage: store.workspaceUsage(req.ws),
+      // Whether the server has an AI provider configured (drives the "AI fill" UI).
+      enrichConfigured: Boolean(enrich?.enabled),
     });
   });
 
@@ -468,6 +470,50 @@ export function createApp({ store, uploadsDir, reminders, billing, mailer, owner
       updated = store.reviewCard(req.params.id, GRADE_MAP[result.suggestedGrade], req.ws);
     }
     res.json({ ...result, cardId: card.id, applied: Boolean(updated), card: updated });
+  });
+
+  // AI-fill a card's back (translation) and notes (grammar/example). Paid
+  // feature; also requires the server to have an AI provider configured.
+  app.post("/api/cards/:id/enrich", featureGate("enrich", "AI card fill"), async (req, res) => {
+    if (!enrich?.enabled) return res.status(503).json({ error: "AI fill isn't configured on this server." });
+    const card = store.getCard(req.params.id, req.ws);
+    if (!card) return res.status(404).json({ error: "Card not found" });
+    const overwrite = req.body?.overwrite === true;
+    const deck = store.getDeck(card.deckId, req.ws);
+    let result;
+    try {
+      result = await enrich.enrich(card.front, deck?.language);
+    } catch (err) {
+      return res.status(502).json({ error: `AI fill failed: ${err.message}` });
+    }
+    if (result.error) return res.status(422).json({ error: `Couldn't generate a card back (${result.error}).` });
+    const patch = {};
+    if (overwrite || !card.back) patch.back = result.back;
+    if (overwrite || !card.notes) patch.notes = result.notes;
+    const updated = Object.keys(patch).length ? store.updateCard(card.id, patch, req.ws) : card;
+    res.json({ generated: result, card: updated });
+  });
+
+  // Bulk AI-fill: fill the back of every card in a deck that doesn't have one
+  // yet (capped so a single request can't fan out unbounded LLM calls).
+  app.post("/api/decks/:id/enrich", featureGate("enrich", "AI card fill"), async (req, res) => {
+    if (!enrich?.enabled) return res.status(503).json({ error: "AI fill isn't configured on this server." });
+    const deck = store.getDeck(req.params.id, req.ws);
+    if (!deck) return res.status(404).json({ error: "Deck not found" });
+    const targets = deck.cards.filter((c) => !c.back).slice(0, 40);
+    let updated = 0;
+    for (const c of targets) {
+      let result;
+      try {
+        result = await enrich.enrich(c.front, deck.language);
+      } catch (err) {
+        return res.status(502).json({ error: `AI fill failed after ${updated} cards: ${err.message}`, updated });
+      }
+      if (result.error) continue;
+      store.updateCard(c.id, { back: result.back, notes: c.notes || result.notes }, req.ws);
+      updated++;
+    }
+    res.json({ updated, deck: store.getDeck(req.params.id, req.ws) });
   });
 
   // --- pages -----------------------------------------------------------

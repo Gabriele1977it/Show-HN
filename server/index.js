@@ -12,6 +12,7 @@ import { createApp } from "./app.js";
 import { createReminderService, webhookNotifier, consoleNotifier } from "./reminders.js";
 import { createBilling } from "./billing.js";
 import { createMailer } from "./email.js";
+import { createEnricher } from "./enrich.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, "..");
@@ -71,11 +72,16 @@ const ownerEmails = new Set(
 // Email: POST to EMAIL_WEBHOOK_URL when set (provider relay), else log (dev).
 const mailer = createMailer({ webhookUrl: process.env.EMAIL_WEBHOOK_URL });
 
-const app = createApp({ store, uploadsDir: UPLOADS_DIR, reminders, billing, mailer, ownerEmails });
+// AI card-back fill: enabled when an Anthropic API key is present. Model is
+// configurable via ECHODECK_LLM_MODEL.
+const enrich = createEnricher({ apiKey: process.env.ANTHROPIC_API_KEY });
+
+const app = createApp({ store, uploadsDir: UPLOADS_DIR, reminders, billing, mailer, enrich, ownerEmails });
 
 const server = app.listen(PORT, () => {
   console.log(`EchoDeck running on http://localhost:${PORT}`);
   console.log(billing.enabled ? "Stripe billing enabled." : "Billing in dev mode (no Stripe keys).");
+  console.log(enrich.enabled ? `AI card fill enabled (model: ${enrich.model}).` : "AI card fill disabled (no ANTHROPIC_API_KEY).");
   // Background polling only runs when explicitly enabled.
   if (process.env.REMINDER_ENABLED === "1" || process.env.REMINDER_ENABLED === "true") {
     reminders.start();

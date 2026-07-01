@@ -34,6 +34,12 @@ already uses (Anki, spreadsheets, JSON).
   sentence (longest kanji run / longest word heuristic); review hides the term
   and reveals it highlighted alongside the translation. Terms are editable.
 - **Inline editing** — add the translation / meaning to the back of each card.
+- **AI card-back fill** — one click asks Claude to fill a card's back with a
+  natural translation plus a short study note (key vocab / grammar + an example);
+  a deck-level *AI-fill backs* button does every empty card at once. Removes the
+  most tedious step in the ingest loop. Enabled when `ANTHROPIC_API_KEY` is set
+  (model configurable via `ECHODECK_LLM_MODEL`); it's a paid-plan feature and the
+  UI only shows it when the server has a provider configured.
 - **Cross-deck search** — the topbar search box (and `/api/search`) finds any
   card by front/back/notes across every deck, with the match highlighted and a
   one-click jump that scrolls to and flashes the card in its deck.
@@ -148,6 +154,8 @@ from the workspace member key in `Authorization`).
 | `PATCH` | `/api/cards/:id` | Update `front` / `back` / `notes` / `tags` / timing. |
 | `POST` | `/api/cards/:id/review` | Grade a card (`again`/`hard`/`good`/`easy` or `0`–`5`). |
 | `POST` | `/api/cards/:id/pronounce` | Score a shadowing attempt against the card `{heard, applyGrade?}`; returns score, word-level results, and a suggested grade. |
+| `POST` | `/api/cards/:id/enrich` | AI-fill a card's back + notes `{overwrite?}` (paid; requires a configured provider). |
+| `POST` | `/api/decks/:id/enrich` | AI-fill every empty card back in the deck (capped per request). |
 | `POST` | `/api/decks/:id/share` | Publish to a public link; returns `shareId` + `shareUrl`. |
 | `DELETE` | `/api/decks/:id/share` | Unpublish (revoke the link). |
 | `POST` | `/api/decks/:id/list` | List the deck in the public marketplace (implies sharing); body `{description?}`. |
@@ -199,6 +207,8 @@ webhook at `POST /api/billing/webhook` (events: `checkout.session.completed`,
 | `STRIPE_WEBHOOK_SECRET` | Signing secret for webhook verification. |
 | `OWNER_EMAILS` | Comma-separated emails auto-comped to the Team plan (e.g. the developer's own account). |
 | `EMAIL_WEBHOOK_URL` | Outbound webhook for transactional email (password resets). Point at a provider relay (Resend/Postmark/SendGrid) or Zapier/Make. Logs to console if unset. |
+| `ANTHROPIC_API_KEY` | Enables AI card-back fill via the Claude API. Unset → the feature is disabled and hidden in the UI. |
+| `ECHODECK_LLM_MODEL` | Model used for AI card fill (defaults to the latest Claude model). |
 
 ## Configuration
 
@@ -237,6 +247,7 @@ server/
   srs.js         SM-2 spaced repetition
   pronounce.js   shadowing attempt scoring (word/character alignment)
   cloze.js       fill-in-the-blank term suggestion + masking
+  enrich.js      AI card-back fill (Anthropic SDK, injectable generator)
   auth.js        password hashing (scrypt) + session/reset tokens
   email.js       transactional email (webhook provider, dev-mode fallback)
   plans.js       plan tiers + entitlement/limit helpers

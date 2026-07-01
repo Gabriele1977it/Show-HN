@@ -194,6 +194,7 @@ function renderDeck() {
   if (d.shareId) showShareBar(`${location.origin}/s/${d.shareId}`);
   else $("#share-bar").classList.add("hidden");
   renderListBar();
+  $("#ai-fill-btn").classList.toggle("hidden", !enrichConfigured);
 
   const list = $("#card-list");
   list.innerHTML = "";
@@ -216,15 +217,40 @@ function renderCard(card, idx) {
       ${card.cloze ? `<span class="cloze-chip">blank: ${esc(card.cloze)} <button class="cloze-x" title="Clear cloze">×</button></span>` : ""}
     </div>
     <input class="back-input" placeholder="Translation / meaning (back of card)" value="${esc(card.back)}" />
+    <div class="card-notes ${card.notes ? "" : "hidden"}">${esc(card.notes || "")}</div>
     <div class="tools">
       ${hasAudio ? '<button class="play">▶ Shadow loop</button>' : ""}
       <button class="save ghost">Save back</button>
+      ${enrichConfigured ? '<button class="ai ghost" title="Fill translation + notes with AI">✨ AI fill</button>' : ""}
     </div>`;
   const backInput = $(".back-input", el);
+  const notesEl = $(".card-notes", el);
   $(".save", el).addEventListener("click", async () => {
     const updated = await api.patch(`/api/cards/${card.id}`, { back: backInput.value });
     card.back = updated.back;
     flash($(".save", el), "Saved ✓");
+  });
+  const aiBtn = $(".ai", el);
+  if (aiBtn) aiBtn.addEventListener("click", async () => {
+    aiBtn.disabled = true;
+    const old = aiBtn.textContent;
+    aiBtn.textContent = "Thinking…";
+    try {
+      const res = await api.post(`/api/cards/${card.id}/enrich`, { overwrite: true });
+      card.back = res.card.back;
+      card.notes = res.card.notes;
+      backInput.value = card.back || "";
+      notesEl.textContent = card.notes || "";
+      notesEl.classList.toggle("hidden", !card.notes);
+      aiBtn.textContent = old;
+      flash(aiBtn, "Filled ✓");
+    } catch (err) {
+      aiBtn.textContent = old;
+      if (err.upgrade) { showView("pricing"); loadPricing(); }
+      else alert(err.message);
+    } finally {
+      aiBtn.disabled = false;
+    }
   });
   const clozeX = $(".cloze-x", el);
   if (clozeX) clozeX.addEventListener("click", async () => {
@@ -269,6 +295,30 @@ $("#cloze-btn").addEventListener("click", async () => {
   renderDeck();
   btn.disabled = false;
   flash(btn, res.updated ? `Cloze +${res.updated}` : "All set");
+});
+
+// ---- AI-fill empty backs (whole deck) ----
+$("#ai-fill-btn").addEventListener("click", async () => {
+  if (!state.deck) return;
+  const btn = $("#ai-fill-btn");
+  const empty = state.deck.cards.filter((c) => !c.back).length;
+  if (!empty) { flash(btn, "All filled"); return; }
+  if (!confirm(`Use AI to fill ${empty} empty card back${empty === 1 ? "" : "s"} in this deck?`)) return;
+  btn.disabled = true;
+  const old = btn.textContent;
+  btn.textContent = "Filling…";
+  try {
+    const res = await api.post(`/api/decks/${state.deck.id}/enrich`, {});
+    state.deck = res.deck;
+    renderDeck();
+    flash($("#ai-fill-btn"), `Filled ${res.updated}`);
+  } catch (err) {
+    btn.textContent = old;
+    if (err.upgrade) { showView("pricing"); loadPricing(); }
+    else alert(err.message);
+  } finally {
+    btn.disabled = false;
+  }
 });
 
 // ---- sharing ----
@@ -729,7 +779,7 @@ async function loadPricing() {
   $("#pricing-msg").textContent = "";
   const host = $("#pricing-cards");
   host.innerHTML = "";
-  const featLabel = { sharing: "Public deck sharing", reminders: "Review reminders", stats: "Study dashboard" };
+  const featLabel = { sharing: "Public deck sharing", reminders: "Review reminders", stats: "Study dashboard", enrich: "AI card-back fill" };
   for (const p of plans) {
     const isCurrent = p.id === currentPlan;
     const card = document.createElement("div");
@@ -868,6 +918,7 @@ function setWorkspace(key, name) {
 
 let wsRole = "admin";
 let wsMemberId = null;
+let enrichConfigured = false;
 
 $("#ws-madd").addEventListener("click", async () => {
   const name = $("#ws-mname").value.trim();
@@ -916,6 +967,7 @@ async function loadWorkspaceInfo() {
     const w = await api.get("/api/workspace");
     wsRole = w.role;
     wsMemberId = w.memberId;
+    enrichConfigured = Boolean(w.enrichConfigured);
     localStorage.setItem(WS_NAME, w.name);
     $("#ws-name").textContent = w.name;
     $("#ws-panel-name").textContent = w.name;

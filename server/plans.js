@@ -11,19 +11,19 @@ export const PLANS = {
   free: {
     id: "free", name: "Free", price: 0,
     maxDecks: 3, maxCards: 100, maxMembers: 1,
-    features: { sharing: false, reminders: false, stats: false },
+    features: { sharing: false, reminders: false, stats: false, enrich: false },
     blurb: "Try it out — a few decks to get going.",
   },
   pro: {
     id: "pro", name: "Pro", price: 7.99,
     maxDecks: Infinity, maxCards: Infinity, maxMembers: 1,
-    features: { sharing: true, reminders: true, stats: true },
+    features: { sharing: true, reminders: true, stats: true, enrich: true },
     blurb: "For serious solo creators: unlimited decks, sharing, reminders, stats.",
   },
   team: {
     id: "team", name: "Team", price: 19.99,
     maxDecks: Infinity, maxCards: Infinity, maxMembers: 10,
-    features: { sharing: true, reminders: true, stats: true },
+    features: { sharing: true, reminders: true, stats: true, enrich: true },
     blurb: "Everything in Pro, plus up to 10 teammates with roles.",
   },
 };
