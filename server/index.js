@@ -14,6 +14,7 @@ import { createBilling } from "./billing.js";
 import { createMailer } from "./email.js";
 import { createEnricher } from "./enrich.js";
 import { createTranscriber } from "./transcribe.js";
+import { createPushService, deliverToWorkspace } from "./push.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, "..");
@@ -35,13 +36,27 @@ if (process.env.STORE === "json") {
   console.log(`Store: SQLite (${DB_FILE}).`);
 }
 
+// Web Push: enabled when VAPID keys are set. Generate them once with
+// `npx web-push generate-vapid-keys` and put them in .env.
+const push = createPushService({
+  publicKey: process.env.VAPID_PUBLIC_KEY,
+  privateKey: process.env.VAPID_PRIVATE_KEY,
+  subject: process.env.VAPID_SUBJECT,
+});
+
 // Reminders: deliver via REMINDER_WEBHOOK_URL when set (ntfy / Slack / email
 // relay), otherwise log to the console so the surface is always inspectable.
+// Also fans out to any push subscriptions for the workspace when push is on.
+const baseNotify = process.env.REMINDER_WEBHOOK_URL
+  ? webhookNotifier(process.env.REMINDER_WEBHOOK_URL)
+  : consoleNotifier();
 const reminders = createReminderService({
   store,
-  notify: process.env.REMINDER_WEBHOOK_URL
-    ? webhookNotifier(process.env.REMINDER_WEBHOOK_URL)
-    : consoleNotifier(),
+  notify: async (message, workspaceId) => {
+    const base = await baseNotify(message, workspaceId);
+    if (push.enabled && workspaceId) return { base, push: await deliverToWorkspace({ store, push, workspaceId, message }) };
+    return base;
+  },
   config: {
     minDue: Number(process.env.REMINDER_MIN_DUE) || 1,
     minIntervalMs: Number(process.env.REMINDER_MIN_INTERVAL_MS) || undefined,
@@ -81,13 +96,14 @@ const enrich = createEnricher({ apiKey: process.env.ANTHROPIC_API_KEY });
 // AssemblyAI/etc. via a relay). Disabled + hidden when unset.
 const transcribe = createTranscriber({ webhookUrl: process.env.TRANSCRIBE_WEBHOOK_URL });
 
-const app = createApp({ store, uploadsDir: UPLOADS_DIR, reminders, billing, mailer, enrich, transcribe, ownerEmails });
+const app = createApp({ store, uploadsDir: UPLOADS_DIR, reminders, billing, mailer, enrich, transcribe, push, ownerEmails });
 
 const server = app.listen(PORT, () => {
   console.log(`EchoDeck running on http://localhost:${PORT}`);
   console.log(billing.enabled ? "Stripe billing enabled." : "Billing in dev mode (no Stripe keys).");
   console.log(enrich.enabled ? `AI card fill enabled (model: ${enrich.model}).` : "AI card fill disabled (no ANTHROPIC_API_KEY).");
   console.log(transcribe.enabled ? "Auto-transcription enabled." : "Auto-transcription disabled (no TRANSCRIBE_WEBHOOK_URL).");
+  console.log(push.enabled ? "Web Push enabled." : "Web Push disabled (no VAPID keys).");
   // Background polling only runs when explicitly enabled.
   if (process.env.REMINDER_ENABLED === "1" || process.env.REMINDER_ENABLED === "true") {
     reminders.start();

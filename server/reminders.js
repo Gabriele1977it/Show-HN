@@ -104,7 +104,7 @@ export function createReminderService({ store, notify, config = {} }) {
     if (!force && !shouldSend(summary, last, now, { minDue, minIntervalMs })) {
       return { sent: false, reason: last == null ? "below-min-due" : "throttled", message };
     }
-    const result = await notify(message);
+    const result = await notify(message, workspaceId);
     lastSentAt.set(workspaceId, now);
     return { sent: true, message, result };
   }

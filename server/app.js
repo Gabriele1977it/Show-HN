@@ -11,6 +11,7 @@ import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { nanoid } from "nanoid";
 import { segmentTranscript } from "./segment.js";
 import { scoreAttempt } from "./pronounce.js";
+import { deliverToWorkspace } from "./push.js";
 import { exportDeck } from "./exporters.js";
 import { normalizeEmail } from "./auth.js";
 import { canAdd, hasFeature, planPublic, listPlans } from "./plans.js";
@@ -53,7 +54,7 @@ function sendExport(res, deck, cards, format) {
   res.send(body);
 }
 
-export function createApp({ store, uploadsDir, reminders, billing, mailer, enrich, transcribe, ownerEmails = new Set(), rateLimits = {} }) {
+export function createApp({ store, uploadsDir, reminders, billing, mailer, enrich, transcribe, push, ownerEmails = new Set(), rateLimits = {} }) {
   const app = express();
   app.set("trust proxy", 1); // behind a host's load balancer; lets req.ip work
   app.use(securityHeaders);
@@ -369,6 +370,41 @@ export function createApp({ store, uploadsDir, reminders, billing, mailer, enric
       res.json(result);
     } catch (err) {
       res.status(502).json({ error: `Reminder delivery failed: ${err.message}` });
+    }
+  });
+
+  // --- web push --------------------------------------------------------
+  // Public config for the client: whether push is available + the VAPID key
+  // needed to subscribe.
+  app.get("/api/push/config", (req, res) => {
+    res.json({ enabled: Boolean(push?.enabled), publicKey: push?.publicKey ?? null });
+  });
+
+  // Register this device's push subscription for the workspace.
+  app.post("/api/push/subscribe", (req, res) => {
+    if (!push?.enabled) return res.status(503).json({ error: "Push notifications aren't configured on this server." });
+    const result = store.addPushSubscription(req.ws, req.body?.subscription);
+    if (result?.error) return res.status(400).json({ error: "Invalid push subscription." });
+    res.status(201).json({ ok: true });
+  });
+
+  app.post("/api/push/unsubscribe", (req, res) => {
+    store.removePushSubscription(req.ws, req.body?.endpoint);
+    res.status(204).end();
+  });
+
+  // Send a test push to this workspace's subscribed devices (paid; needs push).
+  app.post("/api/push/test", featureGate("reminders", "Reminders"), async (req, res) => {
+    if (!push?.enabled) return res.status(503).json({ error: "Push notifications aren't configured on this server." });
+    const summary = store.dueSummary(req.ws);
+    const message = summary.totalDue > 0
+      ? { title: `EchoDeck: ${summary.totalDue} card${summary.totalDue === 1 ? "" : "s"} to review`, body: `You have ${summary.totalDue} card${summary.totalDue === 1 ? "" : "s"} due.` }
+      : { title: "EchoDeck", body: "Test notification — you're all caught up." };
+    try {
+      const result = await deliverToWorkspace({ store, push, workspaceId: req.ws, message });
+      res.json(result);
+    } catch (err) {
+      res.status(502).json({ error: `Push failed: ${err.message}` });
     }
   });
 

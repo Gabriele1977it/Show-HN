@@ -4,6 +4,10 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>EchoDeck — audio into flashcards & shadowing</title>
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="theme-color" content="#4f46e5" />
+    <link rel="icon" href="/icon.svg" />
+    <link rel="apple-touch-icon" href="/icon.svg" />
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
@@ -210,6 +214,11 @@ Subtitle text here"></textarea>
           </div>
           <p class="muted small" id="reminder-status">Checking reminder configuration…</p>
           <pre id="reminder-preview" class="reminder-preview hidden"></pre>
+          <div id="push-row" class="row hidden" style="margin-top:10px">
+            <button id="push-enable" class="ghost small">🔔 Enable notifications on this device</button>
+            <button id="push-test" class="ghost small hidden">Send test notification</button>
+          </div>
+          <p class="muted small" id="push-status"></p>
         </div>
       </section>
 

@@ -58,6 +58,10 @@ CREATE TABLE IF NOT EXISTS review_log (
   card_id TEXT, grade INTEGER, at INTEGER
 );
 CREATE INDEX IF NOT EXISTS idx_review_ws ON review_log(workspace_id);
+CREATE TABLE IF NOT EXISTS push_subs (
+  endpoint TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, sub TEXT NOT NULL, created_at INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_push_ws ON push_subs(workspace_id);
 `;
 
 const newMember = (name, role) => ({ id: nanoid(8), name: name?.trim() || "Member", role, key: nanoid(24), createdAt: Date.now() });
@@ -576,6 +580,20 @@ export function createSqliteStore(dbPath, { migrateFrom } = {}) {
         if (out.length >= limit) break;
       }
       return out;
+    },
+
+    // --- push subscriptions ------------------------------------------
+    addPushSubscription(ws, sub) {
+      if (!sub?.endpoint) return { error: "invalid" };
+      db.prepare("INSERT OR REPLACE INTO push_subs (endpoint,workspace_id,sub,created_at) VALUES (?,?,?,?)")
+        .run(sub.endpoint, ws, JSON.stringify(sub), Date.now());
+      return { ok: true };
+    },
+    listPushSubscriptions(ws) {
+      return db.prepare("SELECT sub FROM push_subs WHERE workspace_id=?").all(ws).map((r) => JSON.parse(r.sub));
+    },
+    removePushSubscription(ws, endpoint) {
+      db.prepare("DELETE FROM push_subs WHERE workspace_id=? AND endpoint=?").run(ws, endpoint);
     },
 
     _db: () => db,

@@ -1137,10 +1137,58 @@ async function rememberKey(key) {
   await acctJson("/api/account/keys", { method: "POST", body: JSON.stringify({ memberKey: key }) }).catch(() => {});
 }
 
+// ---- push notifications (installed PWA) ----
+function urlB64ToUint8Array(base64) {
+  const padding = "=".repeat((4 - (base64.length % 4)) % 4);
+  const b64 = (base64 + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const raw = atob(b64);
+  return Uint8Array.from([...raw].map((c) => c.charCodeAt(0)));
+}
+let pushPublicKey = null;
+
+function reflectPush(on) {
+  $("#push-enable").textContent = on ? "🔔 Notifications on" : "🔔 Enable notifications on this device";
+  $("#push-enable").disabled = on;
+  $("#push-test").classList.toggle("hidden", !on);
+}
+
+async function initPush() {
+  const supported = "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+  let cfg;
+  try { cfg = await api.get("/api/push/config"); } catch { cfg = { enabled: false }; }
+  if (!supported || !cfg.enabled) { $("#push-row").classList.add("hidden"); return; }
+  pushPublicKey = cfg.publicKey;
+  $("#push-row").classList.remove("hidden");
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    reflectPush(Boolean(await reg.pushManager.getSubscription()));
+  } catch { reflectPush(false); }
+}
+
+$("#push-enable").addEventListener("click", async () => {
+  const status = $("#push-status");
+  try {
+    if (await Notification.requestPermission() !== "granted") { status.textContent = "Notifications permission was denied."; return; }
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlB64ToUint8Array(pushPublicKey) });
+    await api.post("/api/push/subscribe", { subscription: sub });
+    reflectPush(true);
+    status.textContent = "Device notifications enabled — you'll get a nudge when cards are due.";
+  } catch (err) { status.textContent = "Couldn't enable notifications: " + err.message; }
+});
+
+$("#push-test").addEventListener("click", async () => {
+  const status = $("#push-status");
+  try { const r = await api.post("/api/push/test", {}); status.textContent = `Sent to ${r.pushed} device${r.pushed === 1 ? "" : "s"}.`; }
+  catch (err) { status.textContent = err.message; }
+});
+
 (async function start() {
+  if ("serviceWorker" in navigator) { try { await navigator.serviceWorker.register("/sw.js"); } catch {} }
   await ensureWorkspace();
   await loadAccount();
   await loadDecks();
+  initPush();
   // Deep links from the marketing site:
   //  ?install=<shareId> — install a marketplace deck into this workspace.
   //  ?sample=1          — build a ready-made sample deck (no signup needed).

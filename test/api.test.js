@@ -11,8 +11,9 @@ import { createBilling } from "../server/billing.js";
 import { createMailer } from "../server/email.js";
 import { createEnricher } from "../server/enrich.js";
 import { createTranscriber } from "../server/transcribe.js";
+import { createPushService } from "../server/push.js";
 
-let server, base, tmp, sentReminders, realFetch, wsKey;
+let server, base, tmp, sentReminders, sentPush, realFetch, wsKey;
 
 before(async () => {
   tmp = mkdtempSync(join(tmpdir(), "echodeck-"));
@@ -32,8 +33,11 @@ before(async () => {
   const enrich = createEnricher({ generate: async (front, language) => ({ back: `EN:${front}`, notes: `note(${language})` }) });
   // Fake transcriber so the auto-transcription flow is exercised without a provider.
   const transcribe = createTranscriber({ transcribe: async (audioUrl) => ({ segments: [{ start: 0, end: 3, text: `heard from ${audioUrl}` }, { start: 3, end: 6, text: "second line" }] }) });
+  // Capturing push sender so Web Push plumbing is exercised without a push service.
+  sentPush = [];
+  const push = createPushService({ publicKey: "test-vapid-key", send: async (sub, payload) => { sentPush.push({ sub, payload }); } });
   const ownerEmails = new Set(["owner@echodeck.app"]);
-  const app = createApp({ store, uploadsDir: join(tmp, "uploads"), reminders, billing, mailer, enrich, transcribe, ownerEmails });
+  const app = createApp({ store, uploadsDir: join(tmp, "uploads"), reminders, billing, mailer, enrich, transcribe, push, ownerEmails });
   await new Promise((res) => { server = app.listen(0, res); });
   base = `http://127.0.0.1:${server.address().port}`;
 
@@ -896,4 +900,50 @@ test("creator analytics is gated on the Free plan", async () => {
     method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: "Free reach" }),
   }).then(j);
   assert.equal((await realFetch(`${base}/api/creator/stats`, { headers: { Authorization: `Bearer ${free.key}` } })).status, 402);
+});
+
+test("web push: config, subscribe, test delivery, and unsubscribe", async () => {
+  const cfg = await fetch(`${base}/api/push/config`).then(j);
+  assert.equal(cfg.enabled, true);
+  assert.equal(cfg.publicKey, "test-vapid-key");
+
+  // A bad subscription is rejected; a valid one is stored.
+  assert.equal((await fetch(`${base}/api/push/subscribe`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: "{}",
+  })).status, 400);
+  const sub = { endpoint: "https://push.example/dev-1", keys: { p256dh: "x", auth: "y" } };
+  assert.equal((await fetch(`${base}/api/push/subscribe`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ subscription: sub }),
+  })).status, 201);
+
+  // Ensure something is due, then a test push reaches the subscribed device.
+  await fetch(`${base}/api/decks`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title: "Due now", transcript: "alpha. beta." }),
+  });
+  sentPush.length = 0;
+  const r = await fetch(`${base}/api/push/test`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" }).then(j);
+  assert.equal(r.pushed, 1);
+  assert.equal(sentPush.length, 1);
+  assert.match(JSON.parse(sentPush[0].payload).title, /EchoDeck/);
+
+  // Unsubscribing stops delivery.
+  assert.equal((await fetch(`${base}/api/push/unsubscribe`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ endpoint: sub.endpoint }),
+  })).status, 204);
+  sentPush.length = 0;
+  const r2 = await fetch(`${base}/api/push/test`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" }).then(j);
+  assert.equal(r2.pushed, 0);
+  assert.equal(sentPush.length, 0);
+});
+
+test("push test is gated on the Free plan; subscriptions are workspace-scoped", async () => {
+  const free = await realFetch(`${base}/api/workspaces`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: "Free push" }),
+  }).then(j);
+  const hdr = { Authorization: `Bearer ${free.key}`, "Content-Type": "application/json" };
+  // Free can still subscribe a device...
+  assert.equal((await realFetch(`${base}/api/push/subscribe`, { method: "POST", headers: hdr, body: JSON.stringify({ subscription: { endpoint: "https://push.example/free-1" } }) })).status, 201);
+  // ...but the test-send (like reminders) is a paid feature.
+  assert.equal((await realFetch(`${base}/api/push/test`, { method: "POST", headers: hdr, body: "{}" })).status, 402);
 });

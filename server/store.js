@@ -14,7 +14,7 @@ import { computeStats } from "./stats.js";
 import { suggestCloze } from "./cloze.js";
 import { hashPassword, verifyPassword, newToken, hashToken } from "./auth.js";
 
-const EMPTY = { users: {}, sessions: {}, resets: {}, workspaces: {}, decks: {}, cards: {}, reviewLog: [] };
+const EMPTY = { users: {}, sessions: {}, resets: {}, workspaces: {}, decks: {}, cards: {}, reviewLog: [], pushSubs: {} };
 
 const SESSION_TTL = 30 * 24 * 60 * 60 * 1000; // 30 days
 const RESET_TTL = 60 * 60 * 1000; // 1 hour
@@ -584,6 +584,21 @@ export function createStore(filePath) {
       return out;
     },
 
+    // --- push subscriptions --------------------------------------------
+    addPushSubscription(ws, sub) {
+      if (!sub?.endpoint) return { error: "invalid" };
+      state.pushSubs[sub.endpoint] = { workspaceId: ws, sub, createdAt: Date.now() };
+      persist();
+      return { ok: true };
+    },
+    listPushSubscriptions(ws) {
+      return Object.values(state.pushSubs).filter((x) => x.workspaceId === ws).map((x) => x.sub);
+    },
+    removePushSubscription(ws, endpoint) {
+      const e = state.pushSubs[endpoint];
+      if (e && e.workspaceId === ws) { delete state.pushSubs[endpoint]; persist(); }
+    },
+
     // For tests / inspection.
     _state: () => state,
     _reset: () => {
@@ -607,6 +622,7 @@ function load(filePath) {
         decks: parsed.decks ?? {},
         cards: parsed.cards ?? {},
         reviewLog: parsed.reviewLog ?? [],
+        pushSubs: parsed.pushSubs ?? {},
       };
     }
   } catch {

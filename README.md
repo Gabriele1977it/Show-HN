@@ -51,6 +51,11 @@ already uses (Anki, spreadsheets, JSON).
 - **Study dashboard** — a *Stats* tab (and `/api/stats` endpoint) tracks review
   history: cards in study, reviews today, 14-day retention rate, study streak, a
   14-day activity chart, and a 7-day due forecast.
+- **Installable PWA + push notifications** — a web app manifest and service
+  worker make EchoDeck installable to the home screen and load offline (network-
+  first shell cache). With VAPID keys configured, learners can enable **Web Push**
+  on a device from the *Alerts* tab and get a "cards due" nudge even when the app
+  is closed; the daily reminder poll fans out to subscribed devices automatically.
 - **Review alerts** — an *Alerts* tab (and `/api/alerts` endpoint) summarises
   how many cards are due across every deck and when the next card comes up, with
   one-click jump straight into a review session. This is the surface a daily
@@ -155,6 +160,10 @@ from the workspace member key in `Authorization`).
 | `GET` | `/api/search?q=…&limit=…` | Cross-deck card search (front/back/notes), with deck context. |
 | `GET` | `/api/reminders/preview` | The reminder message that would be sent now, plus whether it would fire. |
 | `POST` | `/api/reminders/test` | Force-send a reminder now (ignores the throttle). |
+| `GET` | `/api/push/config` | Web Push availability + the VAPID public key for subscribing. |
+| `POST` | `/api/push/subscribe` | Register this device's push subscription `{subscription}`. |
+| `POST` | `/api/push/unsubscribe` | Remove a device subscription `{endpoint}`. |
+| `POST` | `/api/push/test` | Send a test push to the workspace's subscribed devices (paid). |
 | `GET` | `/api/decks/:id` | Deck with all cards. |
 | `DELETE` | `/api/decks/:id` | Delete a deck and its cards. |
 | `POST` | `/api/decks/:id/cards` | Append more cards from extra transcript text. |
@@ -221,6 +230,8 @@ webhook at `POST /api/billing/webhook` (events: `checkout.session.completed`,
 | `ANTHROPIC_API_KEY` | Enables AI card-back fill via the Claude API. Unset → the feature is disabled and hidden in the UI. |
 | `ECHODECK_LLM_MODEL` | Model used for AI card fill (defaults to the latest Claude model). |
 | `TRANSCRIBE_WEBHOOK_URL` | Speech-to-text endpoint for auto-transcription. Receives `{audioUrl}`, returns `{segments}` or `{text}`. Unset → the feature is disabled and hidden. |
+| `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` | Web Push keys — generate once with `npx web-push generate-vapid-keys`. Unset → push is disabled and hidden. |
+| `VAPID_SUBJECT` | Contact URI for push (`mailto:you@example.com`); defaults to a placeholder. |
 
 ## Configuration
 
@@ -269,6 +280,7 @@ server/
   env.js         .env loader
   exporters.js   Anki / CSV / JSON exporters
   reminders.js   due-review reminders + webhook delivery
+  push.js        web push (VAPID) + per-workspace fan-out
   stats.js       study dashboard aggregation (history, streak, forecast)
 public/          landing.html, index.html (app), share.html, terms.html, privacy.html
 test/            node:test suites

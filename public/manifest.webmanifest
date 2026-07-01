@@ -1,0 +1,13 @@
+{
+  "name": "EchoDeck — audio flashcards & shadowing",
+  "short_name": "EchoDeck",
+  "description": "Turn native audio into flashcards and shadowing practice, with spaced repetition and pronunciation scoring.",
+  "start_url": "/app",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f7f8fa",
+  "theme_color": "#4f46e5",
+  "icons": [
+    { "src": "/icon.svg", "type": "image/svg+xml", "sizes": "any", "purpose": "any maskable" }
+  ]
+}
