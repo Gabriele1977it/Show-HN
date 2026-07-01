@@ -56,6 +56,7 @@ $$(".tab").forEach((t) =>
     $$(".view").forEach((v) => v.classList.toggle("is-active", v.id === `view-${t.dataset.view}`));
     if (t.dataset.view === "alerts") loadAlerts();
     if (t.dataset.view === "stats") loadStats();
+    if (t.dataset.view === "discover") loadMarketplace();
     if (t.dataset.view === "pricing") loadPricing();
   }),
 );
@@ -192,6 +193,7 @@ function renderDeck() {
 
   if (d.shareId) showShareBar(`${location.origin}/s/${d.shareId}`);
   else $("#share-bar").classList.add("hidden");
+  renderListBar();
 
   const list = $("#card-list");
   list.innerHTML = "";
@@ -292,6 +294,117 @@ function showShareBar(url) {
   $("#share-url").value = url;
   $("#share-open").href = url;
   $("#share-bar").classList.remove("hidden");
+}
+
+// ---- marketplace: listing the current deck ----
+$("#list-btn").addEventListener("click", () => {
+  $("#mkt-bar").classList.toggle("hidden");
+});
+$("#mkt-list").addEventListener("click", async () => {
+  if (!state.deck) return;
+  try {
+    const res = await api.post(`/api/decks/${state.deck.id}/list`, { description: $("#mkt-desc").value.trim() });
+    state.deck.listed = true;
+    state.deck.shareId = res.shareId;
+    state.deck.description = res.description;
+    showShareBar(`${location.origin}/s/${res.shareId}`);
+    renderListBar();
+    flash($("#mkt-list"), "Published ✓");
+  } catch (err) { showBuildError(err); }
+});
+$("#mkt-unlist").addEventListener("click", async () => {
+  if (!state.deck) return;
+  await api.del(`/api/decks/${state.deck.id}/list`);
+  state.deck.listed = false;
+  renderListBar();
+});
+
+function renderListBar() {
+  const d = state.deck;
+  const listed = Boolean(d?.listed);
+  $("#list-btn").textContent = listed ? "Listed ✓" : "List";
+  $("#mkt-desc").value = d?.description || "";
+  $("#mkt-list").textContent = listed ? "Update" : "Publish";
+  $("#mkt-unlist").classList.toggle("hidden", !listed);
+  const installs = $("#mkt-installs");
+  if (listed && d.installs) {
+    installs.textContent = `· ${d.installs} install${d.installs === 1 ? "" : "s"}`;
+    installs.classList.remove("hidden");
+  } else {
+    installs.classList.add("hidden");
+  }
+  $("#mkt-bar-label").textContent = listed ? "Live on the marketplace:" : "List on the marketplace:";
+}
+
+// ---- discover (browse & install marketplace decks) ----
+let discoverAll = [];
+let discoverTimer = null;
+$("#disc-q").addEventListener("input", () => { clearTimeout(discoverTimer); discoverTimer = setTimeout(renderDiscover, 150); });
+$("#disc-lang").addEventListener("change", renderDiscover);
+
+async function loadMarketplace() {
+  const status = $("#disc-status");
+  status.style.display = "block";
+  status.textContent = "Loading decks…";
+  try {
+    discoverAll = await api.get("/api/marketplace?limit=200");
+  } catch { status.textContent = "Couldn't load the marketplace."; return; }
+  const sel = $("#disc-lang");
+  const chosen = sel.value;
+  const langs = [...new Set(discoverAll.map((d) => d.language).filter(Boolean))].sort();
+  sel.innerHTML = `<option value="">All languages</option>` + langs.map((l) => `<option value="${esc(l)}">${esc(l)}</option>`).join("");
+  sel.value = langs.includes(chosen) ? chosen : "";
+  renderDiscover();
+}
+
+function renderDiscover() {
+  const q = $("#disc-q").value.trim().toLowerCase();
+  const lang = $("#disc-lang").value;
+  const list = discoverAll.filter((d) =>
+    (!lang || (d.language || "") === lang) &&
+    (!q || `${d.title} ${d.description || ""} ${d.language || ""}`.toLowerCase().includes(q)));
+  const grid = $("#disc-grid");
+  const status = $("#disc-status");
+  grid.innerHTML = "";
+  if (!list.length) {
+    status.style.display = "block";
+    status.textContent = discoverAll.length ? "No decks match your search." : "No decks published yet — list one of yours to seed it.";
+    return;
+  }
+  status.style.display = "none";
+  for (const d of list) {
+    const el = document.createElement("div");
+    el.className = "mkt-card";
+    el.innerHTML = `
+      <h3>${esc(d.title)}</h3>
+      <div class="creator">by ${esc(d.creator)}</div>
+      <div class="desc">${esc(d.description || "No description provided.")}</div>
+      <div class="mkt-meta">
+        <span class="deck-chip">${esc(d.language || "—")}</span>
+        <span class="pill">${d.cardCount} cards</span>
+        ${d.installs ? `<span class="pill">${d.installs} install${d.installs === 1 ? "" : "s"}</span>` : ""}
+      </div>
+      <div class="cta">
+        <button class="primary install">Add to my decks</button>
+        <a class="ghost" style="text-decoration:none" href="/s/${encodeURIComponent(d.shareId)}" target="_blank" rel="noopener">Preview ↗</a>
+      </div>`;
+    const btn = $(".install", el);
+    btn.addEventListener("click", () => installListing(d.shareId, btn));
+    grid.appendChild(el);
+  }
+}
+
+async function installListing(shareId, btn) {
+  if (btn) { btn.disabled = true; btn.textContent = "Adding…"; }
+  try {
+    const res = await api.post(`/api/marketplace/${encodeURIComponent(shareId)}/install`, {});
+    await loadDecks();
+    await openDeck(res.deckId);
+  } catch (err) {
+    if (btn) { btn.disabled = false; btn.textContent = "Add to my decks"; }
+    if (err.upgrade) { showView("pricing"); loadPricing(); }
+    else alert(err.message);
+  }
 }
 
 // ---- review session ----
@@ -854,5 +967,12 @@ async function rememberKey(key) {
 (async function start() {
   await ensureWorkspace();
   await loadAccount();
-  loadDecks();
+  await loadDecks();
+  // Deep link from the public marketplace page: ?install=<shareId> installs the
+  // deck into this workspace and opens it.
+  const installId = new URLSearchParams(location.search).get("install");
+  if (installId) {
+    history.replaceState(null, "", location.pathname);
+    await installListing(installId, null);
+  }
 })();

@@ -41,9 +41,11 @@ CREATE TABLE IF NOT EXISTS members (
 CREATE INDEX IF NOT EXISTS idx_members_ws ON members(workspace_id);
 CREATE TABLE IF NOT EXISTS decks (
   id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, title TEXT, language TEXT,
-  audio_url TEXT, created_at INTEGER, share_id TEXT UNIQUE
+  audio_url TEXT, created_at INTEGER, share_id TEXT UNIQUE,
+  listed INTEGER NOT NULL DEFAULT 0, listed_at INTEGER, description TEXT, installs INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_decks_ws ON decks(workspace_id);
+CREATE INDEX IF NOT EXISTS idx_decks_listed ON decks(listed);
 CREATE TABLE IF NOT EXISTS cards (
   id TEXT PRIMARY KEY, deck_id TEXT NOT NULL, position INTEGER,
   front TEXT, back TEXT, notes TEXT, start_t REAL, end_t REAL,
@@ -73,6 +75,15 @@ export function createSqliteStore(dbPath, { migrateFrom } = {}) {
   db.pragma("journal_mode = WAL");
   db.pragma("foreign_keys = ON");
   db.exec(SCHEMA);
+
+  // Migrate older databases: add marketplace columns to `decks` if missing.
+  const deckCols = new Set(db.prepare("PRAGMA table_info(decks)").all().map((c) => c.name));
+  const addDeckCol = (name, ddl) => { if (!deckCols.has(name)) db.exec(`ALTER TABLE decks ADD COLUMN ${ddl}`); };
+  addDeckCol("listed", "listed INTEGER NOT NULL DEFAULT 0");
+  addDeckCol("listed_at", "listed_at INTEGER");
+  addDeckCol("description", "description TEXT");
+  addDeckCol("installs", "installs INTEGER NOT NULL DEFAULT 0");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_decks_listed ON decks(listed)");
 
   const ownedDeck = (id, ws) => db.prepare("SELECT * FROM decks WHERE id=? AND workspace_id=?").get(id, ws);
   const ownedCard = (id, ws) =>
@@ -269,7 +280,7 @@ export function createSqliteStore(dbPath, { migrateFrom } = {}) {
       const id = nanoid(10);
       db.prepare("INSERT INTO decks (id,workspace_id,title,language,audio_url,created_at,share_id) VALUES (?,?,?,?,?,?,NULL)")
         .run(id, ws, title?.trim() || "Untitled deck", language?.trim() || "", audioUrl || null, Date.now());
-      return { id, workspaceId: ws, title: title?.trim() || "Untitled deck", language: language?.trim() || "", audioUrl: audioUrl || null, shareId: null };
+      return { id, workspaceId: ws, title: title?.trim() || "Untitled deck", language: language?.trim() || "", audioUrl: audioUrl || null, shareId: null, listed: false, description: "", installs: 0 };
     },
 
     listDecks(ws) {
@@ -281,6 +292,7 @@ export function createSqliteStore(dbPath, { migrateFrom } = {}) {
         return {
           id: d.id, workspaceId: d.workspace_id, title: d.title, language: d.language,
           audioUrl: d.audio_url, createdAt: d.created_at, shareId: d.share_id,
+          listed: !!d.listed, description: d.description || "", installs: d.installs || 0,
           cardCount: srsRows.length, dueCount,
         };
       });
@@ -292,6 +304,7 @@ export function createSqliteStore(dbPath, { migrateFrom } = {}) {
       return {
         id: d.id, workspaceId: d.workspace_id, title: d.title, language: d.language,
         audioUrl: d.audio_url, createdAt: d.created_at, shareId: d.share_id,
+        listed: !!d.listed, description: d.description || "", installs: d.installs || 0,
         cards: cardsOfDeck(d.id).map(toCard),
       };
     },
@@ -425,6 +438,83 @@ export function createSqliteStore(dbPath, { migrateFrom } = {}) {
         return { front: c.front, back: c.back, notes: c.notes, start: c.start, end: c.end, tags: c.tags, cloze: c.cloze };
       });
       return { shareId, title: d.title, language: d.language, audioUrl: d.audio_url, cards };
+    },
+
+    // --- marketplace -------------------------------------------------
+    // Listing a deck publishes it to the public catalog. It implies sharing
+    // (a listed deck must be publicly viewable), so we mint a share id if
+    // needed. Unlisting only removes it from the catalog; the share link and
+    // description are preserved so re-listing is a one-click round trip.
+    listDeck(id, ws, { description = "" } = {}) {
+      const d = ownedDeck(id, ws);
+      if (!d) return null;
+      const shareId = d.share_id || nanoid(16);
+      const desc = String(description || "").slice(0, 300);
+      db.prepare("UPDATE decks SET share_id=?, listed=1, listed_at=?, description=? WHERE id=?")
+        .run(shareId, Date.now(), desc, id);
+      return { id, shareId, listed: true, description: desc };
+    },
+
+    unlistDeck(id, ws) {
+      const d = ownedDeck(id, ws);
+      if (!d) return null;
+      if (d.listed) db.prepare("UPDATE decks SET listed=0 WHERE id=?").run(id);
+      return { id, listed: false };
+    },
+
+    // Public catalog of listed decks, newest-and-most-installed first, with an
+    // optional text query (title/description/language) and language filter.
+    listMarketplace({ q = "", language = "", limit = 60 } = {}) {
+      const rows = db.prepare(
+        "SELECT d.*, w.name AS ws_name, (SELECT count(*) FROM cards c WHERE c.deck_id=d.id) AS card_count " +
+        "FROM decks d JOIN workspaces w ON d.workspace_id=w.id WHERE d.listed=1 " +
+        "ORDER BY d.installs DESC, d.listed_at DESC").all();
+      const needle = String(q || "").trim().toLowerCase();
+      const lang = String(language || "").trim().toLowerCase();
+      const out = [];
+      for (const d of rows) {
+        if (lang && (d.language || "").toLowerCase() !== lang) continue;
+        if (needle && !`${d.title} ${d.description || ""} ${d.language || ""}`.toLowerCase().includes(needle)) continue;
+        out.push({
+          shareId: d.share_id, title: d.title, language: d.language, description: d.description || "",
+          cardCount: d.card_count, installs: d.installs || 0, creator: d.ws_name, listedAt: d.listed_at,
+        });
+        if (out.length >= limit) break;
+      }
+      return out;
+    },
+
+    getListing(shareId) {
+      const d = db.prepare(
+        "SELECT d.*, w.name AS ws_name, (SELECT count(*) FROM cards c WHERE c.deck_id=d.id) AS card_count " +
+        "FROM decks d JOIN workspaces w ON d.workspace_id=w.id WHERE d.share_id=? AND d.listed=1").get(shareId);
+      if (!d) return null;
+      return {
+        shareId: d.share_id, title: d.title, language: d.language, description: d.description || "",
+        cardCount: d.card_count, installs: d.installs || 0, creator: d.ws_name,
+      };
+    },
+
+    // Clone a listed deck into `ws` as a fresh deck (new ids, reset SRS, not
+    // shared/listed) and bump the source's install count. Returns null if the
+    // deck isn't listed.
+    installListing(shareId, ws, now = Date.now()) {
+      const src = db.prepare("SELECT * FROM decks WHERE share_id=? AND listed=1").get(shareId);
+      if (!src) return null;
+      const srcCards = cardsOfDeck(src.id);
+      const newId = nanoid(10);
+      const insertCard = db.prepare("INSERT INTO cards (id,deck_id,position,front,back,notes,start_t,end_t,tags,cloze,srs) VALUES (?,?,?,?,?,?,?,?,?,?,?)");
+      const tx = db.transaction(() => {
+        db.prepare("INSERT INTO decks (id,workspace_id,title,language,audio_url,created_at,share_id,listed,listed_at,description,installs) VALUES (?,?,?,?,?,?,NULL,0,NULL,'',0)")
+          .run(newId, ws, src.title, src.language, src.audio_url, now);
+        let pos = 0;
+        for (const c of srcCards) {
+          insertCard.run(nanoid(10), newId, pos++, c.front, c.back, c.notes, c.start_t, c.end_t, c.tags, c.cloze, JSON.stringify(freshSrs(now)));
+        }
+        db.prepare("UPDATE decks SET installs=installs+1 WHERE id=?").run(src.id);
+      });
+      tx();
+      return { deckId: newId, title: src.title, cardCount: srcCards.length };
     },
 
     // --- stats / search ----------------------------------------------

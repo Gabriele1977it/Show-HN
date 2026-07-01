@@ -225,3 +225,21 @@ body.readonly .back-input { pointer-events: none; opacity: .7; }
 .grades button { padding: 12px 0; color: #fff; font-weight: 600; border: none; }
 .g-again { background: #ef4444; } .g-hard { background: #f59e0b; }
 .g-good { background: #10b981; } .g-easy { background: var(--accent); }
+
+/* --- marketplace --- */
+.mkt-toolbar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin: 4px 0 16px; }
+.mkt-toolbar input, .mkt-toolbar select { padding: 9px 12px; border: 1px solid var(--line); border-radius: 10px; font: inherit; background: #fff; }
+.mkt-toolbar input { flex: 1; min-width: 200px; }
+.mkt-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
+.mkt-card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 18px; display: flex; flex-direction: column; box-shadow: var(--shadow-sm); }
+.mkt-card:hover { border-color: #d8dbe0; box-shadow: var(--shadow-md); }
+.mkt-card h3 { margin: 0 0 2px; font-size: 16px; }
+.mkt-card .creator { color: var(--muted); font-size: 12.5px; }
+.mkt-card .desc { color: var(--ink-2); font-size: 13px; margin: 10px 0; min-height: 34px; }
+.mkt-card .mkt-meta { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.mkt-card .cta { margin-top: auto; display: flex; gap: 8px; }
+.mkt-card .cta .primary { flex: 1; }
+.mkt-empty { color: var(--muted); text-align: center; padding: 40px 0; }
+.mkt-bar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
+.mkt-bar input { flex: 1; min-width: 180px; padding: 8px 11px; border: 1px solid var(--line); border-radius: 10px; font: inherit; }
+body.readonly #list-btn, body.readonly #mkt-bar { display: none !important; }

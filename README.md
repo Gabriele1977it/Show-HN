@@ -42,6 +42,13 @@ already uses (Anki, spreadsheets, JSON).
   (`/s/:shareId`). Your audience gets a read-only viewer (shadowing loops,
   reveal-meaning, export) with no access to your private review schedule; one
   click to unshare revokes it.
+- **Deck marketplace** — publish a deck to a public, searchable catalog
+  (`/marketplace`) so other learners can discover it, preview the read-only
+  viewer, and **install** a fresh copy into their own workspace in one click
+  (new cards, reset review schedule). Listing is an extension of sharing (same
+  paid gate); installs are counted so popular decks rise to the top. This turns
+  the share link into a growth loop: creators bring their audience, the audience
+  becomes users.
 - **Export** to Anki (`.tsv`), CSV, or full-fidelity JSON.
 - **Plans & billing (Stripe)** — Free / Pro / Team tiers with server-enforced
   limits (decks, cards, members) and feature gates (sharing, reminders, stats).
@@ -136,6 +143,10 @@ from the workspace member key in `Authorization`).
 | `POST` | `/api/cards/:id/review` | Grade a card (`again`/`hard`/`good`/`easy` or `0`–`5`). |
 | `POST` | `/api/decks/:id/share` | Publish to a public link; returns `shareId` + `shareUrl`. |
 | `DELETE` | `/api/decks/:id/share` | Unpublish (revoke the link). |
+| `POST` | `/api/decks/:id/list` | List the deck in the public marketplace (implies sharing); body `{description?}`. |
+| `DELETE` | `/api/decks/:id/list` | Remove the deck from the marketplace (keeps the share link). |
+| `GET` | `/api/marketplace?q=…&language=…&limit=…` | Public catalog of listed decks (no auth). |
+| `POST` | `/api/marketplace/:shareId/install` | Clone a listed deck into the caller's workspace (respects plan limits). |
 | `GET` | `/api/shared/:shareId` | Public read-only deck (card content only). |
 | `GET` | `/api/shared/:shareId/export?format=…` | Export a shared deck. |
 | `GET` | `/s/:shareId` | Public viewer page for a shared deck. |

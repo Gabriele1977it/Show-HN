@@ -65,6 +65,9 @@ export function createApp({ store, uploadsDir, reminders, billing, mailer, owner
   app.use("/api", (req, res, next) => {
     if (req.method === "POST" && req.path === "/workspaces") return next();
     if (req.path.startsWith("/shared/")) return next();
+    // The marketplace catalog is public (browse without a key); installing a
+    // listed deck is a POST and still requires a workspace key.
+    if (req.method === "GET" && req.path.startsWith("/marketplace")) return next();
     if (req.path.startsWith("/auth/") || req.path.startsWith("/account")) return next();
     if (req.path === "/billing/webhook" || req.path === "/plans") return next();
     const key = (req.get("authorization") || "").replace(/^Bearer\s+/i, "").trim();
@@ -389,6 +392,45 @@ export function createApp({ store, uploadsDir, reminders, billing, mailer, owner
   // Public viewer page.
   app.get("/s/:shareId", (_req, res) => res.sendFile(join(PUBLIC_DIR, "share.html")));
 
+  // --- marketplace -----------------------------------------------------
+  // List a deck in the public catalog (implies sharing, so it's gated the same
+  // way). An optional description helps learners find it.
+  app.post("/api/decks/:id/list", featureGate("sharing", "The marketplace"), (req, res) => {
+    const result = store.listDeck(req.params.id, req.ws, { description: req.body?.description });
+    if (!result) return res.status(404).json({ error: "Deck not found" });
+    res.json({ ...result, shareUrl: `${req.protocol}://${req.get("host")}/s/${result.shareId}` });
+  });
+
+  app.delete("/api/decks/:id/list", (req, res) => {
+    const result = store.unlistDeck(req.params.id, req.ws);
+    if (!result) return res.status(404).json({ error: "Deck not found" });
+    res.status(204).end();
+  });
+
+  // Public catalog of listed decks (no auth). Supports a text query and a
+  // language filter.
+  app.get("/api/marketplace", (req, res) => {
+    const limit = Math.min(Number(req.query.limit) || 60, 200);
+    res.json(store.listMarketplace({ q: req.query.q ?? "", language: req.query.language ?? "", limit }));
+  });
+
+  // Install (clone) a listed deck into the caller's workspace. Subject to the
+  // caller's plan limits; bumps the source deck's install count.
+  app.post("/api/marketplace/:shareId/install", (req, res) => {
+    const listing = store.getListing(req.params.shareId);
+    if (!listing) return res.status(404).json({ error: "Listing not found" });
+    const use = store.workspaceUsage(req.ws);
+    if (!canAdd(planOf(req), "decks", use.decks)) {
+      return upgrade(res, `You've reached the deck limit on the Free plan. Upgrade for unlimited decks.`);
+    }
+    if (!canAdd(planOf(req), "cards", use.cards, listing.cardCount)) {
+      return upgrade(res, `Installing this deck would exceed your card limit. Upgrade for unlimited cards.`);
+    }
+    const result = store.installListing(req.params.shareId, req.ws);
+    if (!result) return res.status(404).json({ error: "Listing not found" });
+    res.status(201).json(result);
+  });
+
   // --- cards -----------------------------------------------------------
   app.patch("/api/cards/:id", (req, res) => {
     const card = store.updateCard(req.params.id, req.body ?? {}, req.ws);
@@ -416,6 +458,7 @@ export function createApp({ store, uploadsDir, reminders, billing, mailer, owner
   // Marketing landing page at the root; the app itself lives at /app.
   app.get("/", (_req, res) => res.sendFile(join(PUBLIC_DIR, "landing.html")));
   app.get("/app", (_req, res) => res.sendFile(join(PUBLIC_DIR, "index.html")));
+  app.get("/marketplace", (_req, res) => res.sendFile(join(PUBLIC_DIR, "marketplace.html")));
   app.get("/terms", (_req, res) => res.sendFile(join(PUBLIC_DIR, "terms.html")));
   app.get("/privacy", (_req, res) => res.sendFile(join(PUBLIC_DIR, "privacy.html")));
   app.get("/reset", (_req, res) => res.sendFile(join(PUBLIC_DIR, "reset.html")));

@@ -17,6 +17,7 @@
         <button class="tab" data-view="study">Study</button>
         <button class="tab" data-view="alerts">Alerts <span id="alert-badge" class="badge hidden">0</span></button>
         <button class="tab" data-view="stats">Stats</button>
+        <button class="tab" data-view="discover">Discover</button>
         <button class="tab" data-view="pricing" id="pricing-tab">✦ Upgrade</button>
         <button id="ws-btn" class="tab" title="Workspace">⌂ <span id="ws-name">Workspace</span></button>
       </nav>
@@ -159,6 +160,7 @@ Subtitle text here"></textarea>
               <button id="cloze-btn" class="ghost" title="Auto-generate fill-in-the-blank terms">Auto-cloze</button>
               <button id="export-btn" class="ghost">Export</button>
               <button id="share-btn" class="ghost">Share</button>
+              <button id="list-btn" class="ghost" title="Publish to the public marketplace">List</button>
               <button id="review-btn" class="primary">Review due <span id="due-badge" class="badge">0</span></button>
             </div>
           </div>
@@ -170,6 +172,15 @@ Subtitle text here"></textarea>
             <button id="share-copy" class="ghost small">Copy</button>
             <a id="share-open" class="ghost small" target="_blank" rel="noopener" style="text-decoration:none">Open ↗</a>
             <button id="share-off" class="ghost small">Unshare</button>
+          </div>
+
+          <!-- Marketplace listing bar -->
+          <div id="mkt-bar" class="panel mkt-bar hidden">
+            <span class="muted small" id="mkt-bar-label">List on the marketplace:</span>
+            <input id="mkt-desc" placeholder="Short description (helps learners find it)…" maxlength="300" />
+            <button id="mkt-list" class="primary small">Publish</button>
+            <button id="mkt-unlist" class="ghost small hidden">Unlist</button>
+            <span class="muted small hidden" id="mkt-installs"></span>
           </div>
 
           <!-- Shadowing / card list -->
@@ -206,6 +217,21 @@ Subtitle text here"></textarea>
           <button id="search-clear" class="ghost small">Clear</button>
         </div>
         <div id="search-results" class="card-list"></div>
+      </section>
+
+      <!-- DISCOVER VIEW -->
+      <section id="view-discover" class="view">
+        <div class="alert-head" style="padding:0">
+          <h2>Discover decks</h2>
+          <a class="ghost small" href="/marketplace" target="_blank" rel="noopener" style="text-decoration:none">Public page ↗</a>
+        </div>
+        <p class="muted small">Install community-made decks into this workspace. Cards arrive fresh — your review schedule starts from scratch.</p>
+        <div class="mkt-toolbar">
+          <input id="disc-q" type="search" placeholder="Search decks by title, topic, or language…" autocomplete="off" />
+          <select id="disc-lang"><option value="">All languages</option></select>
+        </div>
+        <div id="disc-grid" class="mkt-grid"></div>
+        <p id="disc-status" class="mkt-empty">Loading decks…</p>
       </section>
 
       <!-- PRICING VIEW -->

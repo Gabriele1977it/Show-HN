@@ -604,3 +604,89 @@ test("deleting a deck removes it and its cards", async () => {
   assert.equal((await fetch(`${base}/api/decks/${created.id}`, { method: "DELETE" })).status, 204);
   assert.equal((await fetch(`${base}/api/decks/${created.id}`)).status, 404);
 });
+
+test("marketplace: list a deck, browse the public catalog, and install it", async () => {
+  // Build a deck in the suite's (Team-plan) workspace and list it.
+  const deck = await fetch(`${base}/api/decks`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title: "JLPT N5 core", language: "Japanese", transcript: "[00:00] ねこ\n[00:02] いぬ" }),
+  }).then(j);
+  const listed = await fetch(`${base}/api/decks/${deck.id}/list`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ description: "Beginner vocabulary from NHK Easy." }),
+  }).then(j);
+  assert.ok(listed.shareId);
+  assert.equal(listed.listed, true);
+  assert.match(listed.shareUrl, /\/s\//);
+
+  // The catalog is public — no workspace key required.
+  const catalog = await realFetch(`${base}/api/marketplace`).then(j);
+  const entry = catalog.find((e) => e.shareId === listed.shareId);
+  assert.ok(entry, "listed deck shows in the public catalog");
+  assert.equal(entry.cardCount, 2);
+  assert.equal(entry.description, "Beginner vocabulary from NHK Easy.");
+  assert.equal(entry.installs, 0);
+
+  // Text query and language filter both work.
+  assert.ok((await realFetch(`${base}/api/marketplace?q=nhk`).then(j)).some((e) => e.shareId === listed.shareId));
+  assert.ok((await realFetch(`${base}/api/marketplace?language=Japanese`).then(j)).some((e) => e.shareId === listed.shareId));
+  assert.ok(!(await realFetch(`${base}/api/marketplace?q=zzznotfound`).then(j)).some((e) => e.shareId === listed.shareId));
+
+  // A separate workspace installs the listing into its own space.
+  const other = await realFetch(`${base}/api/workspaces`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: "Learner" }),
+  }).then(j);
+  const auth = { Authorization: `Bearer ${other.key}`, "Content-Type": "application/json" };
+  const installed = await realFetch(`${base}/api/marketplace/${listed.shareId}/install`, { method: "POST", headers: auth }).then(j);
+  assert.equal(installed.cardCount, 2);
+  assert.ok(installed.deckId);
+
+  // The clone lives in the learner's workspace with fresh, due cards.
+  const clone = await realFetch(`${base}/api/decks/${installed.deckId}`, { headers: { Authorization: `Bearer ${other.key}` } }).then(j);
+  assert.equal(clone.title, "JLPT N5 core");
+  assert.equal(clone.cards.length, 2);
+  assert.notEqual(clone.id, deck.id);
+  assert.equal(clone.listed, false);
+  assert.equal(clone.shareId, null);
+
+  // Install count bumped on the source listing.
+  assert.equal((await realFetch(`${base}/api/marketplace`).then(j)).find((e) => e.shareId === listed.shareId).installs, 1);
+
+  // Unlisting removes it from the catalog (but keeps the share link live).
+  assert.equal((await fetch(`${base}/api/decks/${deck.id}/list`, { method: "DELETE" })).status, 204);
+  assert.ok(!(await realFetch(`${base}/api/marketplace`).then(j)).some((e) => e.shareId === listed.shareId));
+  assert.equal((await realFetch(`${base}/api/marketplace/${listed.shareId}/install`, { method: "POST", headers: auth })).status, 404);
+  assert.equal((await fetch(`${base}/api/shared/${listed.shareId}`)).status, 200); // still shared
+});
+
+test("marketplace: listing is gated on Free; install respects plan limits", async () => {
+  const hdr = (key, json) => ({ Authorization: `Bearer ${key}`, ...(json ? { "Content-Type": "application/json" } : {}) });
+  // A Free workspace cannot list a deck (402, same gate as sharing).
+  const free = await realFetch(`${base}/api/workspaces`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: "Free lister" }),
+  }).then(j);
+  const fdeck = await realFetch(`${base}/api/decks`, {
+    method: "POST", headers: hdr(free.key, true), body: JSON.stringify({ title: "x", transcript: "[00:00] a" }),
+  }).then(j);
+  assert.equal((await realFetch(`${base}/api/decks/${fdeck.id}/list`, { method: "POST", headers: hdr(free.key, true), body: "{}" })).status, 402);
+
+  // Publish a big listing from the Team workspace.
+  const big = await fetch(`${base}/api/decks`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title: "Big", transcript: Array.from({ length: 60 }, (_, i) => `[00:0${i % 10}] line ${i}`).join("\n") }),
+  }).then(j);
+  const bigListed = await fetch(`${base}/api/decks/${big.id}/list`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: "{}",
+  }).then(j);
+
+  // The Free workspace already has 1 deck; installing 60 cards would exceed the
+  // 100-card cap only if combined — but the deck cap (3) or card cap applies.
+  // Fill it to the card limit first, then the install is blocked with 402.
+  await realFetch(`${base}/api/decks/${fdeck.id}/cards`, {
+    method: "POST", headers: hdr(free.key, true),
+    body: JSON.stringify({ transcript: Array.from({ length: 60 }, (_, i) => `[00:0${i % 10}] fill ${i}`).join("\n") }),
+  });
+  const blocked = await realFetch(`${base}/api/marketplace/${bigListed.shareId}/install`, { method: "POST", headers: hdr(free.key, true) });
+  assert.equal(blocked.status, 402);
+  assert.equal((await blocked.json()).upgrade, true);
+});

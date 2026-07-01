@@ -270,6 +270,10 @@ export function createStore(filePath) {
         createdAt: Date.now(),
         cardOrder: [],
         shareId: null,
+        listed: false,
+        listedAt: null,
+        description: "",
+        installs: 0,
       };
       state.decks[id] = deck;
       persist();
@@ -442,6 +446,82 @@ export function createStore(filePath) {
         .filter(Boolean)
         .map((c) => ({ front: c.front, back: c.back, notes: c.notes, start: c.start, end: c.end, tags: c.tags, cloze: c.cloze ?? null }));
       return { shareId, title: deck.title, language: deck.language, audioUrl: deck.audioUrl, cards };
+    },
+
+    // --- marketplace ---------------------------------------------------
+    // Listing publishes a deck to the public catalog. It implies sharing, so a
+    // share id is minted if needed. Unlisting only removes it from the catalog;
+    // the share link and description are kept for a one-click re-list.
+    listDeck(id, ws, { description = "" } = {}) {
+      const deck = deckOwned(id, ws);
+      if (!deck) return null;
+      if (!deck.shareId) deck.shareId = nanoid(16);
+      deck.listed = true;
+      deck.listedAt = Date.now();
+      deck.description = String(description || "").slice(0, 300);
+      persist();
+      return { id, shareId: deck.shareId, listed: true, description: deck.description };
+    },
+
+    unlistDeck(id, ws) {
+      const deck = deckOwned(id, ws);
+      if (!deck) return null;
+      if (deck.listed) { deck.listed = false; persist(); }
+      return { id, listed: false };
+    },
+
+    // Public catalog of listed decks, most-installed / newest first, with an
+    // optional text query and language filter.
+    listMarketplace({ q = "", language = "", limit = 60 } = {}) {
+      const needle = String(q || "").trim().toLowerCase();
+      const lang = String(language || "").trim().toLowerCase();
+      return Object.values(state.decks)
+        .filter((d) => d.listed && d.shareId)
+        .filter((d) => (!lang || (d.language || "").toLowerCase() === lang))
+        .filter((d) => (!needle || `${d.title} ${d.description || ""} ${d.language || ""}`.toLowerCase().includes(needle)))
+        .sort((a, b) => (b.installs || 0) - (a.installs || 0) || (b.listedAt || 0) - (a.listedAt || 0))
+        .slice(0, limit)
+        .map((d) => ({
+          shareId: d.shareId, title: d.title, language: d.language, description: d.description || "",
+          cardCount: d.cardOrder.length, installs: d.installs || 0,
+          creator: state.workspaces[d.workspaceId]?.name ?? "Creator", listedAt: d.listedAt,
+        }));
+    },
+
+    getListing(shareId) {
+      const d = Object.values(state.decks).find((x) => x.shareId === shareId && x.listed);
+      if (!d) return null;
+      return {
+        shareId: d.shareId, title: d.title, language: d.language, description: d.description || "",
+        cardCount: d.cardOrder.length, installs: d.installs || 0,
+        creator: state.workspaces[d.workspaceId]?.name ?? "Creator",
+      };
+    },
+
+    // Clone a listed deck into `ws` as a fresh deck (new ids, reset SRS, not
+    // shared/listed) and bump the source's install count.
+    installListing(shareId, ws, now = Date.now()) {
+      const src = Object.values(state.decks).find((x) => x.shareId === shareId && x.listed);
+      if (!src) return null;
+      const id = nanoid(10);
+      const deck = {
+        id, workspaceId: ws, title: src.title, language: src.language, audioUrl: src.audioUrl,
+        createdAt: now, cardOrder: [], shareId: null, listed: false, listedAt: null, description: "", installs: 0,
+      };
+      state.decks[id] = deck;
+      for (const cid of src.cardOrder) {
+        const c = state.cards[cid];
+        if (!c) continue;
+        const newCid = nanoid(10);
+        state.cards[newCid] = {
+          id: newCid, deckId: id, front: c.front, back: c.back, notes: c.notes,
+          start: c.start, end: c.end, tags: [...(c.tags ?? [])], cloze: c.cloze ?? null, srs: freshSrs(now),
+        };
+        deck.cardOrder.push(newCid);
+      }
+      src.installs = (src.installs || 0) + 1;
+      persist();
+      return { deckId: id, title: src.title, cardCount: deck.cardOrder.length };
     },
 
     // Aggregated study statistics for the dashboard (workspace-scoped).
