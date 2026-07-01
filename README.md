@@ -20,6 +20,11 @@ already uses (Anki, spreadsheets, JSON).
 - **Ingest** a transcript with timestamps (`[00:12]`, `1:02:33`, bare `00:12`),
   or import a subtitle file (`.srt` / `.vtt`) — cue ranges give every card its
   real start **and** end time. Plain text is split into sentence cards.
+- **Auto-transcription** — skip the manual transcript step entirely: paste or
+  upload an audio URL and hit **Transcribe** to get timestamped lines that drop
+  straight into the build box (real shadowing loops included). Provider-agnostic
+  via `TRANSCRIBE_WEBHOOK_URL` (Whisper / Deepgram / AssemblyAI / self-hosted);
+  the button is hidden when no provider is configured.
 - **Shadowing player** — each timestamped card becomes a loop with adjustable
   playback speed (0.6× / 0.75× / 1×) for repeat-after-me practice.
 - **Pronunciation feedback** — the other half of shadowing: in a review, hit
@@ -166,6 +171,7 @@ from the workspace member key in `Authorization`).
 | `GET` | `/api/shared/:shareId/export?format=…` | Export a shared deck. |
 | `GET` | `/s/:shareId` | Public viewer page for a shared deck. |
 | `POST` | `/api/upload` | Upload an audio file (multipart field `audio`). |
+| `POST` | `/api/transcribe` | Transcribe an audio URL `{audioUrl}` → `{segments, transcript}` (requires a configured provider). |
 
 ## Reminders (push / email)
 
@@ -209,6 +215,7 @@ webhook at `POST /api/billing/webhook` (events: `checkout.session.completed`,
 | `EMAIL_WEBHOOK_URL` | Outbound webhook for transactional email (password resets). Point at a provider relay (Resend/Postmark/SendGrid) or Zapier/Make. Logs to console if unset. |
 | `ANTHROPIC_API_KEY` | Enables AI card-back fill via the Claude API. Unset → the feature is disabled and hidden in the UI. |
 | `ECHODECK_LLM_MODEL` | Model used for AI card fill (defaults to the latest Claude model). |
+| `TRANSCRIBE_WEBHOOK_URL` | Speech-to-text endpoint for auto-transcription. Receives `{audioUrl}`, returns `{segments}` or `{text}`. Unset → the feature is disabled and hidden. |
 
 ## Configuration
 
@@ -248,6 +255,7 @@ server/
   pronounce.js   shadowing attempt scoring (word/character alignment)
   cloze.js       fill-in-the-blank term suggestion + masking
   enrich.js      AI card-back fill (Anthropic SDK, injectable generator)
+  transcribe.js  audio → transcript (provider-agnostic webhook)
   auth.js        password hashing (scrypt) + session/reset tokens
   email.js       transactional email (webhook provider, dev-mode fallback)
   plans.js       plan tiers + entitlement/limit helpers

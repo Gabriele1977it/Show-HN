@@ -10,6 +10,7 @@ import { createReminderService } from "../server/reminders.js";
 import { createBilling } from "../server/billing.js";
 import { createMailer } from "../server/email.js";
 import { createEnricher } from "../server/enrich.js";
+import { createTranscriber } from "../server/transcribe.js";
 
 let server, base, tmp, sentReminders, realFetch, wsKey;
 
@@ -29,8 +30,10 @@ before(async () => {
   const mailer = createMailer({ log: () => {} }); // dev mode (no email provider)
   // Inject a fake generator so the AI-fill flow is exercised without a live key.
   const enrich = createEnricher({ generate: async (front, language) => ({ back: `EN:${front}`, notes: `note(${language})` }) });
+  // Fake transcriber so the auto-transcription flow is exercised without a provider.
+  const transcribe = createTranscriber({ transcribe: async (audioUrl) => ({ segments: [{ start: 0, end: 3, text: `heard from ${audioUrl}` }, { start: 3, end: 6, text: "second line" }] }) });
   const ownerEmails = new Set(["owner@echodeck.app"]);
-  const app = createApp({ store, uploadsDir: join(tmp, "uploads"), reminders, billing, mailer, enrich, ownerEmails });
+  const app = createApp({ store, uploadsDir: join(tmp, "uploads"), reminders, billing, mailer, enrich, transcribe, ownerEmails });
   await new Promise((res) => { server = app.listen(0, res); });
   base = `http://127.0.0.1:${server.address().port}`;
 
@@ -784,4 +787,31 @@ test("AI fill is gated on the Free plan", async () => {
   assert.equal((await realFetch(`${base}/api/cards/${deck.cards[0].id}/enrich`, {
     method: "POST", headers: hdr(free.key, true), body: "{}",
   })).status, 402);
+});
+
+test("auto-transcription: audio URL becomes timestamped transcript, then builds a deck", async () => {
+  // The workspace endpoint advertises that transcription is configured.
+  assert.equal((await fetch(`${base}/api/workspace`).then(j)).transcribeConfigured, true);
+
+  // Transcribe an audio URL → bracket-timestamped lines from the fake provider.
+  const res = await fetch(`${base}/api/transcribe`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ audioUrl: "http://example/clip.mp3" }),
+  }).then(j);
+  assert.match(res.transcript, /^\[00:00\] heard from http:\/\/example\/clip\.mp3\n\[00:03\] second line$/);
+  assert.equal(res.segments.length, 2);
+
+  // The transcript drops straight into the normal build pipeline → timestamped cards.
+  const deck = await fetch(`${base}/api/decks`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title: "From audio", audioUrl: "http://example/clip.mp3", transcript: res.transcript }),
+  }).then(j);
+  assert.equal(deck.cards.length, 2);
+  assert.equal(deck.cards[0].start, 0);
+  assert.equal(deck.cards[1].start, 3);
+
+  // Missing URL → 400.
+  assert.equal((await fetch(`${base}/api/transcribe`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: "{}",
+  })).status, 400);
 });

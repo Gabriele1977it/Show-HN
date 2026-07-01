@@ -13,6 +13,7 @@ import { createReminderService, webhookNotifier, consoleNotifier } from "./remin
 import { createBilling } from "./billing.js";
 import { createMailer } from "./email.js";
 import { createEnricher } from "./enrich.js";
+import { createTranscriber } from "./transcribe.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, "..");
@@ -76,12 +77,17 @@ const mailer = createMailer({ webhookUrl: process.env.EMAIL_WEBHOOK_URL });
 // configurable via ECHODECK_LLM_MODEL.
 const enrich = createEnricher({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-const app = createApp({ store, uploadsDir: UPLOADS_DIR, reminders, billing, mailer, enrich, ownerEmails });
+// Auto-transcription: POST audio URLs to TRANSCRIBE_WEBHOOK_URL (Whisper/Deepgram/
+// AssemblyAI/etc. via a relay). Disabled + hidden when unset.
+const transcribe = createTranscriber({ webhookUrl: process.env.TRANSCRIBE_WEBHOOK_URL });
+
+const app = createApp({ store, uploadsDir: UPLOADS_DIR, reminders, billing, mailer, enrich, transcribe, ownerEmails });
 
 const server = app.listen(PORT, () => {
   console.log(`EchoDeck running on http://localhost:${PORT}`);
   console.log(billing.enabled ? "Stripe billing enabled." : "Billing in dev mode (no Stripe keys).");
   console.log(enrich.enabled ? `AI card fill enabled (model: ${enrich.model}).` : "AI card fill disabled (no ANTHROPIC_API_KEY).");
+  console.log(transcribe.enabled ? "Auto-transcription enabled." : "Auto-transcription disabled (no TRANSCRIBE_WEBHOOK_URL).");
   // Background polling only runs when explicitly enabled.
   if (process.env.REMINDER_ENABLED === "1" || process.env.REMINDER_ENABLED === "true") {
     reminders.start();

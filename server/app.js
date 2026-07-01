@@ -29,7 +29,7 @@ function sendExport(res, deck, cards, format) {
   res.send(body);
 }
 
-export function createApp({ store, uploadsDir, reminders, billing, mailer, enrich, ownerEmails = new Set(), rateLimits = {} }) {
+export function createApp({ store, uploadsDir, reminders, billing, mailer, enrich, transcribe, ownerEmails = new Set(), rateLimits = {} }) {
   const app = express();
   app.set("trust proxy", 1); // behind a host's load balancer; lets req.ip work
   app.use(securityHeaders);
@@ -185,6 +185,8 @@ export function createApp({ store, uploadsDir, reminders, billing, mailer, enric
       usage: store.workspaceUsage(req.ws),
       // Whether the server has an AI provider configured (drives the "AI fill" UI).
       enrichConfigured: Boolean(enrich?.enabled),
+      // Whether auto-transcription is configured (drives the "Transcribe" button).
+      transcribeConfigured: Boolean(transcribe?.enabled),
     });
   });
 
@@ -265,6 +267,24 @@ export function createApp({ store, uploadsDir, reminders, billing, mailer, enric
   app.post("/api/upload", upload.single("audio"), (req, res) => {
     if (!req.file) return res.status(400).json({ error: "No audio file (field 'audio') accepted." });
     res.json({ url: `/uploads/${req.file.filename}` });
+  });
+
+  // Auto-transcribe an audio URL into timestamped transcript lines. Requires a
+  // transcription provider to be configured (503 otherwise). The result is fed
+  // back into the normal build flow — nothing here creates a deck directly.
+  app.post("/api/transcribe", async (req, res) => {
+    if (!transcribe?.enabled) return res.status(503).json({ error: "Auto-transcription isn't configured on this server." });
+    const audioUrl = req.body?.audioUrl;
+    if (!audioUrl) return res.status(400).json({ error: "Provide an audio URL to transcribe." });
+    let result;
+    try {
+      result = await transcribe.run(audioUrl);
+    } catch (err) {
+      return res.status(502).json({ error: `Transcription failed: ${err.message}` });
+    }
+    if (result.error) return res.status(422).json({ error: `Transcription failed (${result.error}).` });
+    if (!result.transcript) return res.status(422).json({ error: "No speech was transcribed from that audio." });
+    res.json(result);
   });
 
   // --- decks -----------------------------------------------------------

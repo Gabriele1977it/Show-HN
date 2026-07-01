@@ -84,6 +84,30 @@ $("#audioFile").addEventListener("change", async (e) => {
   }
 });
 
+// ---- auto-transcription (audio URL → timestamped transcript) ----
+$("#transcribeBtn").addEventListener("click", async () => {
+  const url = $("#audioUrl").value.trim();
+  const status = $("#uploadStatus");
+  if (!url) { status.textContent = "Add an audio URL (or upload a file) to transcribe."; return; }
+  const btn = $("#transcribeBtn");
+  btn.disabled = true;
+  const old = btn.textContent;
+  btn.textContent = "Transcribing…";
+  status.textContent = "Transcribing audio — this can take a moment…";
+  try {
+    const res = await api.post("/api/transcribe", { audioUrl: url });
+    const ta = $("#build-form").transcript;
+    ta.value = ta.value.trim() ? ta.value.trimEnd() + "\n\n" + res.transcript : res.transcript;
+    const n = res.segments?.length;
+    status.textContent = n ? `Transcribed ${n} segment${n === 1 ? "" : "s"}.` : "Transcript added.";
+  } catch (err) {
+    status.textContent = err.message;
+  } finally {
+    btn.textContent = old;
+    btn.disabled = false;
+  }
+});
+
 // ---- subtitle import (reads file text straight into the transcript box) ----
 $("#subBtn").addEventListener("click", () => $("#subFile").click());
 $("#subFile").addEventListener("change", async (e) => {
@@ -919,6 +943,7 @@ function setWorkspace(key, name) {
 let wsRole = "admin";
 let wsMemberId = null;
 let enrichConfigured = false;
+let transcribeConfigured = false;
 
 $("#ws-madd").addEventListener("click", async () => {
   const name = $("#ws-mname").value.trim();
@@ -968,6 +993,8 @@ async function loadWorkspaceInfo() {
     wsRole = w.role;
     wsMemberId = w.memberId;
     enrichConfigured = Boolean(w.enrichConfigured);
+    transcribeConfigured = Boolean(w.transcribeConfigured);
+    $("#transcribeBtn").classList.toggle("hidden", !transcribeConfigured);
     localStorage.setItem(WS_NAME, w.name);
     $("#ws-name").textContent = w.name;
     $("#ws-panel-name").textContent = w.name;
