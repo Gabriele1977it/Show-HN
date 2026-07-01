@@ -1,0 +1,315 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>EchoDeck — audio into flashcards & shadowing</title>
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="theme-color" content="#4f46e5" />
+    <link rel="icon" href="/icon.svg" />
+    <link rel="apple-touch-icon" href="/icon.svg" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="/" style="text-decoration:none;color:inherit">
+        <span class="logo">◈</span> EchoDeck
+      </a>
+      <input id="search-box" class="search-box" type="search" placeholder="Search all cards…" autocomplete="off" />
+      <nav class="tabs">
+        <button class="tab is-active" data-view="build">Build</button>
+        <button class="tab" data-view="study">Study</button>
+        <button class="tab" data-view="alerts">Alerts <span id="alert-badge" class="badge hidden">0</span></button>
+        <button class="tab" data-view="stats">Stats</button>
+        <button class="tab" data-view="discover">Discover</button>
+        <button class="tab" data-view="pricing" id="pricing-tab">✦ Upgrade</button>
+        <button id="ws-btn" class="tab" title="Workspace">⌂ <span id="ws-name">Workspace</span></button>
+      </nav>
+
+      <div id="ws-panel" class="ws-panel hidden">
+        <div id="acct-out">
+          <h3>Account</h3>
+          <label>Email<input id="acct-email" type="email" placeholder="you@example.com" /></label>
+          <label>Password<input id="acct-pass" type="password" placeholder="at least 6 characters" /></label>
+          <div class="row" style="margin-top:8px">
+            <button id="acct-login" class="ghost small">Log in</button>
+            <button id="acct-signup" class="primary small">Sign up</button>
+            <button id="acct-forgot" class="ghost small" style="border:none;margin-left:auto">Forgot?</button>
+          </div>
+          <p id="acct-msg" class="error"></p>
+          <hr />
+        </div>
+
+        <div id="acct-in" class="hidden">
+          <h3>Account</h3>
+          <p class="muted small">Signed in as <strong id="acct-who">—</strong> · <button id="acct-logout" class="ghost small">Log out</button></p>
+          <p class="muted small" style="margin:8px 0 4px">Your workspaces</p>
+          <ul id="acct-keychain" class="member-list"></ul>
+          <hr />
+        </div>
+
+        <h3>Workspace</h3>
+        <p class="muted small">You are <strong id="ws-role">—</strong> in <strong id="ws-panel-name">—</strong>.</p>
+        <div class="plan-line">
+          <span>Plan: <strong id="ws-plan">Free</strong></span>
+          <button id="ws-upgrade" class="primary small">Upgrade</button>
+        </div>
+        <p class="muted small" id="ws-usage"></p>
+        <hr />
+        <label>Your access key
+          <div class="row"><input id="ws-key" readonly /><button id="ws-copy" class="ghost small">Copy</button></div>
+        </label>
+
+        <div id="ws-admin" class="hidden">
+          <hr />
+          <h3>Members</h3>
+          <ul id="ws-members" class="member-list"></ul>
+          <label>Invite a member
+            <div class="row">
+              <input id="ws-mname" placeholder="name" />
+              <select id="ws-mrole"><option value="editor">editor</option><option value="viewer">viewer</option><option value="admin">admin</option></select>
+              <button id="ws-madd" class="ghost small">Add</button>
+            </div>
+          </label>
+          <div id="ws-newkey" class="hidden">
+            <p class="muted small" style="margin:8px 0 4px">New member key (copy now — shown once):</p>
+            <div class="row"><input id="ws-newkey-val" readonly /><button id="ws-newkey-copy" class="ghost small">Copy</button></div>
+          </div>
+        </div>
+
+        <hr />
+        <label>Join another workspace
+          <div class="row"><input id="ws-join-key" placeholder="paste a key…" /><button id="ws-join" class="ghost small">Join</button></div>
+        </label>
+        <button id="ws-new" class="ghost small" style="margin-top:10px">Create a new empty workspace</button>
+        <p id="ws-msg" class="error"></p>
+      </div>
+    </header>
+
+    <main>
+      <!-- BUILD VIEW -->
+      <section id="view-build" class="view is-active">
+        <div class="grid">
+          <form id="build-form" class="card panel">
+            <h2>New deck</h2>
+            <p class="muted">
+              Paste a transcript of native-language audio. Lines with timestamps
+              (<code>[00:12]</code>, <code>1:02:33</code>, SRT/VTT) become
+              shadowing loops; plain text is split into sentence cards.
+            </p>
+
+            <label>Title<input name="title" placeholder="e.g. NHK Easy News — 2026-06" required /></label>
+            <label>Language<input name="language" placeholder="e.g. Japanese" /></label>
+
+            <label>Audio
+              <div class="row">
+                <input name="audioUrl" id="audioUrl" placeholder="https://… or upload →" />
+                <input type="file" id="audioFile" accept="audio/*" hidden />
+                <button type="button" id="uploadBtn" class="ghost">Upload</button>
+                <button type="button" id="transcribeBtn" class="ghost hidden" title="Auto-transcribe this audio into a timestamped transcript">✨ Transcribe</button>
+              </div>
+              <span id="uploadStatus" class="muted small"></span>
+            </label>
+
+            <label>
+              <span class="row between">
+                <span>Transcript</span>
+                <span>
+                  <input type="file" id="subFile" accept=".srt,.vtt,.txt,text/*" hidden />
+                  <button type="button" id="subBtn" class="ghost small">Import .srt / .vtt</button>
+                </span>
+              </span>
+              <textarea name="transcript" rows="10" placeholder="[00:00] こんにちは、今日のニュースです。
+[00:04] 天気は晴れ、気温は二十五度です。
+
+…or paste an SRT/VTT block:
+1
+00:00:01,000 --> 00:00:04,000
+Subtitle text here"></textarea>
+            </label>
+
+            <div class="row between">
+              <label class="inline">Max card length
+                <input name="maxChars" type="number" value="180" min="40" max="500" />
+              </label>
+              <button type="submit" class="primary">Build deck</button>
+            </div>
+            <p id="build-error" class="error"></p>
+          </form>
+
+          <div class="panel">
+            <h2>Your decks</h2>
+            <p id="creator-summary" class="creator-summary hidden"></p>
+            <ul id="deck-list" class="deck-list"></ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- STUDY VIEW -->
+      <section id="view-study" class="view">
+        <div id="study-empty" class="panel center muted">
+          Pick a deck from the <strong>Build</strong> tab to study.
+        </div>
+
+        <div id="study-deck" class="hidden">
+          <div class="study-head panel">
+            <div>
+              <h2 id="study-title"></h2>
+              <p class="muted small" id="study-meta"></p>
+            </div>
+            <div class="study-actions">
+              <select id="export-format">
+                <option value="anki">Anki (.tsv)</option>
+                <option value="csv">CSV</option>
+                <option value="json">JSON</option>
+              </select>
+              <button id="cloze-btn" class="ghost" title="Auto-generate fill-in-the-blank terms">Auto-cloze</button>
+              <button id="ai-fill-btn" class="ghost hidden" title="Use AI to fill empty card backs (translation + notes)">✨ AI-fill backs</button>
+              <button id="export-btn" class="ghost">Export</button>
+              <button id="share-btn" class="ghost">Share</button>
+              <button id="list-btn" class="ghost" title="Publish to the public marketplace">List</button>
+              <button id="review-btn" class="primary">Review due <span id="due-badge" class="badge">0</span></button>
+            </div>
+          </div>
+
+          <!-- Share link bar -->
+          <div id="share-bar" class="panel share-bar hidden">
+            <span class="muted small">Public link:</span>
+            <input id="share-url" readonly />
+            <button id="share-copy" class="ghost small">Copy</button>
+            <a id="share-open" class="ghost small" target="_blank" rel="noopener" style="text-decoration:none">Open ↗</a>
+            <button id="share-off" class="ghost small">Unshare</button>
+          </div>
+
+          <!-- Marketplace listing bar -->
+          <div id="mkt-bar" class="panel mkt-bar hidden">
+            <span class="muted small" id="mkt-bar-label">List on the marketplace:</span>
+            <input id="mkt-desc" placeholder="Short description (helps learners find it)…" maxlength="300" />
+            <button id="mkt-list" class="primary small">Publish</button>
+            <button id="mkt-unlist" class="ghost small hidden">Unlist</button>
+            <span class="muted small hidden" id="mkt-installs"></span>
+          </div>
+
+          <!-- Shadowing / card list -->
+          <div id="card-list" class="card-list"></div>
+        </div>
+      </section>
+    </main>
+
+      <!-- ALERTS VIEW -->
+      <section id="view-alerts" class="view">
+        <div class="panel alert-head">
+          <div>
+            <h2>Review alerts</h2>
+            <p class="muted small" id="alert-summary">Loading…</p>
+          </div>
+          <button id="alert-refresh" class="ghost small">Refresh</button>
+        </div>
+        <ul id="alert-list" class="deck-list"></ul>
+
+        <div class="panel reminder-panel" id="reminder-panel">
+          <div class="alert-head" style="margin:0 0 8px">
+            <h2 style="margin:0">Push / email reminders</h2>
+            <button id="reminder-test" class="ghost small">Send test reminder</button>
+          </div>
+          <p class="muted small" id="reminder-status">Checking reminder configuration…</p>
+          <pre id="reminder-preview" class="reminder-preview hidden"></pre>
+          <div id="push-row" class="row hidden" style="margin-top:10px">
+            <button id="push-enable" class="ghost small">🔔 Enable notifications on this device</button>
+            <button id="push-test" class="ghost small hidden">Send test notification</button>
+          </div>
+          <p class="muted small" id="push-status"></p>
+        </div>
+      </section>
+
+      <!-- SEARCH VIEW -->
+      <section id="view-search" class="view">
+        <div class="alert-head" style="padding:0">
+          <h2 id="search-title">Search</h2>
+          <button id="search-clear" class="ghost small">Clear</button>
+        </div>
+        <div id="search-results" class="card-list"></div>
+      </section>
+
+      <!-- DISCOVER VIEW -->
+      <section id="view-discover" class="view">
+        <div class="alert-head" style="padding:0">
+          <h2>Discover decks</h2>
+          <a class="ghost small" href="/marketplace" target="_blank" rel="noopener" style="text-decoration:none">Public page ↗</a>
+        </div>
+        <p class="muted small">Install community-made decks into this workspace. Cards arrive fresh — your review schedule starts from scratch.</p>
+        <div class="mkt-toolbar">
+          <input id="disc-q" type="search" placeholder="Search decks by title, topic, or language…" autocomplete="off" />
+          <select id="disc-lang"><option value="">All languages</option></select>
+        </div>
+        <div id="disc-grid" class="mkt-grid"></div>
+        <p id="disc-status" class="mkt-empty">Loading decks…</p>
+      </section>
+
+      <!-- PRICING VIEW -->
+      <section id="view-pricing" class="view">
+        <div class="alert-head" style="padding:0">
+          <h2>Plans &amp; pricing</h2>
+          <div class="row">
+            <span class="muted small" id="pricing-current">—</span>
+            <button id="manage-btn" class="ghost small hidden">Manage subscription</button>
+          </div>
+        </div>
+        <div id="pricing-cards" class="pricing-grid"></div>
+        <p id="pricing-msg" class="muted small"></p>
+      </section>
+
+      <!-- STATS VIEW -->
+      <section id="view-stats" class="view">
+        <div class="alert-head" style="padding:0">
+          <h2>Study dashboard</h2>
+          <button id="stats-refresh" class="ghost small">Refresh</button>
+        </div>
+        <div class="metric-row" id="metric-row"></div>
+        <div class="panel chart-panel">
+          <h2>Reviews — last 14 days</h2>
+          <div class="chart" id="chart-reviews"></div>
+        </div>
+        <div class="panel chart-panel">
+          <h2>Due — next 7 days</h2>
+          <div class="chart" id="chart-forecast"></div>
+        </div>
+      </section>
+
+    <!-- Review overlay -->
+    <div id="review-overlay" class="overlay hidden">
+      <div class="review-box">
+        <button id="review-close" class="close" aria-label="Close">×</button>
+        <div class="review-progress"><span id="review-count"></span></div>
+        <div id="review-front" class="review-front"></div>
+        <div id="review-back" class="review-back hidden"></div>
+
+        <div class="shadow-controls" id="review-shadow">
+          <button id="rev-play" class="ghost">▶ Play loop</button>
+          <label class="inline small">Speed
+            <select id="rev-speed">
+              <option value="0.6">0.6×</option>
+              <option value="0.75">0.75×</option>
+              <option value="1" selected>1×</option>
+            </select>
+          </label>
+          <button id="rev-record" class="ghost" title="Record yourself and score your pronunciation">🎤 Shadow &amp; score</button>
+        </div>
+        <div id="pronounce-result" class="pronounce-result hidden"></div>
+
+        <div class="review-buttons">
+          <button id="show-answer" class="primary wide">Show answer</button>
+          <div id="grade-buttons" class="grades hidden">
+            <button data-grade="again" class="g-again">Again</button>
+            <button data-grade="hard" class="g-hard">Hard</button>
+            <button data-grade="good" class="g-good">Good</button>
+            <button data-grade="easy" class="g-easy">Easy</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <audio id="player" preload="auto"></audio>
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>

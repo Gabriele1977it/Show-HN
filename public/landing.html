@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>EchoDeck — turn native audio into flashcards & shadowing practice</title>
+    <meta name="description" content="EchoDeck turns native-language audio into flashcards and timed shadowing practice. Auto-transcribe audio, score your pronunciation, auto-write card backs with AI, and share or discover decks. Built for solo creators and small media teams." />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="EchoDeck — turn native audio into flashcards & shadowing practice" />
+    <meta property="og:description" content="Auto-transcribe audio into study-ready flashcards with shadowing loops, pronunciation scoring, AI card backs, and spaced repetition." />
+    <meta property="og:image" content="/og.svg" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="EchoDeck — native audio into flashcards & shadowing" />
+    <meta name="twitter:description" content="Auto-transcribe, shadow & score, AI card backs, spaced repetition — and a deck marketplace." />
+    <meta name="twitter:image" content="/og.svg" />
+    <link rel="stylesheet" href="/styles.css" />
+    <style>
+      .lp-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 28px; max-width: 1120px; margin: 0 auto; }
+      .lp-nav { display: flex; align-items: center; gap: 22px; }
+      .lp-nav a { color: var(--ink-2); text-decoration: none; font-size: 14px; font-weight: 500; }
+      .lp-nav a:hover { color: var(--ink); }
+      .lp-cta { display: inline-flex; align-items: center; justify-content: center; padding: 10px 18px; border-radius: 10px; font-weight: 600; text-decoration: none; font-size: 14px; }
+      .lp-cta.primary { background: var(--accent); color: #fff; box-shadow: var(--shadow-sm); }
+      .lp-cta.primary:hover { background: #4338ca; }
+      .lp-cta.ghost { color: var(--ink-2); border: 1px solid var(--line); background: #fff; }
+      @media (max-width: 640px) { .lp-nav a.hide-sm { display: none; } }
+
+      .hero { max-width: 880px; margin: 0 auto; padding: 72px 24px 40px; text-align: center; }
+      .eyebrow { display: inline-block; font-size: 12.5px; font-weight: 600; color: var(--accent); background: var(--accent-weak); border: 1px solid #e0e3ff; padding: 5px 13px; border-radius: 999px; margin-bottom: 22px; }
+      .hero h1 { font-size: clamp(34px, 6vw, 56px); line-height: 1.05; letter-spacing: -1.5px; margin: 0 0 18px; font-weight: 750; }
+      .hero h1 .grad { background: linear-gradient(120deg, var(--accent), #a855f7); -webkit-background-clip: text; background-clip: text; color: transparent; }
+      .hero p.sub { font-size: clamp(16px, 2.4vw, 20px); color: var(--muted); max-width: 620px; margin: 0 auto 30px; line-height: 1.5; }
+      .hero-ctas { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+      .hero-ctas .lp-cta.primary { padding: 13px 24px; font-size: 15px; }
+      .hero-note { color: var(--muted); font-size: 13px; margin-top: 16px; }
+
+      .preview { max-width: 720px; margin: 44px auto 0; padding: 0 24px; }
+      .browser { border: 1px solid var(--line); border-radius: 16px; overflow: hidden; box-shadow: var(--shadow-lg); background: #fff; }
+      .browser .bar { display: flex; gap: 7px; padding: 12px 16px; background: var(--panel-2); border-bottom: 1px solid var(--line); }
+      .browser .bar i { width: 11px; height: 11px; border-radius: 50%; background: #d1d5db; }
+      .browser .body { padding: 22px; display: grid; gap: 12px; text-align: left; }
+      .demo-card { border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; box-shadow: var(--shadow-sm); }
+      .demo-card .jp { font-size: 19px; }
+      .demo-card .meta { color: var(--muted); font-size: 12px; margin-top: 6px; }
+      .demo-card .tools { display: flex; gap: 8px; margin-top: 12px; }
+      .demo-card .tools span { font-size: 12.5px; border: 1px solid var(--line); border-radius: 8px; padding: 6px 11px; color: var(--ink-2); }
+      .demo-card .tools span.go { background: var(--accent); color: #fff; border-color: transparent; }
+      .demo-card .ans { color: var(--accent-2); font-size: 14px; margin-top: 10px; }
+
+      .section { max-width: 1080px; margin: 0 auto; padding: 64px 24px; }
+      .section h2.title { text-align: center; font-size: clamp(26px, 4vw, 34px); letter-spacing: -.6px; margin: 0 0 10px; }
+      .section p.lede { text-align: center; color: var(--muted); max-width: 560px; margin: 0 auto 40px; font-size: 16px; }
+      .features { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+      @media (max-width: 820px) { .features { grid-template-columns: 1fr; } }
+      .feature { background: #fff; border: 1px solid var(--line); border-radius: 16px; padding: 24px; box-shadow: var(--shadow-sm); }
+      .feature .ico { width: 40px; height: 40px; border-radius: 11px; display: grid; place-items: center; font-size: 19px; background: var(--accent-weak); color: var(--accent); margin-bottom: 14px; }
+      .feature h3 { margin: 0 0 7px; font-size: 16.5px; }
+      .feature p { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.55; }
+
+      .pricing-wrap { background: #fff; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+      .lp-foot { max-width: 1080px; margin: 0 auto; padding: 36px 24px; color: var(--muted); font-size: 13px; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+      .lp-foot a { color: var(--muted); text-decoration: none; }
+      .lp-foot a:hover { color: var(--ink); }
+    </style>
+  </head>
+  <body>
+    <header class="lp-header">
+      <div class="brand"><span class="logo">◈</span> EchoDeck</div>
+      <nav class="lp-nav">
+        <a href="#features" class="hide-sm">Features</a>
+        <a href="#pricing" class="hide-sm">Pricing</a>
+        <a href="/app" class="lp-cta ghost">Sign in</a>
+        <a href="/app" class="lp-cta primary">Start free</a>
+      </nav>
+    </header>
+
+    <section class="hero">
+      <span class="eyebrow">For solo creators &amp; small media teams</span>
+      <h1>Turn native audio into <span class="grad">flashcards &amp; shadowing</span> practice</h1>
+      <p class="sub">Paste a transcript or drop in subtitles, and EchoDeck builds study-ready flashcards and timed shadowing loops — then score your pronunciation, auto-write card backs with AI, and share or discover decks in the marketplace.</p>
+      <div class="hero-ctas">
+        <a href="/app?sample=1" class="lp-cta primary">Try a sample deck →</a>
+        <a href="/app" class="lp-cta ghost">Start free</a>
+        <a href="#features" class="lp-cta ghost">See how it works</a>
+      </div>
+      <p class="hero-note">No signup to try · No credit card required · Free plan included</p>
+    </section>
+
+    <div class="preview">
+      <div class="browser">
+        <div class="bar"><i></i><i></i><i></i></div>
+        <div class="body">
+          <div class="demo-card">
+            <div class="jp">＿＿＿は天気がいいです。</div>
+            <div class="meta">#1 · ⏱ 0:00–0:04 · fill in the blank</div>
+            <div class="tools"><span class="go">▶ Shadow loop</span><span>Reveal</span></div>
+            <div class="ans">今日は天気がいいです。 — The weather is nice today.</div>
+          </div>
+          <div class="demo-card">
+            <div class="jp">週末は雨が降るかもしれません。</div>
+            <div class="meta">#2 · ⏱ 0:09–0:13 · 🎤 pronunciation 92%</div>
+            <div class="tools"><span class="go">▶ Shadow loop</span><span>🎤 Shadow &amp; score</span><span>✨ AI fill</span></div>
+            <div class="ans">It might rain this weekend. — auto-filled by AI</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <section class="section" id="features">
+      <h2 class="title">Everything you need to study from audio</h2>
+      <p class="lede">From raw recording to a polished, repeatable study deck — in minutes.</p>
+      <div class="features">
+        <div class="feature"><div class="ico">🎧</div><h3>Ingest any transcript</h3><p>Timestamps, SRT/VTT subtitles, or plain text. Each line becomes a flashcard with a real audio shadowing loop.</p></div>
+        <div class="feature"><div class="ico">🔁</div><h3>Shadowing &amp; spaced repetition</h3><p>Loop each segment at adjustable speed, then review with an SM-2 scheduler that surfaces exactly what's due.</p></div>
+        <div class="feature"><div class="ico">🎤</div><h3>Pronunciation feedback</h3><p>Record yourself shadowing a card and get a word-by-word score — with a suggested review grade. The feedback shadowing always needed, right in the browser.</p></div>
+        <div class="feature"><div class="ico">✨</div><h3>AI card backs</h3><p>One click fills a card's back with a natural translation plus a short grammar note and example — or auto-fill an entire deck at once.</p></div>
+        <div class="feature"><div class="ico">✏️</div><h3>Cloze &amp; auto-blanks</h3><p>One click turns sentences into fill-in-the-blank cards for active recall — editable any time.</p></div>
+        <div class="feature"><div class="ico">📊</div><h3>Study dashboard</h3><p>Track retention, streaks, daily activity, and a 7-day due forecast so momentum never slips.</p></div>
+        <div class="feature"><div class="ico">🛒</div><h3>Deck marketplace</h3><p>Publish decks to a public, searchable catalog — or install community-made decks into your own workspace in one click.</p></div>
+        <div class="feature"><div class="ico">🔗</div><h3>Share with your audience</h3><p>Publish any deck to a clean public link — your followers study and export without seeing your schedule.</p></div>
+        <div class="feature"><div class="ico">👥</div><h3>Team workspaces</h3><p>Invite teammates with admin / editor / viewer roles and collaborate on the same decks.</p></div>
+      </div>
+    </section>
+
+    <div class="pricing-wrap">
+      <section class="section" id="pricing">
+        <h2 class="title">Simple, honest pricing</h2>
+        <p class="lede">Start free. Upgrade when you're ready — cancel anytime.</p>
+        <div class="pricing-grid" id="lp-pricing"></div>
+      </section>
+    </div>
+
+    <footer class="lp-foot">
+      <div>© <span id="yr"></span> EchoDeck · Native audio → flashcards &amp; shadowing</div>
+      <div><a href="/app">Open the app</a> · <a href="#pricing">Pricing</a> · <a href="/terms">Terms</a> · <a href="/privacy">Privacy</a></div>
+    </footer>
+
+    <script src="/landing.js" type="module"></script>
+  </body>
+</html>

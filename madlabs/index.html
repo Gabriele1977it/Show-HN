@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>MadLabs — software that does the boring parts</title>
+    <meta name="description" content="MadLabs builds SaaS for small and medium businesses — improving the quality of work and streamlining the tedious processes that slow teams down." />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="MadLabs — software that does the boring parts" />
+    <meta property="og:description" content="We build SaaS for small and medium businesses to improve work quality and streamline tedious processes." />
+    <meta property="og:url" content="https://madlabs.uk/" />
+    <link rel="icon" href="/favicon.svg" />
+    <style>
+      :root {
+        --bg: #f7f8fa; --panel: #fff; --panel-2: #f3f4f6; --ink: #111827; --ink-2: #374151;
+        --muted: #6b7280; --line: #e5e7eb; --accent: #4f46e5; --accent-weak: #eef2ff;
+        --accent-2: #059669; --radius: 16px;
+        --shadow-sm: 0 1px 2px rgba(16,24,40,.06), 0 1px 3px rgba(16,24,40,.05);
+        --shadow-lg: 0 16px 40px rgba(16,24,40,.14);
+        --font: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+      }
+      * { box-sizing: border-box; }
+      body { margin: 0; font-family: var(--font); color: var(--ink); background: var(--bg); line-height: 1.5; -webkit-font-smoothing: antialiased; }
+      a { color: inherit; }
+      .wrap { max-width: 1080px; margin: 0 auto; padding: 0 24px; }
+
+      header { display: flex; align-items: center; justify-content: space-between; padding: 18px 24px; max-width: 1080px; margin: 0 auto; }
+      .brand { font-weight: 750; font-size: 20px; letter-spacing: -.4px; display: flex; align-items: center; gap: 9px; }
+      .brand .mark { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 9px; background: var(--accent); color: #fff; font-size: 17px; }
+      nav a { text-decoration: none; color: var(--ink-2); font-weight: 500; font-size: 14px; margin-left: 22px; }
+      nav a:hover { color: var(--ink); }
+      @media (max-width: 620px) { nav a.hide-sm { display: none; } }
+
+      .hero { text-align: center; padding: 74px 24px 34px; max-width: 860px; margin: 0 auto; }
+      .eyebrow { display: inline-block; font-size: 12.5px; font-weight: 600; color: var(--accent); background: var(--accent-weak); border: 1px solid #e0e3ff; padding: 5px 13px; border-radius: 999px; margin-bottom: 22px; }
+      .hero h1 { font-size: clamp(34px, 6vw, 58px); line-height: 1.04; letter-spacing: -1.6px; margin: 0 0 18px; font-weight: 780; }
+      .hero h1 .grad { background: linear-gradient(120deg, var(--accent), #a855f7); -webkit-background-clip: text; background-clip: text; color: transparent; }
+      .hero p { font-size: clamp(16px, 2.3vw, 20px); color: var(--muted); max-width: 640px; margin: 0 auto 28px; }
+      .cta { display: inline-flex; align-items: center; justify-content: center; padding: 13px 24px; border-radius: 11px; font-weight: 600; text-decoration: none; font-size: 15px; }
+      .cta.primary { background: var(--accent); color: #fff; box-shadow: var(--shadow-sm); }
+      .cta.primary:hover { background: #4338ca; }
+
+      section { padding: 56px 0; }
+      .section-head { text-align: center; margin-bottom: 36px; }
+      .section-head h2 { font-size: clamp(24px, 4vw, 32px); letter-spacing: -.6px; margin: 0 0 8px; }
+      .section-head p { color: var(--muted); margin: 0 auto; max-width: 560px; }
+
+      .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
+      @media (max-width: 760px) { .grid { grid-template-columns: 1fr; } }
+      .product { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow-sm); display: flex; flex-direction: column; transition: box-shadow .15s, border-color .15s, transform .15s; }
+      .product:hover { box-shadow: var(--shadow-lg); border-color: #d8dbe0; transform: translateY(-2px); }
+      .product .thumb { aspect-ratio: 800 / 440; width: 100%; object-fit: cover; border-bottom: 1px solid var(--line); background: var(--panel-2); }
+      .product .body { padding: 22px 22px 24px; display: flex; flex-direction: column; flex: 1; }
+      .product .row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+      .product h3 { margin: 0; font-size: 19px; letter-spacing: -.3px; }
+      .tag { font-size: 11px; font-weight: 600; border-radius: 999px; padding: 3px 10px; }
+      .tag.live { color: var(--accent-2); background: #ecfdf5; border: 1px solid #a7f3d0; }
+      .tag.soon { color: var(--muted); background: var(--panel-2); border: 1px solid var(--line); }
+      .product p { color: var(--muted); font-size: 14.5px; margin: 0 0 18px; }
+      .product .foot { margin-top: auto; }
+      .product .visit { font-weight: 600; color: var(--accent); text-decoration: none; font-size: 14.5px; }
+      .product.placeholder { border-style: dashed; box-shadow: none; }
+      .product.placeholder .ph { aspect-ratio: 800 / 440; display: grid; place-items: center; color: #c7ccd3; font-size: 40px; background: repeating-linear-gradient(45deg, #fafbfc, #fafbfc 12px, #f3f4f6 12px, #f3f4f6 24px); border-bottom: 1px solid var(--line); }
+
+      .mission { background: #fff; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+      .mission .cols { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; margin-top: 30px; }
+      @media (max-width: 760px) { .mission .cols { grid-template-columns: 1fr; } }
+      .value h4 { margin: 0 0 6px; font-size: 16px; }
+      .value p { color: var(--muted); font-size: 14px; margin: 0; }
+      .value .ico { width: 40px; height: 40px; border-radius: 11px; display: grid; place-items: center; font-size: 19px; background: var(--accent-weak); margin-bottom: 12px; }
+
+      footer { max-width: 1080px; margin: 0 auto; padding: 34px 24px; color: var(--muted); font-size: 13.5px; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+      footer a { color: var(--muted); text-decoration: none; }
+      footer a:hover { color: var(--ink); }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="brand"><span class="mark">⚗</span> MadLabs</div>
+      <nav>
+        <a href="#products" class="hide-sm">Products</a>
+        <a href="#mission" class="hide-sm">Mission</a>
+        <a href="mailto:hello@madlabs.uk" class="cta primary" style="padding:9px 16px;font-size:14px">Get in touch</a>
+      </nav>
+    </header>
+
+    <section class="hero">
+      <span class="eyebrow">A software studio for small &amp; medium businesses</span>
+      <h1>Software that does the <span class="grad">boring parts</span></h1>
+      <p>MadLabs builds focused SaaS tools that improve the quality of your work and streamline the tedious, repetitive processes that slow small and medium teams down.</p>
+      <a href="#products" class="cta primary">See what we've built →</a>
+    </section>
+
+    <section id="products">
+      <div class="wrap">
+        <div class="section-head">
+          <h2>Our products</h2>
+          <p>Each one solves a specific, real workflow — end to end, no bloat.</p>
+        </div>
+        <div class="grid">
+          <div class="product">
+            <img class="thumb" src="/echodeck.svg" alt="EchoDeck — audio flashcards and shadowing practice" />
+            <div class="body">
+              <div class="row">
+                <h3>EchoDeck</h3>
+                <span class="tag live">● Live</span>
+              </div>
+              <p>Turn native-language audio into flashcards and shadowing practice. Auto-transcribe audio, score your pronunciation, auto-write card backs with AI, and study with spaced repetition — plus a deck marketplace. Built for language creators and small media teams.</p>
+              <div class="foot"><a class="visit" href="https://echodeck.madlabs.uk">Visit EchoDeck →</a></div>
+            </div>
+          </div>
+
+          <div class="product placeholder">
+            <div class="ph">⚗</div>
+            <div class="body">
+              <div class="row">
+                <h3>Something new</h3>
+                <span class="tag soon">In the lab</span>
+              </div>
+              <p>We're always prototyping the next tool that takes a tedious business process off your plate. Have a workflow that's eating your team's time? Tell us about it.</p>
+              <div class="foot"><a class="visit" href="mailto:hello@madlabs.uk">Suggest an idea →</a></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="mission" class="mission">
+      <div class="wrap">
+        <div class="section-head">
+          <h2>Why MadLabs</h2>
+          <p>Small and medium businesses deserve software as sharp as the tools big companies build in-house.</p>
+        </div>
+        <div class="cols">
+          <div class="value">
+            <div class="ico">⏱️</div>
+            <h4>Streamline the tedious</h4>
+            <p>We target the repetitive, manual steps that quietly drain hours each week and automate them away.</p>
+          </div>
+          <div class="value">
+            <div class="ico">✨</div>
+            <h4>Raise the quality</h4>
+            <p>Better inputs, fewer mistakes, more consistent output — tools that make good work the default.</p>
+          </div>
+          <div class="value">
+            <div class="ico">🎯</div>
+            <h4>Focused, not bloated</h4>
+            <p>Each product does one job properly. Fast to adopt, honest pricing, no enterprise sprawl.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      <div>© <span id="yr"></span> MadLabs · Software for small &amp; medium businesses</div>
+      <div><a href="#products">Products</a> · <a href="#mission">Mission</a> · <a href="mailto:hello@madlabs.uk">hello@madlabs.uk</a></div>
+    </footer>
+
+    <script>document.getElementById("yr").textContent = new Date().getFullYear();</script>
+  </body>
+</html>

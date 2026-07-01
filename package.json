@@ -1,0 +1,23 @@
+{
+  "name": "echodeck",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Turn native-language audio into flashcards and shadowing practice. A focused study-deck builder for solo creators and small media teams.",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js",
+    "test": "node --test && ECHODECK_TEST_STORE=sqlite node --test test/api.test.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.109.0",
+    "better-sqlite3": "^12.11.1",
+    "express": "^4.19.2",
+    "multer": "^2.2.0",
+    "nanoid": "^5.0.7",
+    "web-push": "^3.6.7"
+  }
+}

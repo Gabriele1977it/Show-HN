@@ -1,0 +1,71 @@
+# Render Blueprint — deploys two services from this repo:
+#   1. echodeck     — the EchoDeck web app (Node + persistent disk)
+#   2. madlabs-hub  — the MadLabs company site (static, free)
+#
+# In Render: New + → Blueprint → connect this repo. A persistent disk needs a
+# paid instance type (Starter+); the free tier has no disk and would lose data.
+# Static sites are free. Set custom domains after the first deploy:
+#   madlabs-hub → madlabs.uk (+ www.madlabs.uk)
+#   echodeck    → echodeck.madlabs.uk
+services:
+  - type: web
+    name: echodeck
+    runtime: node
+    plan: starter
+    branch: main
+    buildCommand: npm ci
+    startCommand: node server/index.js
+    healthCheckPath: /health
+    autoDeploy: true
+    disk:
+      name: data
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: ECHODECK_DB
+        value: /data/echodeck.db
+      - key: ECHODECK_UPLOADS
+        value: /data/uploads
+      # Secrets — set these in the Render dashboard (sync:false = not in git).
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_PRICE_PRO
+        sync: false
+      - key: STRIPE_PRICE_TEAM
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: OWNER_EMAILS
+        sync: false
+      - key: EMAIL_WEBHOOK_URL
+        sync: false
+      # AI card fill (Claude) — optional.
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: ECHODECK_LLM_MODEL
+        sync: false
+      # Auto-transcription (Whisper/Deepgram/etc. relay) — optional.
+      - key: TRANSCRIBE_WEBHOOK_URL
+        sync: false
+      # Web Push (npx web-push generate-vapid-keys) — optional.
+      - key: VAPID_PUBLIC_KEY
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false
+      - key: VAPID_SUBJECT
+        sync: false
+      # Daily review reminders — optional.
+      - key: REMINDER_WEBHOOK_URL
+        sync: false
+      - key: REMINDER_ENABLED
+        sync: false
+
+  - type: web
+    name: madlabs-hub
+    runtime: static
+    branch: main
+    buildCommand: "echo no build step"
+    staticPublishPath: madlabs
+    autoDeploy: true
