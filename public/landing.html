@@ -69,7 +69,7 @@
     <section class="hero">
       <span class="eyebrow">For solo creators &amp; small media teams</span>
       <h1>Turn native audio into <span class="grad">flashcards &amp; shadowing</span> practice</h1>
-      <p class="sub">Paste a transcript or drop in subtitles, and EchoDeck builds study-ready flashcards and timed audio loops — with spaced repetition, a study dashboard, and one-click sharing.</p>
+      <p class="sub">Paste a transcript or drop in subtitles, and EchoDeck builds study-ready flashcards and timed shadowing loops — then score your pronunciation, auto-write card backs with AI, and share or discover decks in the marketplace.</p>
       <div class="hero-ctas">
         <a href="/app" class="lp-cta primary">Start free →</a>
         <a href="#features" class="lp-cta ghost">See how it works</a>
@@ -89,8 +89,9 @@
           </div>
           <div class="demo-card">
             <div class="jp">週末は雨が降るかもしれません。</div>
-            <div class="meta">#2 · ⏱ 0:09–0:13 · due now</div>
-            <div class="tools"><span class="go">▶ Shadow loop</span><span>Show meaning</span></div>
+            <div class="meta">#2 · ⏱ 0:09–0:13 · 🎤 pronunciation 92%</div>
+            <div class="tools"><span class="go">▶ Shadow loop</span><span>🎤 Shadow &amp; score</span><span>✨ AI fill</span></div>
+            <div class="ans">It might rain this weekend. — auto-filled by AI</div>
           </div>
         </div>
       </div>
@@ -102,8 +103,11 @@
       <div class="features">
         <div class="feature"><div class="ico">🎧</div><h3>Ingest any transcript</h3><p>Timestamps, SRT/VTT subtitles, or plain text. Each line becomes a flashcard with a real audio shadowing loop.</p></div>
         <div class="feature"><div class="ico">🔁</div><h3>Shadowing &amp; spaced repetition</h3><p>Loop each segment at adjustable speed, then review with an SM-2 scheduler that surfaces exactly what's due.</p></div>
+        <div class="feature"><div class="ico">🎤</div><h3>Pronunciation feedback</h3><p>Record yourself shadowing a card and get a word-by-word score — with a suggested review grade. The feedback shadowing always needed, right in the browser.</p></div>
+        <div class="feature"><div class="ico">✨</div><h3>AI card backs</h3><p>One click fills a card's back with a natural translation plus a short grammar note and example — or auto-fill an entire deck at once.</p></div>
         <div class="feature"><div class="ico">✏️</div><h3>Cloze &amp; auto-blanks</h3><p>One click turns sentences into fill-in-the-blank cards for active recall — editable any time.</p></div>
         <div class="feature"><div class="ico">📊</div><h3>Study dashboard</h3><p>Track retention, streaks, daily activity, and a 7-day due forecast so momentum never slips.</p></div>
+        <div class="feature"><div class="ico">🛒</div><h3>Deck marketplace</h3><p>Publish decks to a public, searchable catalog — or install community-made decks into your own workspace in one click.</p></div>
         <div class="feature"><div class="ico">🔗</div><h3>Share with your audience</h3><p>Publish any deck to a clean public link — your followers study and export without seeing your schedule.</p></div>
         <div class="feature"><div class="ico">👥</div><h3>Team workspaces</h3><p>Invite teammates with admin / editor / viewer roles and collaborate on the same decks.</p></div>
       </div>
@@ -125,7 +129,7 @@
     <script type="module">
       const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
       document.getElementById("yr").textContent = new Date().getFullYear();
-      const featLabel = { sharing: "Public deck sharing", reminders: "Review reminders", stats: "Study dashboard" };
+      const featLabel = { sharing: "Public deck sharing", reminders: "Review reminders", stats: "Study dashboard", enrich: "AI card-back fill" };
       try {
         const plans = await (await fetch("/api/plans")).json();
         const host = document.getElementById("lp-pricing");
