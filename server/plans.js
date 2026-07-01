@@ -18,7 +18,7 @@ export const PLANS = {
     id: "pro", name: "Pro", price: 7.99,
     maxDecks: Infinity, maxCards: Infinity, maxMembers: 1,
     features: { sharing: true, reminders: true, stats: true, enrich: true },
-    blurb: "For serious solo creators: unlimited decks, sharing, reminders, stats.",
+    blurb: "For serious language learners and independent creators: unlimited decks, sharing, reminders, stats + AI card fill.",
   },
   team: {
     id: "team", name: "Team", price: 19.99,
