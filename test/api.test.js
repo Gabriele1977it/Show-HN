@@ -815,3 +815,45 @@ test("auto-transcription: audio URL becomes timestamped transcript, then builds 
     method: "POST", headers: { "Content-Type": "application/json" }, body: "{}",
   })).status, 400);
 });
+
+test("SEO: shared deck page has per-deck meta; sitemap lists only listed decks", async () => {
+  const deck = await fetch(`${base}/api/decks`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title: "SEO Deck <Japanese>", language: "Japanese", transcript: "[00:00] ねこ\n[00:02] いぬ" }),
+  }).then(j);
+
+  // Listing publishes + marks it discoverable.
+  const listed = await fetch(`${base}/api/decks/${deck.id}/list`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: "{}",
+  }).then(j);
+
+  // The public viewer carries server-rendered, escaped, per-deck meta.
+  const html = await (await fetch(`${base}/s/${listed.shareId}`)).text();
+  assert.match(html, /<title>SEO Deck &lt;Japanese&gt; — Japanese flashcards &amp; shadowing · EchoDeck<\/title>/);
+  assert.match(html, /<meta property="og:title"/);
+  assert.match(html, new RegExp(`<link rel="canonical" href="[^"]*/s/${listed.shareId}"`));
+  assert.match(html, /2 Japanese flashcards/);
+
+  // robots.txt points at the sitemap; sitemap enumerates the listed deck + /marketplace.
+  const robots = await (await fetch(`${base}/robots.txt`)).text();
+  assert.match(robots, /Sitemap: https?:\/\/[^\s]+\/sitemap\.xml/);
+  const sitemap = await (await fetch(`${base}/sitemap.xml`)).text();
+  assert.match(sitemap, /\/marketplace</);
+  assert.ok(sitemap.includes(`/s/${listed.shareId}<`), "listed deck appears in sitemap");
+
+  // A shared-but-unlisted deck must NOT leak into the sitemap.
+  const priv = await fetch(`${base}/api/decks`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title: "Private", transcript: "[00:00] x" }),
+  }).then(j);
+  const pub = await fetch(`${base}/api/decks/${priv.id}/share`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" }).then(j);
+  const sitemap2 = await (await fetch(`${base}/sitemap.xml`)).text();
+  assert.ok(!sitemap2.includes(`/s/${pub.shareId}<`), "unlisted share link stays out of the sitemap");
+  // …but the unlisted deck is still viewable and gets meta.
+  assert.equal((await fetch(`${base}/s/${pub.shareId}`)).status, 200);
+});
+
+test("SEO: unknown shared deck still returns a valid page with a default title", async () => {
+  const html = await (await fetch(`${base}/s/does-not-exist`)).text();
+  assert.match(html, /<title>Shared deck — EchoDeck<\/title>/);
+});

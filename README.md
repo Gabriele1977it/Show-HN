@@ -284,6 +284,12 @@ docker run -p 3000:3000 --env-file .env -v echodeck-data:/data echodeck
   every restart. On first SQLite boot an existing `db.json` is imported
   automatically, so upgrading from the JSON store keeps your data.
 - Put it behind **HTTPS** (your host's TLS) so the Stripe webhook has a public URL.
+- **Discovery / SEO is built in:** `/robots.txt` and `/sitemap.xml` (listing the
+  landing page, the marketplace, and every *listed* deck — private share links
+  are never enumerated), plus per-deck `<title>` + OpenGraph/Twitter meta
+  rendered server-side on `/s/:shareId` so shared links unfurl and are indexable.
+  The landing page's **Try a sample deck** button (`/app?sample=1`) builds a
+  ready-made deck with no signup so first-time visitors reach value immediately.
 - Hardening included: security headers (incl. CSP), auth rate limiting, JSON 404s,
   a central error handler, and graceful shutdown on SIGTERM/SIGINT.
 - `Terms` (`/terms`) and `Privacy` (`/privacy`) pages are starter templates —

@@ -49,6 +49,20 @@ const fmtDue = (ms) => {
 
 const state = { deck: null, player: $("#player") };
 
+// A tiny sample deck for the "try without signup" flow (?sample=1 from the
+// landing page). Timestamped lines so cards show timecodes; no audio needed.
+const SAMPLE_DECK = {
+  title: "Sample — Japanese phrases",
+  language: "Japanese",
+  transcript: [
+    "[00:00] 今日は天気がいいです。",
+    "[00:04] 週末は雨が降るかもしれません。",
+    "[00:09] 電車が少し遅れています。",
+    "[00:13] コーヒーを一杯ください。",
+    "[00:17] この本はとても面白いです。",
+  ].join("\n"),
+};
+
 // ---- view switching ----
 $$(".tab").forEach((t) =>
   t.addEventListener("click", () => {
@@ -1114,11 +1128,31 @@ async function rememberKey(key) {
   await ensureWorkspace();
   await loadAccount();
   await loadDecks();
-  // Deep link from the public marketplace page: ?install=<shareId> installs the
-  // deck into this workspace and opens it.
-  const installId = new URLSearchParams(location.search).get("install");
-  if (installId) {
+  // Deep links from the marketing site:
+  //  ?install=<shareId> — install a marketplace deck into this workspace.
+  //  ?sample=1          — build a ready-made sample deck (no signup needed).
+  const params = new URLSearchParams(location.search);
+  if (params.get("install")) {
     history.replaceState(null, "", location.pathname);
-    await installListing(installId, null);
+    await installListing(params.get("install"), null);
+  } else if (params.get("sample")) {
+    history.replaceState(null, "", location.pathname);
+    await buildSample();
   }
 })();
+
+async function buildSample() {
+  const f = $("#build-form");
+  f.title.value = SAMPLE_DECK.title;
+  f.language.value = SAMPLE_DECK.language;
+  f.transcript.value = SAMPLE_DECK.transcript;
+  try {
+    const deck = await api.post("/api/decks", { ...SAMPLE_DECK, maxChars: 180 });
+    f.reset();
+    f.maxChars.value = 180;
+    await loadDecks();
+    openDeck(deck.id);
+  } catch (err) {
+    showBuildError(err);
+  }
+}

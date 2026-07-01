@@ -7,7 +7,7 @@ import express from "express";
 import multer from "multer";
 import { fileURLToPath } from "node:url";
 import { dirname, join, extname } from "node:path";
-import { existsSync, mkdirSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { nanoid } from "nanoid";
 import { segmentTranscript } from "./segment.js";
 import { scoreAttempt } from "./pronounce.js";
@@ -20,6 +20,30 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = join(__dirname, "..", "public");
 
 const GRADE_MAP = { again: 2, hard: 3, good: 4, easy: 5 };
+
+// Minimal HTML-attribute escaping for server-rendered SEO tags.
+const escapeHtml = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+// Build a <title> + description + OpenGraph/Twitter block for a page. Injected
+// server-side so crawlers and social unfurls see per-deck metadata even though
+// the page itself is a JS-rendered SPA.
+function seoTags({ title, description, url, image }) {
+  const t = escapeHtml(title), d = escapeHtml(description), u = escapeHtml(url), img = escapeHtml(image);
+  return [
+    `<title>${t}</title>`,
+    `<meta name="description" content="${d}" />`,
+    `<link rel="canonical" href="${u}" />`,
+    `<meta property="og:type" content="website" />`,
+    `<meta property="og:title" content="${t}" />`,
+    `<meta property="og:description" content="${d}" />`,
+    `<meta property="og:url" content="${u}" />`,
+    `<meta property="og:image" content="${img}" />`,
+    `<meta name="twitter:card" content="summary_large_image" />`,
+    `<meta name="twitter:title" content="${t}" />`,
+    `<meta name="twitter:description" content="${d}" />`,
+    `<meta name="twitter:image" content="${img}" />`,
+  ].join("\n    ");
+}
 
 function sendExport(res, deck, cards, format) {
   const { body, type, ext } = exportDeck(deck, cards, format);
@@ -412,8 +436,42 @@ export function createApp({ store, uploadsDir, reminders, billing, mailer, enric
     sendExport(res, deck, deck.cards, req.query.format);
   });
 
-  // Public viewer page.
-  app.get("/s/:shareId", (_req, res) => res.sendFile(join(PUBLIC_DIR, "share.html")));
+  // Public viewer page. Inject per-deck SEO/social meta server-side (crawlers
+  // don't run the client JS), so shared links unfurl nicely and are indexable.
+  const shareTemplate = readFileSync(join(PUBLIC_DIR, "share.html"), "utf8");
+  app.get("/s/:shareId", (req, res) => {
+    const deck = store.getSharedDeck(req.params.shareId);
+    const origin = `${req.protocol}://${req.get("host")}`;
+    let head;
+    if (deck) {
+      const lang = deck.language ? `${deck.language} ` : "";
+      head = seoTags({
+        title: `${deck.title} — ${lang}flashcards & shadowing · EchoDeck`,
+        description: `Study "${deck.title}" — ${deck.cards.length} ${lang}flashcard${deck.cards.length === 1 ? "" : "s"} with audio shadowing loops and spaced repetition on EchoDeck.`,
+        url: `${origin}/s/${req.params.shareId}`,
+        image: `${origin}/og.svg`,
+      });
+    } else {
+      head = `<title>Shared deck — EchoDeck</title>`;
+    }
+    res.type("html").send(shareTemplate.replace("<!--SEO-->", head));
+  });
+
+  // Crawl directives + a sitemap of public surfaces. Only *listed* (marketplace)
+  // decks are enumerated — private share links are never exposed here.
+  app.get("/robots.txt", (req, res) => {
+    const origin = `${req.protocol}://${req.get("host")}`;
+    res.type("text/plain").send(`User-agent: *\nAllow: /\nDisallow: /app\nSitemap: ${origin}/sitemap.xml\n`);
+  });
+  app.get("/sitemap.xml", (req, res) => {
+    const origin = `${req.protocol}://${req.get("host")}`;
+    const urls = [`${origin}/`, `${origin}/marketplace`];
+    for (const d of store.listMarketplace({ limit: 5000 })) urls.push(`${origin}/s/${d.shareId}`);
+    const body = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${
+      urls.map((u) => `  <url><loc>${escapeHtml(u)}</loc></url>`).join("\n")
+    }\n</urlset>\n`;
+    res.type("application/xml").send(body);
+  });
 
   // --- marketplace -----------------------------------------------------
   // List a deck in the public catalog (implies sharing, so it's gated the same
