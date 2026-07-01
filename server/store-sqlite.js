@@ -46,7 +46,6 @@ CREATE TABLE IF NOT EXISTS decks (
   views INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_decks_ws ON decks(workspace_id);
-CREATE INDEX IF NOT EXISTS idx_decks_listed ON decks(listed);
 CREATE TABLE IF NOT EXISTS cards (
   id TEXT PRIMARY KEY, deck_id TEXT NOT NULL, position INTEGER,
   front TEXT, back TEXT, notes TEXT, start_t REAL, end_t REAL,
