@@ -19,38 +19,57 @@
     <div class="legal">
       <a class="brand head" href="/" style="text-decoration:none;color:inherit"><span class="logo">◈</span> EchoDeck</a>
       <h1>Privacy Policy</h1>
-      <p class="muted">Last updated: <span id="d"></span></p>
+      <p class="muted">Last updated: 1 July 2026</p>
 
-      <p class="note">⚠️ This is a starter template, not legal advice. Have a lawyer review and adapt it (and check GDPR/CCPA obligations) before you launch.</p>
+      <h2>Who we are</h2>
+      <p>EchoDeck (the “Service”) is operated by <strong>MadLabs</strong> (“we”, “us”). For any privacy question or request, email
+      <a href="mailto:privacy@madlabs.uk">privacy@madlabs.uk</a>. Postal address: <em>[MadLabs registered address — to be completed]</em>.</p>
 
       <h2>What we collect</h2>
       <ul>
-        <li><strong>Account data:</strong> your email address and a securely hashed password.</li>
-        <li><strong>Your content:</strong> transcripts, audio you upload, translations, decks and review history.</li>
-        <li><strong>Billing data:</strong> handled by Stripe. We store your plan and Stripe customer/subscription identifiers — not your card number.</li>
-        <li><strong>Technical data:</strong> basic request information needed to operate and secure the Service.</li>
+        <li><strong>Account data:</strong> your email address and a securely hashed password (we never store your password in plain text).</li>
+        <li><strong>Your content:</strong> transcripts and subtitle files, audio you upload or link, translations, decks, tags, notes and your review history.</li>
+        <li><strong>AI-generated content:</strong> translations and grammar/study notes generated at your request.</li>
+        <li><strong>Pronunciation practice:</strong> when you use “Shadow &amp; score”, speech recognition runs <strong>in your browser</strong>. Only the resulting text and a match score are sent to us — <strong>we do not receive or store your voice audio</strong> for scoring.</li>
+        <li><strong>Billing data:</strong> handled by Stripe. We store your plan and Stripe customer/subscription identifiers — <strong>not</strong> your card number.</li>
+        <li><strong>Technical data:</strong> basic request and log information needed to operate and secure the Service.</li>
       </ul>
 
       <h2>How we use it</h2>
-      <p>To provide the Service (build and review decks, sharing, reminders, stats), process subscriptions, secure accounts, and communicate about your account. We do not sell your personal data.</p>
+      <p>To provide the Service (build, review, share, export decks; reminders; stats), process subscriptions, secure accounts and communicate about your account. We do <strong>not</strong> sell your personal data, and we do <strong>not</strong> use your content to train AI models.</p>
 
-      <h2>Payments</h2>
-      <p>Payments are processed by <a href="https://stripe.com" target="_blank" rel="noopener">Stripe</a>, who act as a separate data controller for payment information under their own privacy policy.</p>
+      <h2>AI, transcription &amp; sub-processors</h2>
+      <p>We rely on a small set of service providers who process data only to run the Service:</p>
+      <ul>
+        <li><strong>Anthropic</strong> — powers AI card-back fill. When you generate a card back, the card text is sent to Anthropic’s API. Anthropic does not train its models on data submitted through its API.</li>
+        <li><strong>Speech-to-text provider</strong> — if auto-transcription is enabled, audio you submit for transcription is sent to the configured provider to return a transcript.</li>
+        <li><strong>Stripe</strong> — payment processing (a separate data controller under its own policy).</li>
+        <li><strong>Render</strong> — application hosting and storage.</li>
+        <li>Any reminder/email webhook you configure, used only to deliver the notifications you set up.</li>
+      </ul>
+      <p>These providers may process data outside your country; where they do, appropriate safeguards apply.</p>
 
-      <h2>Sharing</h2>
-      <p>Decks are private to your workspace unless <em>you</em> publish them to a public link. We share data with service providers (e.g. Stripe, and any reminder webhook you configure) only as needed to run the Service, or when required by law.</p>
+      <h2>Uploaded audio &amp; public decks</h2>
+      <p>Audio you upload is stored so the Service can play shadowing loops. Your decks are private to your workspace unless <em>you</em> publish them to a public link or the marketplace — published content (and its cards) is then publicly accessible until you unpublish it. You’re responsible for having the rights to any content you upload or publish.</p>
+
+      <h2>Cookies &amp; analytics</h2>
+      <p>We use essential browser storage (e.g. <code>localStorage</code>) to keep you signed in to your workspace. We do not run third-party advertising trackers.</p>
 
       <h2>Retention &amp; your rights</h2>
-      <p>We keep your data while your account is active. You can edit or delete your decks at any time and request deletion of your account and associated data. Depending on where you live, you may have rights to access, correct, export or delete your personal data.</p>
+      <p>We keep your data while your account is active. You can edit or delete decks at any time and request deletion of your account and associated data by emailing <a href="mailto:privacy@madlabs.uk">privacy@madlabs.uk</a>. Depending on where you live (including under UK/EU GDPR), you may have rights to access, correct, export, delete or object to processing of your personal data. Our legal bases are performance of our contract with you (to provide the Service), your consent (for optional features), and our legitimate interests (to secure and improve the Service).</p>
 
       <h2>Security</h2>
-      <p>Passwords are hashed (scrypt), sessions are token-based, and access to a workspace requires a member key with a role. No system is perfectly secure, but we take reasonable measures to protect your data.</p>
+      <p>Passwords are hashed (scrypt), sessions are token-based, workspace access requires a member key with a role, and the Service is served over HTTPS. No system is perfectly secure, but we take reasonable measures to protect your data.</p>
 
-      <h2>Contact</h2>
-      <p>Privacy questions or requests? Email <a href="mailto:privacy@echodeck.app">privacy@echodeck.app</a>.</p>
+      <h2>Children</h2>
+      <p>EchoDeck is not intended for children under 16, and we do not knowingly collect their data.</p>
+
+      <h2>Changes</h2>
+      <p>We may update this policy; we’ll revise the “Last updated” date above and, for material changes, take reasonable steps to notify you.</p>
+
+      <p class="note">This policy reflects how EchoDeck currently works. Requirements vary by jurisdiction — we recommend an independent legal review before relying on it commercially.</p>
 
       <p style="margin-top:40px"><a href="/">← Back to EchoDeck</a> · <a href="/terms">Terms of Service</a></p>
     </div>
-    <script>document.getElementById("d").textContent = new Date().toISOString().slice(0, 10);</script>
   </body>
 </html>
