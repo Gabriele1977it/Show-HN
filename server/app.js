@@ -341,6 +341,12 @@ export function createApp({ store, uploadsDir, reminders, billing, mailer, enric
     res.json(store.stats(req.ws));
   });
 
+  // Creator analytics: reach (views + installs) of the workspace's shared decks.
+  // Gated behind sharing since only shared decks have reach to report.
+  app.get("/api/creator/stats", featureGate("sharing", "Creator analytics"), (req, res) => {
+    res.json(store.creatorStats(req.ws));
+  });
+
   // Cross-deck card search.
   app.get("/api/search", (req, res) => {
     const limit = Math.min(Number(req.query.limit) || 50, 200);
@@ -423,10 +429,12 @@ export function createApp({ store, uploadsDir, reminders, billing, mailer, enric
     res.status(204).end();
   });
 
-  // Public, read-only deck data (no private scheduling state).
+  // Public, read-only deck data (no private scheduling state). Counts one view
+  // for the creator's analytics (export and the HTML shell don't count).
   app.get("/api/shared/:shareId", (req, res) => {
     const deck = store.getSharedDeck(req.params.shareId);
     if (!deck) return res.status(404).json({ error: "Shared deck not found" });
+    store.recordShareView(req.params.shareId);
     res.json(deck);
   });
 

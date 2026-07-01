@@ -192,7 +192,8 @@ async function loadDecks() {
       <div>
         <div class="title">${esc(d.title)}</div>
         <div class="sub">${esc(d.language || "—")} · ${d.cardCount} cards
-          ${d.dueCount ? `· <span class="pill">${d.dueCount} due</span>` : ""}</div>
+          ${d.dueCount ? `· <span class="pill">${d.dueCount} due</span>` : ""}
+          ${d.shareId ? `· 👁 ${d.views || 0} · ⬇ ${d.installs || 0}${d.listed ? " · listed" : ""}` : ""}</div>
       </div>
       <div class="row">
         <button class="open">Open ▸</button>
@@ -205,6 +206,18 @@ async function loadDecks() {
     ul.appendChild(li);
   }
   refreshBadge();
+  refreshCreatorSummary();
+}
+
+// Creator analytics summary above the deck list — total reach of shared decks.
+// Gated behind sharing server-side; silently hidden for plans without it.
+async function refreshCreatorSummary() {
+  const el = $("#creator-summary");
+  let s;
+  try { s = await api.get("/api/creator/stats"); } catch { el.classList.add("hidden"); return; }
+  if (!s || s.sharedCount === 0) { el.classList.add("hidden"); return; }
+  el.innerHTML = `📣 <strong>${s.sharedCount}</strong> shared${s.listedCount ? ` (${s.listedCount} listed)` : ""} · 👁 <strong>${s.totalViews}</strong> view${s.totalViews === 1 ? "" : "s"} · ⬇ <strong>${s.totalInstalls}</strong> install${s.totalInstalls === 1 ? "" : "s"}`;
+  el.classList.remove("hidden");
 }
 
 // ---- deck detail ----

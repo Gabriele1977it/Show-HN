@@ -857,3 +857,43 @@ test("SEO: unknown shared deck still returns a valid page with a default title",
   const html = await (await fetch(`${base}/s/does-not-exist`)).text();
   assert.match(html, /<title>Shared deck — EchoDeck<\/title>/);
 });
+
+test("creator analytics: views and installs roll up per shared deck", async () => {
+  const deck = await fetch(`${base}/api/decks`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title: "Reach", language: "Spanish", transcript: "[00:00] uno\n[00:02] dos" }),
+  }).then(j);
+  const listed = await fetch(`${base}/api/decks/${deck.id}/list`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: "{}",
+  }).then(j);
+
+  // Two public views (no auth) — the wrapper doesn't touch /api/shared.
+  await fetch(`${base}/api/shared/${listed.shareId}`);
+  await fetch(`${base}/api/shared/${listed.shareId}`);
+
+  // One install from another workspace.
+  const other = await realFetch(`${base}/api/workspaces`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: "Installer" }),
+  }).then(j);
+  await realFetch(`${base}/api/marketplace/${listed.shareId}/install`, { method: "POST", headers: { Authorization: `Bearer ${other.key}` } });
+
+  const stats = await fetch(`${base}/api/creator/stats`).then(j);
+  const entry = stats.decks.find((d) => d.deckId === deck.id);
+  assert.ok(entry, "shared deck appears in creator stats");
+  assert.equal(entry.views, 2);
+  assert.equal(entry.installs, 1);
+  assert.equal(entry.listed, true);
+  assert.ok(stats.totalViews >= 2 && stats.totalInstalls >= 1 && stats.sharedCount >= 1);
+
+  // Exporting a shared deck must NOT count as a view.
+  await fetch(`${base}/api/shared/${listed.shareId}/export?format=csv`);
+  const after = await fetch(`${base}/api/creator/stats`).then(j);
+  assert.equal(after.decks.find((d) => d.deckId === deck.id).views, 2);
+});
+
+test("creator analytics is gated on the Free plan", async () => {
+  const free = await realFetch(`${base}/api/workspaces`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: "Free reach" }),
+  }).then(j);
+  assert.equal((await realFetch(`${base}/api/creator/stats`, { headers: { Authorization: `Bearer ${free.key}` } })).status, 402);
+});

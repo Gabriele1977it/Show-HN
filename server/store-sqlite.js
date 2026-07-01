@@ -42,7 +42,8 @@ CREATE INDEX IF NOT EXISTS idx_members_ws ON members(workspace_id);
 CREATE TABLE IF NOT EXISTS decks (
   id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, title TEXT, language TEXT,
   audio_url TEXT, created_at INTEGER, share_id TEXT UNIQUE,
-  listed INTEGER NOT NULL DEFAULT 0, listed_at INTEGER, description TEXT, installs INTEGER NOT NULL DEFAULT 0
+  listed INTEGER NOT NULL DEFAULT 0, listed_at INTEGER, description TEXT, installs INTEGER NOT NULL DEFAULT 0,
+  views INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_decks_ws ON decks(workspace_id);
 CREATE INDEX IF NOT EXISTS idx_decks_listed ON decks(listed);
@@ -83,6 +84,7 @@ export function createSqliteStore(dbPath, { migrateFrom } = {}) {
   addDeckCol("listed_at", "listed_at INTEGER");
   addDeckCol("description", "description TEXT");
   addDeckCol("installs", "installs INTEGER NOT NULL DEFAULT 0");
+  addDeckCol("views", "views INTEGER NOT NULL DEFAULT 0");
   db.exec("CREATE INDEX IF NOT EXISTS idx_decks_listed ON decks(listed)");
 
   const ownedDeck = (id, ws) => db.prepare("SELECT * FROM decks WHERE id=? AND workspace_id=?").get(id, ws);
@@ -280,7 +282,7 @@ export function createSqliteStore(dbPath, { migrateFrom } = {}) {
       const id = nanoid(10);
       db.prepare("INSERT INTO decks (id,workspace_id,title,language,audio_url,created_at,share_id) VALUES (?,?,?,?,?,?,NULL)")
         .run(id, ws, title?.trim() || "Untitled deck", language?.trim() || "", audioUrl || null, Date.now());
-      return { id, workspaceId: ws, title: title?.trim() || "Untitled deck", language: language?.trim() || "", audioUrl: audioUrl || null, shareId: null, listed: false, description: "", installs: 0 };
+      return { id, workspaceId: ws, title: title?.trim() || "Untitled deck", language: language?.trim() || "", audioUrl: audioUrl || null, shareId: null, listed: false, description: "", installs: 0, views: 0 };
     },
 
     listDecks(ws) {
@@ -292,7 +294,7 @@ export function createSqliteStore(dbPath, { migrateFrom } = {}) {
         return {
           id: d.id, workspaceId: d.workspace_id, title: d.title, language: d.language,
           audioUrl: d.audio_url, createdAt: d.created_at, shareId: d.share_id,
-          listed: !!d.listed, description: d.description || "", installs: d.installs || 0,
+          listed: !!d.listed, description: d.description || "", installs: d.installs || 0, views: d.views || 0,
           cardCount: srsRows.length, dueCount,
         };
       });
@@ -304,7 +306,7 @@ export function createSqliteStore(dbPath, { migrateFrom } = {}) {
       return {
         id: d.id, workspaceId: d.workspace_id, title: d.title, language: d.language,
         audioUrl: d.audio_url, createdAt: d.created_at, shareId: d.share_id,
-        listed: !!d.listed, description: d.description || "", installs: d.installs || 0,
+        listed: !!d.listed, description: d.description || "", installs: d.installs || 0, views: d.views || 0,
         cards: cardsOfDeck(d.id).map(toCard),
       };
     },
@@ -443,6 +445,30 @@ export function createSqliteStore(dbPath, { migrateFrom } = {}) {
         return { front: c.front, back: c.back, notes: c.notes, start: c.start, end: c.end, tags: c.tags, cloze: c.cloze };
       });
       return { shareId, title: d.title, language: d.language, audioUrl: d.audio_url, cards };
+    },
+
+    // Count one public view of a shared deck (creator analytics).
+    recordShareView(shareId) {
+      db.prepare("UPDATE decks SET views=views+1 WHERE share_id=?").run(shareId);
+    },
+
+    // Per-deck reach for the workspace's shared/listed decks, plus totals.
+    creatorStats(ws) {
+      const rows = db.prepare(
+        "SELECT d.id,d.title,d.language,d.share_id,d.listed,d.views,d.installs, " +
+        "(SELECT count(*) FROM cards c WHERE c.deck_id=d.id) card_count " +
+        "FROM decks d WHERE d.workspace_id=? AND d.share_id IS NOT NULL ORDER BY d.installs DESC, d.views DESC").all(ws);
+      const decks = rows.map((r) => ({
+        deckId: r.id, title: r.title, language: r.language, shareId: r.share_id,
+        listed: !!r.listed, views: r.views || 0, installs: r.installs || 0, cardCount: r.card_count,
+      }));
+      return {
+        decks,
+        totalViews: decks.reduce((s, d) => s + d.views, 0),
+        totalInstalls: decks.reduce((s, d) => s + d.installs, 0),
+        listedCount: decks.filter((d) => d.listed).length,
+        sharedCount: decks.length,
+      };
     },
 
     // --- marketplace -------------------------------------------------

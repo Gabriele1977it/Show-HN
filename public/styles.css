@@ -264,3 +264,7 @@ body.readonly #list-btn, body.readonly #mkt-bar { display: none !important; }
 .card-notes.hidden { display: none; }
 .scard .ai { color: var(--accent); }
 body.readonly #ai-fill-btn, body.readonly .scard .ai { display: none !important; }
+
+/* --- creator analytics --- */
+.creator-summary { background: var(--accent-weak); border: 1px solid #e0e3ff; color: var(--ink-2); border-radius: 10px; padding: 8px 12px; font-size: 13px; margin: 0 0 12px; }
+.creator-summary.hidden { display: none; }

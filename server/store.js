@@ -274,6 +274,7 @@ export function createStore(filePath) {
         listedAt: null,
         description: "",
         installs: 0,
+        views: 0,
       };
       state.decks[id] = deck;
       persist();
@@ -452,6 +453,30 @@ export function createStore(filePath) {
       return { shareId, title: deck.title, language: deck.language, audioUrl: deck.audioUrl, cards };
     },
 
+    // Count one public view of a shared deck (creator analytics).
+    recordShareView(shareId) {
+      const deck = Object.values(state.decks).find((d) => d.shareId === shareId);
+      if (deck) { deck.views = (deck.views || 0) + 1; persist(); }
+    },
+
+    // Per-deck reach for the workspace's shared/listed decks, plus totals.
+    creatorStats(ws) {
+      const decks = decksOf(ws)
+        .filter((d) => d.shareId)
+        .map((d) => ({
+          deckId: d.id, title: d.title, language: d.language, shareId: d.shareId,
+          listed: Boolean(d.listed), views: d.views || 0, installs: d.installs || 0, cardCount: d.cardOrder.length,
+        }))
+        .sort((a, b) => b.installs - a.installs || b.views - a.views);
+      return {
+        decks,
+        totalViews: decks.reduce((s, d) => s + d.views, 0),
+        totalInstalls: decks.reduce((s, d) => s + d.installs, 0),
+        listedCount: decks.filter((d) => d.listed).length,
+        sharedCount: decks.length,
+      };
+    },
+
     // --- marketplace ---------------------------------------------------
     // Listing publishes a deck to the public catalog. It implies sharing, so a
     // share id is minted if needed. Unlisting only removes it from the catalog;
@@ -510,7 +535,7 @@ export function createStore(filePath) {
       const id = nanoid(10);
       const deck = {
         id, workspaceId: ws, title: src.title, language: src.language, audioUrl: src.audioUrl,
-        createdAt: now, cardOrder: [], shareId: null, listed: false, listedAt: null, description: "", installs: 0,
+        createdAt: now, cardOrder: [], shareId: null, listed: false, listedAt: null, description: "", installs: 0, views: 0,
       };
       state.decks[id] = deck;
       for (const cid of src.cardOrder) {

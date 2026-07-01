@@ -66,6 +66,10 @@ already uses (Anki, spreadsheets, JSON).
   paid gate); installs are counted so popular decks rise to the top. This turns
   the share link into a growth loop: creators bring their audience, the audience
   becomes users.
+- **Creator analytics** — see the reach of your shared work: per-deck **views**
+  (public opens of the shared viewer) and **installs** (marketplace clones),
+  plus workspace totals, surfaced above your deck list. Exports don't count as
+  views. The foundation for a creator economy (paid decks are the next step).
 - **Export** to Anki (`.tsv`), CSV, or full-fidelity JSON.
 - **Plans & billing (Stripe)** — Free / Pro / Team tiers with server-enforced
   limits (decks, cards, members) and feature gates (sharing, reminders, stats).
@@ -147,6 +151,7 @@ from the workspace member key in `Authorization`).
 | `GET` | `/api/decks` | List decks with card and due counts. |
 | `GET` | `/api/alerts` | Cross-deck review summary: `totalDue`, per-deck due counts, and the next due time. |
 | `GET` | `/api/stats` | Study dashboard data: totals, retention, streak, 14-day activity, 7-day due forecast. |
+| `GET` | `/api/creator/stats` | Creator analytics: per-deck views + installs and totals for the workspace's shared decks (paid). |
 | `GET` | `/api/search?q=…&limit=…` | Cross-deck card search (front/back/notes), with deck context. |
 | `GET` | `/api/reminders/preview` | The reminder message that would be sent now, plus whether it would fire. |
 | `POST` | `/api/reminders/test` | Force-send a reminder now (ignores the throttle). |
