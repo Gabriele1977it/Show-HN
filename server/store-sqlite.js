@@ -356,6 +356,11 @@ export function createSqliteStore(dbPath, { migrateFrom } = {}) {
       return created;
     },
 
+    getCard(id, ws) {
+      const c = ownedCard(id, ws);
+      return c ? toCard(c) : null;
+    },
+
     updateCard(id, patch, ws) {
       const c = ownedCard(id, ws);
       if (!c) return null;

@@ -10,6 +10,7 @@ import { dirname, join, extname } from "node:path";
 import { existsSync, mkdirSync } from "node:fs";
 import { nanoid } from "nanoid";
 import { segmentTranscript } from "./segment.js";
+import { scoreAttempt } from "./pronounce.js";
 import { exportDeck } from "./exporters.js";
 import { normalizeEmail } from "./auth.js";
 import { canAdd, hasFeature, planPublic, listPlans } from "./plans.js";
@@ -452,6 +453,21 @@ export function createApp({ store, uploadsDir, reminders, billing, mailer, owner
     const card = store.reviewCard(req.params.id, grade, req.ws);
     if (!card) return res.status(404).json({ error: "Card not found" });
     res.json(card);
+  });
+
+  // Score a shadowing attempt against a card's text. `heard` is the recognised
+  // transcript of what the learner said (from the browser's Web Speech API or a
+  // server-side STT step). Optionally applies the suggested SRS grade so
+  // speaking practice feeds the schedule directly.
+  app.post("/api/cards/:id/pronounce", (req, res) => {
+    const card = store.getCard(req.params.id, req.ws);
+    if (!card) return res.status(404).json({ error: "Card not found" });
+    const result = scoreAttempt(card.front, req.body?.heard ?? "");
+    let updated = null;
+    if (req.body?.applyGrade) {
+      updated = store.reviewCard(req.params.id, GRADE_MAP[result.suggestedGrade], req.ws);
+    }
+    res.json({ ...result, cardId: card.id, applied: Boolean(updated), card: updated });
   });
 
   // --- pages -----------------------------------------------------------

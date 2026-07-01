@@ -416,6 +416,69 @@ $("#rev-play").addEventListener("click", () => {
   const c = review.queue[review.idx];
   if (c) playLoop(c.start, c.end, Number($("#rev-speed").value));
 });
+
+// ---- pronunciation scoring (record yourself shadowing) ----
+// Uses the browser's Web Speech API for on-device transcription (no server
+// key), then scores it with /api/cards/:id/pronounce. Progressive enhancement:
+// if the browser lacks SpeechRecognition, the button is hidden.
+const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+const LANG_BCP47 = {
+  japanese: "ja-JP", english: "en-US", spanish: "es-ES", french: "fr-FR", german: "de-DE",
+  italian: "it-IT", portuguese: "pt-PT", korean: "ko-KR", mandarin: "zh-CN", chinese: "zh-CN",
+  russian: "ru-RU", dutch: "nl-NL", polish: "pl-PL", turkish: "tr-TR", arabic: "ar-SA",
+  hindi: "hi-IN", vietnamese: "vi-VN", thai: "th-TH", indonesian: "id-ID",
+};
+const bcp47 = (lang) => LANG_BCP47[String(lang || "").trim().toLowerCase()] || "";
+let recognizer = null, recording = false;
+
+const recBtn = $("#rev-record");
+if (!SpeechRec) recBtn.style.display = "none";
+recBtn.addEventListener("click", () => {
+  if (!SpeechRec) return;
+  if (recording) { recognizer?.stop(); return; }
+  const c = review.queue[review.idx];
+  if (!c) return;
+  recognizer = new SpeechRec();
+  const lang = bcp47(state.deck?.language);
+  if (lang) recognizer.lang = lang;
+  recognizer.interimResults = false;
+  recognizer.maxAlternatives = 1;
+  recording = true;
+  recBtn.classList.add("recording");
+  recBtn.textContent = "■ Stop";
+  const host = $("#pronounce-result");
+  host.innerHTML = `<span class="pron-listening">● Listening — say the phrase now…</span>`;
+  host.classList.remove("hidden");
+  recognizer.onresult = (e) => scorePronunciation(c, e.results[0][0].transcript);
+  recognizer.onerror = (e) => {
+    host.innerHTML = `<span class="muted small">${e.error === "no-speech" ? "Didn't catch that — try again." : "Microphone/recognition error: " + esc(e.error)}</span>`;
+  };
+  recognizer.onend = () => { recording = false; recBtn.classList.remove("recording"); recBtn.textContent = "🎤 Shadow & score"; };
+  try { recognizer.start(); } catch { recognizer.onend(); }
+});
+
+async function scorePronunciation(card, heard) {
+  let res;
+  try { res = await api.post(`/api/cards/${card.id}/pronounce`, { heard }); }
+  catch { return; }
+  const host = $("#pronounce-result");
+  const words = res.words.map((w) => `<span class="w ${w.ok ? "ok" : "miss"}">${esc(w.token)}</span>`).join(" ");
+  host.innerHTML = `
+    <div><span class="pron-score">${res.score}<span class="unit">%</span></span><span class="pron-grade">suggested: ${res.suggestedGrade}</span></div>
+    <div class="pron-words">${words || '<span class="muted small">(no target words)</span>'}</div>
+    <div class="pron-heard">You said: “${esc(heard)}”</div>`;
+  host.classList.remove("hidden");
+  // Reveal the answer and nudge the grade button that matches the score.
+  if ($("#grade-buttons").classList.contains("hidden")) showAnswer();
+  $$("#grade-buttons button").forEach((b) => b.classList.toggle("suggested", b.dataset.grade === res.suggestedGrade));
+}
+
+function resetPronounce() {
+  if (recording) { try { recognizer?.stop(); } catch {} }
+  $("#pronounce-result").classList.add("hidden");
+  $("#pronounce-result").innerHTML = "";
+  $$("#grade-buttons button").forEach((b) => b.classList.remove("suggested"));
+}
 $$("#grade-buttons button").forEach((b) =>
   b.addEventListener("click", () => gradeCard(b.dataset.grade)),
 );
@@ -437,7 +500,11 @@ function showCard() {
   $("#review-back").classList.add("hidden");
   $("#grade-buttons").classList.add("hidden");
   $("#show-answer").classList.remove("hidden");
-  $("#review-shadow").classList.toggle("hidden", !(state.deck.audioUrl && c.start != null));
+  // Shadowing controls: the loop needs audio+timing, but record-and-score works
+  // for any card, so show the panel whenever recognition is available.
+  $("#review-shadow").classList.toggle("hidden", !(state.deck.audioUrl && c.start != null) && !SpeechRec);
+  $("#rev-play").classList.toggle("hidden", !(state.deck.audioUrl && c.start != null));
+  resetPronounce();
 }
 function showAnswer() {
   const c = review.queue[review.idx];

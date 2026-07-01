@@ -353,6 +353,10 @@ export function createStore(filePath) {
       return created;
     },
 
+    getCard(id, ws) {
+      return cardOwned(id, ws);
+    },
+
     updateCard(id, patch, ws) {
       const card = cardOwned(id, ws);
       if (!card) return null;

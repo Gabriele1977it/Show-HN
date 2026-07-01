@@ -22,6 +22,12 @@ already uses (Anki, spreadsheets, JSON).
   real start **and** end time. Plain text is split into sentence cards.
 - **Shadowing player** — each timestamped card becomes a loop with adjustable
   playback speed (0.6× / 0.75× / 1×) for repeat-after-me practice.
+- **Pronunciation feedback** — the other half of shadowing: in a review, hit
+  *Shadow & score* to record yourself saying the card. The browser's on-device
+  speech recognition (Web Speech API — no server key, nothing uploaded)
+  transcribes it and the server scores the attempt word-by-word (per character
+  for Japanese/Chinese/Korean), highlights what you missed, and suggests an SRS
+  grade — optionally applying it so speaking practice feeds the schedule.
 - **Spaced repetition** — an SM-2 scheduler surfaces a daily *due* queue so
   study sessions stay short and effective.
 - **Cloze (fill-in-the-blank)** — one click auto-blanks a key term in each
@@ -141,6 +147,7 @@ from the workspace member key in `Authorization`).
 | `GET` | `/api/decks/:id/export?format=anki\|csv\|json` | Download the deck. |
 | `PATCH` | `/api/cards/:id` | Update `front` / `back` / `notes` / `tags` / timing. |
 | `POST` | `/api/cards/:id/review` | Grade a card (`again`/`hard`/`good`/`easy` or `0`–`5`). |
+| `POST` | `/api/cards/:id/pronounce` | Score a shadowing attempt against the card `{heard, applyGrade?}`; returns score, word-level results, and a suggested grade. |
 | `POST` | `/api/decks/:id/share` | Publish to a public link; returns `shareId` + `shareUrl`. |
 | `DELETE` | `/api/decks/:id/share` | Unpublish (revoke the link). |
 | `POST` | `/api/decks/:id/list` | List the deck in the public marketplace (implies sharing); body `{description?}`. |
@@ -228,6 +235,7 @@ server/
   store-sqlite.js SQLite persistence — the default backend
   segment.js     transcript → segments
   srs.js         SM-2 spaced repetition
+  pronounce.js   shadowing attempt scoring (word/character alignment)
   cloze.js       fill-in-the-blank term suggestion + masking
   auth.js        password hashing (scrypt) + session/reset tokens
   email.js       transactional email (webhook provider, dev-mode fallback)

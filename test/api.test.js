@@ -690,3 +690,43 @@ test("marketplace: listing is gated on Free; install respects plan limits", asyn
   assert.equal(blocked.status, 402);
   assert.equal((await blocked.json()).upgrade, true);
 });
+
+test("pronounce: scores a shadowing attempt and can apply the grade to the SRS", async () => {
+  const deck = await fetch(`${base}/api/decks`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title: "Shadowing", transcript: "the quick brown fox" }),
+  }).then(j);
+  const cardId = deck.cards[0].id;
+
+  // A perfect attempt scores 100 and suggests "easy" without touching the SRS.
+  const perfect = await fetch(`${base}/api/cards/${cardId}/pronounce`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ heard: "The quick brown fox!" }),
+  }).then(j);
+  assert.equal(perfect.score, 100);
+  assert.equal(perfect.suggestedGrade, "easy");
+  assert.equal(perfect.applied, false);
+  assert.equal(perfect.card, null);
+
+  // A partial attempt with applyGrade reviews the card (SRS advances).
+  const before = await fetch(`${base}/api/decks/${deck.id}`).then(j);
+  const repsBefore = before.cards[0].srs.reps;
+  const partial = await fetch(`${base}/api/cards/${cardId}/pronounce`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ heard: "the brown dog", applyGrade: true }),
+  }).then(j);
+  assert.equal(partial.score, 50);
+  assert.deepEqual(partial.missed, ["quick", "fox"]);
+  assert.equal(partial.applied, true);
+  assert.ok(partial.card, "returns the updated card");
+  assert.equal(partial.card.srs.reps, repsBefore + 1);
+
+  // Unknown card → 404; empty attempt scores 0.
+  assert.equal((await fetch(`${base}/api/cards/nope/pronounce`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ heard: "x" }),
+  })).status, 404);
+  const empty = await fetch(`${base}/api/cards/${cardId}/pronounce`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ heard: "" }),
+  }).then(j);
+  assert.equal(empty.score, 0);
+});
