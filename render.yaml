@@ -44,6 +44,12 @@ services:
         sync: false
       - key: OWNER_EMAILS
         sync: false
+      # Email — set both to send real invites & password resets via Resend.
+      - key: RESEND_API_KEY
+        sync: false
+      - key: EMAIL_FROM
+        sync: false
+      # ...or point EMAIL_WEBHOOK_URL at your own relay instead.
       - key: EMAIL_WEBHOOK_URL
         sync: false
       # AI card fill (Claude) — optional.
