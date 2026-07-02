@@ -79,6 +79,7 @@ test("with an apiKey, YouTube import goes through the Supadata API (not scraping
   const importer = createImporter({ fetchImpl, apiKey: "sd_test" });
   const r = await importer.run("https://www.youtube.com/watch?v=EwFn5EM07i0", { lang: "es" });
   assert.equal(r.source, "youtube");
+  assert.equal(r.videoId, "EwFn5EM07i0"); // lets the client attach the video for playback
   assert.equal(r.title, "Cairo trip");
   assert.equal(r.language, "en");
   assert.match(r.transcript, /\[00:00\] Hola mundo/);
@@ -107,6 +108,7 @@ test("createImporter.run uses the YouTube player API first", async () => {
   };
   const r = await createImporter({ fetchImpl }).run("https://youtu.be/dQw4w9WgXcQ");
   assert.equal(r.source, "youtube");
+  assert.equal(r.videoId, "dQw4w9WgXcQ");
   assert.equal(r.title, "Innertube Demo");
   assert.match(r.transcript, /\[00:00\] First line/);
 });

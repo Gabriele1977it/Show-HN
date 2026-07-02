@@ -42,7 +42,7 @@ before(async () => {
     enabled: true,
     run: async (url) => url.includes("bad")
       ? { error: "no-captions" }
-      : { source: "youtube", title: "Imported", language: "es", transcript: "[00:00] Hola mundo.\n[00:04] Buenos dias." },
+      : { source: "youtube", videoId: "dQw4w9WgXcQ", title: "Imported", language: "es", transcript: "[00:00] Hola mundo.\n[00:04] Buenos dias." },
   };
   // Capturing push sender so Web Push plumbing is exercised without a push service.
   sentPush = [];
@@ -1039,16 +1039,19 @@ test("import returns a transcript + segments the build form can use", async () =
   assert.equal(r.status, 200);
   const data = await r.json();
   assert.equal(data.source, "youtube");
+  assert.equal(data.videoId, "dQw4w9WgXcQ"); // client uses this to attach the video
   assert.equal(data.title, "Imported");
   assert.equal(data.language, "es");
   assert.equal(data.segmentCount, 2);
   assert.equal(data.segments[0].start, 0);
-  // The imported transcript builds a real deck through the normal endpoint.
+  // The imported transcript builds a real deck through the normal endpoint,
+  // with the youtube: audio reference stored for embedded playback.
   const deck = await fetch(`${base}/api/decks`, {
     method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ title: data.title, language: data.language, transcript: data.transcript }),
+    body: JSON.stringify({ title: data.title, language: data.language, transcript: data.transcript, audioUrl: `youtube:${data.videoId}` }),
   }).then(j);
   assert.equal(deck.cards.length, 2);
+  assert.equal(deck.audioUrl, "youtube:dQw4w9WgXcQ");
 });
 
 test("import surfaces a friendly error and requires a URL", async () => {
