@@ -68,7 +68,7 @@ test("supadataToTranscript builds [mm:ss] lines from offset-ms segments", () => 
 });
 
 test("with an apiKey, YouTube import goes through the Supadata API (not scraping)", async () => {
-  const transcript = { lang: "en", content: [{ text: "Hola mundo", offset: 0 }, { text: "Segunda linea", offset: 4000 }] };
+  const transcript = { lang: "en", availableLangs: ["en", "nl"], content: [{ text: "Hola mundo", offset: 0 }, { text: "Segunda linea", offset: 4000 }] };
   const calls = [];
   const fetchImpl = async (url) => {
     calls.push(url);
@@ -82,9 +82,11 @@ test("with an apiKey, YouTube import goes through the Supadata API (not scraping
   assert.equal(r.videoId, "EwFn5EM07i0"); // lets the client attach the video for playback
   assert.equal(r.title, "Cairo trip");
   assert.equal(r.language, "en");
+  assert.deepEqual(r.availableLangs, ["en", "nl"]); // drives the one-click language switch
   assert.match(r.transcript, /\[00:00\] Hola mundo/);
   assert.match(r.transcript, /\[00:04\] Segunda linea/);
   assert.ok(calls.some((u) => u.startsWith("https://api.supadata.ai/")), "the Supadata API was called");
+  assert.ok(calls.some((u) => u.includes("lang=es")), "the requested caption language is forwarded");
 });
 
 test("a failing transcript API surfaces api-failed (no silent scrape)", async () => {
@@ -110,6 +112,7 @@ test("createImporter.run uses the YouTube player API first", async () => {
   assert.equal(r.source, "youtube");
   assert.equal(r.videoId, "dQw4w9WgXcQ");
   assert.equal(r.title, "Innertube Demo");
+  assert.deepEqual(r.availableLangs, ["en"]);
   assert.match(r.transcript, /\[00:00\] First line/);
 });
 

@@ -161,7 +161,10 @@ function updateAudioPreview() {
 $("#audioUrl").addEventListener("input", updateAudioPreview);
 
 // ---- URL / YouTube import (captions → transcript) ----
-$("#import-btn").addEventListener("click", async () => {
+// `lang` forces a caption language (from a chip click); `replace` swaps the
+// transcript instead of appending (re-importing the same video in another
+// language shouldn't stack two transcripts).
+async function runImport({ lang, replace = false } = {}) {
   const f = $("#build-form");
   const url = $("#import-url").value.trim();
   const status = $("#import-status");
@@ -171,25 +174,42 @@ $("#import-btn").addEventListener("click", async () => {
   const old = btn.textContent;
   btn.textContent = "Importing…";
   status.textContent = "Fetching captions — this can take a moment…";
+  $("#import-langs").textContent = "";
   try {
     // The Language field takes names ("English"); caption APIs take ISO codes.
-    const wantedLang = isoOf(f.language.value);
+    const wantedLang = lang ?? isoOf(f.language.value);
     const res = await api.post("/api/import", { url, lang: wantedLang });
     const ta = f.transcript;
-    ta.value = ta.value.trim() ? ta.value.trimEnd() + "\n\n" + res.transcript : res.transcript;
+    ta.value = replace || !ta.value.trim() ? res.transcript : ta.value.trimEnd() + "\n\n" + res.transcript;
     if (res.title && !f.title.value.trim()) f.title.value = res.title;
     const gotLang = isoOf(res.language);
-    if (res.language && !f.language.value.trim()) f.language.value = nameOf(res.language);
+    if (res.language && (replace || !f.language.value.trim())) f.language.value = nameOf(res.language);
     // Attach the video so shadowing loops play the real YouTube segments.
     if (res.videoId && !f.audioUrl.value.trim()) f.audioUrl.value = `youtube:${res.videoId}`;
     let msg = `Imported ${res.segmentCount} line${res.segmentCount === 1 ? "" : "s"}`;
     if (gotLang) msg += ` in ${nameOf(gotLang)}`;
     if (res.videoId) msg += ` + attached the video (it appears when you build the deck)`;
     msg += " — review, then Build deck.";
-    // The default caption track isn't always the spoken language (e.g. a video
-    // with creator-uploaded subs in another language) — tell them how to fix it.
     if (gotLang && wantedLang && gotLang !== wantedLang) {
       msg += ` ⚠ You asked for ${nameOf(wantedLang)} but only ${nameOf(gotLang)} captions were available.`;
+    }
+    // One-click switches for the video's other caption languages. The default
+    // track isn't always the spoken language (e.g. creator-uploaded subs).
+    const others = [...new Set((res.availableLangs || []).map((l) => isoOf(l) || l))].filter((l) => l && l !== gotLang);
+    if (others.length) {
+      const chips = $("#import-langs");
+      const label = document.createElement("span");
+      label.className = "muted small";
+      label.textContent = "Also available — click to use instead:";
+      chips.appendChild(label);
+      for (const l of others.slice(0, 8)) {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "lang-chip";
+        b.textContent = nameOf(l);
+        b.addEventListener("click", () => runImport({ lang: l, replace: true }));
+        chips.appendChild(b);
+      }
     } else if (gotLang && !wantedLang) {
       msg += ` Wrong language? Type e.g. "English" in Language, clear the transcript, and press Import again.`;
     }
@@ -201,7 +221,8 @@ $("#import-btn").addEventListener("click", async () => {
     btn.textContent = old;
     btn.disabled = false;
   }
-});
+}
+$("#import-btn").addEventListener("click", () => runImport());
 
 // ---- subtitle import (reads file text straight into the transcript box) ----
 $("#subBtn").addEventListener("click", () => $("#subFile").click());
@@ -239,6 +260,7 @@ $("#build-form").addEventListener("submit", async (e) => {
     f.maxChars.value = 180;
     $("#uploadStatus").textContent = "";
     $("#import-status").textContent = "";
+    $("#import-langs").textContent = "";
     updateAudioPreview();
     await loadDecks();
     openDeck(deck.id);
