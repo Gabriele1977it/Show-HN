@@ -14,6 +14,7 @@ import { createBilling } from "./billing.js";
 import { createMailer } from "./email.js";
 import { createEnricher } from "./enrich.js";
 import { createTranscriber } from "./transcribe.js";
+import { createImporter } from "./importer.js";
 import { createPushService, deliverToWorkspace } from "./push.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -96,13 +97,18 @@ const enrich = createEnricher({ apiKey: process.env.ANTHROPIC_API_KEY });
 // AssemblyAI/etc. via a relay). Disabled + hidden when unset.
 const transcribe = createTranscriber({ webhookUrl: process.env.TRANSCRIBE_WEBHOOK_URL });
 
-const app = createApp({ store, uploadsDir: UPLOADS_DIR, reminders, billing, mailer, enrich, transcribe, push, ownerEmails });
+// URL / YouTube import: needs only outbound network (no API key), so it's on by
+// default. Set ECHODECK_IMPORT_DISABLED=1 to turn the feature (and its UI) off.
+const importer = process.env.ECHODECK_IMPORT_DISABLED === "1" ? { enabled: false } : createImporter();
+
+const app = createApp({ store, uploadsDir: UPLOADS_DIR, reminders, billing, mailer, enrich, transcribe, importer, push, ownerEmails });
 
 const server = app.listen(PORT, () => {
   console.log(`EchoDeck running on http://localhost:${PORT}`);
   console.log(billing.enabled ? "Stripe billing enabled." : "Billing in dev mode (no Stripe keys).");
   console.log(enrich.enabled ? `AI card fill enabled (model: ${enrich.model}).` : "AI card fill disabled (no ANTHROPIC_API_KEY).");
   console.log(transcribe.enabled ? "Auto-transcription enabled." : "Auto-transcription disabled (no TRANSCRIBE_WEBHOOK_URL).");
+  console.log(importer.enabled ? "URL / YouTube import enabled." : "URL / YouTube import disabled (ECHODECK_IMPORT_DISABLED).");
   console.log(push.enabled ? "Web Push enabled." : "Web Push disabled (no VAPID keys).");
   // Background polling only runs when explicitly enabled.
   if (process.env.REMINDER_ENABLED === "1" || process.env.REMINDER_ENABLED === "true") {

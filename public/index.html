@@ -102,6 +102,14 @@
             <label>Title<input name="title" placeholder="e.g. NHK Easy News — 2026-06" required /></label>
             <label>Language<input name="language" placeholder="e.g. Japanese" /></label>
 
+            <label id="import-row" class="hidden">Import from a link
+              <div class="row">
+                <input id="import-url" placeholder="Paste a YouTube link or a .srt/.vtt/.txt URL" />
+                <button type="button" id="import-btn" class="ghost" title="Pull captions/subtitles from this link into the transcript">⬇ Import</button>
+              </div>
+              <span id="import-status" class="muted small"></span>
+            </label>
+
             <label>Audio
               <div class="row">
                 <input name="audioUrl" id="audioUrl" placeholder="https://… or upload →" />

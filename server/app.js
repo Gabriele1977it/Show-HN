@@ -55,7 +55,7 @@ function sendExport(res, deck, cards, format) {
   res.send(body);
 }
 
-export function createApp({ store, uploadsDir, reminders, billing, mailer, enrich, transcribe, push, ownerEmails = new Set(), rateLimits = {} }) {
+export function createApp({ store, uploadsDir, reminders, billing, mailer, enrich, transcribe, importer, push, ownerEmails = new Set(), rateLimits = {} }) {
   const app = express();
   app.set("trust proxy", 1); // behind a host's load balancer; lets req.ip work
   app.use(securityHeaders);
@@ -64,6 +64,8 @@ export function createApp({ store, uploadsDir, reminders, billing, mailer, enric
   // The public no-signup demo runs without a workspace key, so throttle it per
   // IP to keep it from being used as free, unauthenticated compute.
   const demoLimiter = rateLimit(createRateLimiter(rateLimits.demo ?? { windowMs: 15 * 60 * 1000, max: 60 }));
+  // URL/YouTube import makes an outbound fetch per call, so throttle it per IP.
+  const importLimiter = rateLimit(createRateLimiter(rateLimits.import ?? { windowMs: 15 * 60 * 1000, max: 30 }));
   // Owner allowlist: these accounts get the top (Team) plan automatically.
   const isOwner = (email) => Boolean(email) && ownerEmails.has(String(email).toLowerCase());
   const compOwnerWorkspaces = (userId) => {
@@ -218,6 +220,8 @@ export function createApp({ store, uploadsDir, reminders, billing, mailer, enric
       enrichConfigured: Boolean(enrich?.enabled),
       // Whether auto-transcription is configured (drives the "Transcribe" button).
       transcribeConfigured: Boolean(transcribe?.enabled),
+      // Whether URL/YouTube import is enabled (drives the "Import from URL" row).
+      importConfigured: Boolean(importer?.enabled),
     });
   });
 
@@ -348,6 +352,40 @@ export function createApp({ store, uploadsDir, reminders, billing, mailer, enric
     const target = String(req.body?.target ?? "");
     if (!target.trim()) return res.status(400).json({ error: "Missing target text." });
     res.json(scoreAttempt(target, String(req.body?.heard ?? "")));
+  });
+
+  // Import a transcript from a URL (YouTube captions, or a direct .srt/.vtt/.txt
+  // link). Returns { title, language, transcript, segments } so the client can
+  // populate the build form; building the deck is a separate, gated step.
+  const IMPORT_ERRORS = {
+    "not-configured": "URL import isn't enabled on this server.",
+    "no-url": "Paste a URL to import.",
+    "blocked": "That URL can't be imported.",
+    "no-captions": "That video has no captions available to import.",
+    "empty-captions": "That video's captions came back empty.",
+    "unsupported-page": "That link is a web page, not a transcript. Paste a YouTube link, or a direct .srt/.vtt/.txt URL.",
+    "empty": "Nothing to import from that URL.",
+    "fetch-failed": "Couldn't fetch that URL — check the link and try again.",
+  };
+  app.post("/api/import", importLimiter, async (req, res) => {
+    if (!importer?.enabled) return res.status(503).json({ error: IMPORT_ERRORS["not-configured"] });
+    const url = req.body?.url;
+    if (!String(url || "").trim()) return res.status(400).json({ error: IMPORT_ERRORS["no-url"] });
+    let result;
+    try {
+      result = await importer.run(url, { lang: req.body?.lang });
+    } catch (err) {
+      return res.status(502).json({ error: `Import failed: ${err.message}` });
+    }
+    if (result.error) {
+      const status = result.error === "blocked" ? 400 : 422;
+      // Only the guard's own message is user-facing; other providers' raw errors
+      // (e.g. "upstream responded 403") are replaced with friendly copy.
+      const error = result.error === "blocked" ? (result.message || IMPORT_ERRORS.blocked) : (IMPORT_ERRORS[result.error] || "Import failed.");
+      return res.status(status).json({ error });
+    }
+    const segments = segmentTranscript(result.transcript, {});
+    res.json({ ...result, segments, segmentCount: segments.length });
   });
 
   // --- decks -----------------------------------------------------------
