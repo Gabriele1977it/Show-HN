@@ -106,7 +106,9 @@ const transcribe = createTranscriber({ webhookUrl: process.env.TRANSCRIBE_WEBHOO
 
 // URL / YouTube import: needs only outbound network (no API key), so it's on by
 // default. Set ECHODECK_IMPORT_DISABLED=1 to turn the feature (and its UI) off.
-const importer = process.env.ECHODECK_IMPORT_DISABLED === "1" ? { enabled: false } : createImporter();
+const importer = process.env.ECHODECK_IMPORT_DISABLED === "1"
+  ? { enabled: false }
+  : createImporter({ apiKey: process.env.SUPADATA_API_KEY });
 
 const app = createApp({ store, uploadsDir: UPLOADS_DIR, reminders, billing, mailer, enrich, transcribe, importer, push, ownerEmails });
 
@@ -115,7 +117,7 @@ const server = app.listen(PORT, () => {
   console.log(billing.enabled ? "Stripe billing enabled." : "Billing in dev mode (no Stripe keys).");
   console.log(enrich.enabled ? `AI card fill enabled (model: ${enrich.model}).` : "AI card fill disabled (no ANTHROPIC_API_KEY).");
   console.log(transcribe.enabled ? "Auto-transcription enabled." : "Auto-transcription disabled (no TRANSCRIBE_WEBHOOK_URL).");
-  console.log(importer.enabled ? "URL / YouTube import enabled." : "URL / YouTube import disabled (ECHODECK_IMPORT_DISABLED).");
+  console.log(importer.enabled ? `URL / YouTube import enabled${process.env.SUPADATA_API_KEY ? " (Supadata transcript API)" : " (free best-effort)"}.` : "URL / YouTube import disabled (ECHODECK_IMPORT_DISABLED).");
   console.log(push.enabled ? "Web Push enabled." : "Web Push disabled (no VAPID keys).");
   console.log(mailer.enabled ? `Email enabled (${mailer.mode}).` : "Email in dev mode (logs only — set RESEND_API_KEY + EMAIL_FROM to send).");
   // Background polling only runs when explicitly enabled.

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {
   parseYouTubeId, isYouTube, guardUrl,
   timedTextJson3ToTranscript, timedTextXmlToTranscript,
-  extractCaptionTracks, captionTracksFromPlayer, pickTrack, createImporter,
+  extractCaptionTracks, captionTracksFromPlayer, supadataToTranscript, pickTrack, createImporter,
 } from "../server/importer.js";
 
 test("parseYouTubeId handles the common URL shapes", () => {
@@ -59,6 +59,42 @@ test("captionTracksFromPlayer reads the innertube player response", () => {
   assert.equal(title, "T");
   assert.deepEqual(captionTracksFromPlayer({}).tracks, []);
   assert.deepEqual(captionTracksFromPlayer(null).tracks, []);
+});
+
+test("supadataToTranscript builds [mm:ss] lines from offset-ms segments", () => {
+  const data = { lang: "en", content: [{ text: "First line", offset: 0, duration: 2000 }, { text: "Second line ", offset: 65000 }, { text: "  ", offset: 70000 }] };
+  assert.equal(supadataToTranscript(data), "[00:00] First line\n[01:05] Second line");
+  assert.equal(supadataToTranscript({}), "");
+});
+
+test("with an apiKey, YouTube import goes through the Supadata API (not scraping)", async () => {
+  const transcript = { lang: "en", content: [{ text: "Hola mundo", offset: 0 }, { text: "Segunda linea", offset: 4000 }] };
+  const calls = [];
+  const fetchImpl = async (url) => {
+    calls.push(url);
+    if (url.startsWith("https://api.supadata.ai/")) return { ok: true, json: async () => transcript };
+    if (url.includes("/oembed")) return { ok: true, json: async () => ({ title: "Cairo trip" }) };
+    throw new Error("should not scrape YouTube when an API key is set");
+  };
+  const importer = createImporter({ fetchImpl, apiKey: "sd_test" });
+  const r = await importer.run("https://www.youtube.com/watch?v=EwFn5EM07i0", { lang: "es" });
+  assert.equal(r.source, "youtube");
+  assert.equal(r.title, "Cairo trip");
+  assert.equal(r.language, "en");
+  assert.match(r.transcript, /\[00:00\] Hola mundo/);
+  assert.match(r.transcript, /\[00:04\] Segunda linea/);
+  assert.ok(calls.some((u) => u.startsWith("https://api.supadata.ai/")), "the Supadata API was called");
+});
+
+test("a failing transcript API surfaces api-failed (no silent scrape)", async () => {
+  const fetchImpl = async (url) => {
+    if (url.startsWith("https://api.supadata.ai/")) return { ok: false, status: 401 };
+    throw new Error("should not fall back to scraping");
+  };
+  const importer = createImporter({ fetchImpl, apiKey: "bad_key" });
+  const r = await importer.run("https://youtu.be/EwFn5EM07i0");
+  assert.equal(r.error, "api-failed");
+  assert.match(r.message, /401/);
 });
 
 test("createImporter.run uses the YouTube player API first", async () => {

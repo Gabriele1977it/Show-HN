@@ -394,6 +394,7 @@ export function createApp({ store, uploadsDir, reminders, billing, mailer, enric
     "yt-blocked": "YouTube wouldn't return this video's captions to our server (it often blocks automated requests). Tip: on YouTube open the transcript, copy it, and paste it below — or use “Import .srt / .vtt” with a downloaded subtitle file.",
     "unsupported-page": "That link is a web page, not a transcript. Paste a YouTube link, or a direct .srt/.vtt/.txt URL.",
     "empty": "Nothing to import from that URL.",
+    "api-failed": "The transcript service couldn't fetch that video. Check the API key/quota, or try another video.",
     "fetch-failed": "Couldn't fetch that URL — check the link and try again.",
   };
   app.post("/api/import", importLimiter, async (req, res) => {
@@ -410,7 +411,8 @@ export function createApp({ store, uploadsDir, reminders, billing, mailer, enric
       const status = result.error === "blocked" ? 400 : 422;
       // Only the guard's own message is user-facing; other providers' raw errors
       // (e.g. "upstream responded 403") are replaced with friendly copy.
-      const error = result.error === "blocked" ? (result.message || IMPORT_ERRORS.blocked) : (IMPORT_ERRORS[result.error] || "Import failed.");
+      const friendly = IMPORT_ERRORS[result.error] || "Import failed.";
+      const error = (result.error === "blocked" || result.error === "api-failed") ? (result.message || friendly) : friendly;
       return res.status(status).json({ error });
     }
     const segments = segmentTranscript(result.transcript, {});
