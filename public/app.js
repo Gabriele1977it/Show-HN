@@ -1,6 +1,7 @@
 // EchoDeck client.
 import { onboardingSteps, onboardingProgress, nextStep } from "./onboarding.js";
-import { parseYouTubeRef, createYouTubeLoop } from "./yt-player.js";
+import { parseYouTubeRef, createYouTubeLoop, embedUrl } from "./yt-player.js";
+import { bcp47, isoOf, nameOf } from "./lang.js";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
@@ -140,6 +141,25 @@ $("#transcribeBtn").addEventListener("click", async () => {
   }
 });
 
+// Show the attached YouTube video right in the build form so "is the video
+// attached?" is visible at a glance (a youtube:<id> string alone isn't).
+function updateAudioPreview() {
+  const host = $("#audio-preview");
+  const id = parseYouTubeRef($("#audioUrl").value.trim());
+  if (!id) { host.classList.add("hidden"); host.textContent = ""; return; }
+  const src = embedUrl(id);
+  if (host.firstChild?.src !== src) {
+    host.textContent = "";
+    const iframe = document.createElement("iframe");
+    iframe.src = src;
+    iframe.title = "Attached video preview";
+    iframe.allowFullscreen = true;
+    host.appendChild(iframe);
+  }
+  host.classList.remove("hidden");
+}
+$("#audioUrl").addEventListener("input", updateAudioPreview);
+
 // ---- URL / YouTube import (captions → transcript) ----
 $("#import-btn").addEventListener("click", async () => {
   const f = $("#build-form");
@@ -152,14 +172,29 @@ $("#import-btn").addEventListener("click", async () => {
   btn.textContent = "Importing…";
   status.textContent = "Fetching captions — this can take a moment…";
   try {
-    const res = await api.post("/api/import", { url, lang: f.language.value.trim() || undefined });
+    // The Language field takes names ("English"); caption APIs take ISO codes.
+    const wantedLang = isoOf(f.language.value);
+    const res = await api.post("/api/import", { url, lang: wantedLang });
     const ta = f.transcript;
     ta.value = ta.value.trim() ? ta.value.trimEnd() + "\n\n" + res.transcript : res.transcript;
     if (res.title && !f.title.value.trim()) f.title.value = res.title;
-    if (res.language && !f.language.value.trim()) f.language.value = res.language;
+    const gotLang = isoOf(res.language);
+    if (res.language && !f.language.value.trim()) f.language.value = nameOf(res.language);
     // Attach the video so shadowing loops play the real YouTube segments.
     if (res.videoId && !f.audioUrl.value.trim()) f.audioUrl.value = `youtube:${res.videoId}`;
-    status.textContent = `Imported ${res.segmentCount} line${res.segmentCount === 1 ? "" : "s"}${res.videoId ? " + attached the video for shadowing loops" : ""} — review, then Build deck.`;
+    let msg = `Imported ${res.segmentCount} line${res.segmentCount === 1 ? "" : "s"}`;
+    if (gotLang) msg += ` in ${nameOf(gotLang)}`;
+    if (res.videoId) msg += ` + attached the video (it appears when you build the deck)`;
+    msg += " — review, then Build deck.";
+    // The default caption track isn't always the spoken language (e.g. a video
+    // with creator-uploaded subs in another language) — tell them how to fix it.
+    if (gotLang && wantedLang && gotLang !== wantedLang) {
+      msg += ` ⚠ You asked for ${nameOf(wantedLang)} but only ${nameOf(gotLang)} captions were available.`;
+    } else if (gotLang && !wantedLang) {
+      msg += ` Wrong language? Type e.g. "English" in Language, clear the transcript, and press Import again.`;
+    }
+    status.textContent = msg;
+    updateAudioPreview();
   } catch (err) {
     status.textContent = err.message;
   } finally {
@@ -203,6 +238,8 @@ $("#build-form").addEventListener("submit", async (e) => {
     f.reset();
     f.maxChars.value = 180;
     $("#uploadStatus").textContent = "";
+    $("#import-status").textContent = "";
+    updateAudioPreview();
     await loadDecks();
     openDeck(deck.id);
   } catch (err) {
@@ -651,13 +688,6 @@ $("#rev-play").addEventListener("click", () => {
 // key), then scores it with /api/cards/:id/pronounce. Progressive enhancement:
 // if the browser lacks SpeechRecognition, the button is hidden.
 const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
-const LANG_BCP47 = {
-  japanese: "ja-JP", english: "en-US", spanish: "es-ES", french: "fr-FR", german: "de-DE",
-  italian: "it-IT", portuguese: "pt-PT", korean: "ko-KR", mandarin: "zh-CN", chinese: "zh-CN",
-  russian: "ru-RU", dutch: "nl-NL", polish: "pl-PL", turkish: "tr-TR", arabic: "ar-SA",
-  hindi: "hi-IN", vietnamese: "vi-VN", thai: "th-TH", indonesian: "id-ID",
-};
-const bcp47 = (lang) => LANG_BCP47[String(lang || "").trim().toLowerCase()] || "";
 let recognizer = null, recording = false;
 
 const recBtn = $("#rev-record");
