@@ -926,28 +926,66 @@ $("#manage-btn").addEventListener("click", async () => {
 });
 
 let currentPlan = "free";
+let billingInterval = "month";
+let lastPlans = null;
+
+$("#bill-month").addEventListener("click", () => setBillingInterval("month"));
+$("#bill-year").addEventListener("click", () => setBillingInterval("year"));
+function setBillingInterval(interval) {
+  billingInterval = interval;
+  $("#bill-month").classList.toggle("is-active", interval === "month");
+  $("#bill-year").classList.toggle("is-active", interval === "year");
+  if (lastPlans) renderPricingCards(lastPlans);
+}
+
 async function loadPricing() {
   let plans, ws;
   try { [plans, ws] = await Promise.all([api.get("/api/plans"), api.get("/api/workspace")]); } catch { return; }
   currentPlan = ws.plan;
+  lastPlans = plans;
+  // Only offer the annual toggle when the server can actually honour it.
+  const annualOn = ws.annualBilling && plans.some((p) => p.priceYear);
+  $(".billing-toggle").classList.toggle("hidden", !annualOn);
+  if (!annualOn && billingInterval === "year") setBillingInterval("month");
+  // Surface the best annual saving on the toggle badge.
+  const bestSave = Math.max(0, ...plans.map((p) => p.yearSavingPct || 0));
+  $("#bill-save").textContent = bestSave ? `save ${bestSave}%` : "";
   $("#pricing-current").textContent = `You're on the ${ws.planInfo.name} plan · ${ws.usage.decks} decks · ${ws.usage.cards} cards`;
   $("#manage-btn").classList.toggle("hidden", ws.plan === "free");
   $("#pricing-msg").textContent = "";
+  renderPricingCards(plans);
+}
+
+const PRICE_FEAT = { sharing: "Public deck sharing", reminders: "Review reminders", stats: "Study dashboard", enrich: "AI card-back fill" };
+function renderPricingCards(plans) {
+  const annual = billingInterval === "year";
   const host = $("#pricing-cards");
   host.innerHTML = "";
-  const featLabel = { sharing: "Public deck sharing", reminders: "Review reminders", stats: "Study dashboard", enrich: "AI card-back fill" };
   for (const p of plans) {
     const isCurrent = p.id === currentPlan;
     const card = document.createElement("div");
     card.className = `plan-card${isCurrent ? " current" : ""}${p.id === "pro" ? " featured" : ""}`;
     const limit = (v, unit) => (v === null ? `Unlimited ${unit}` : `${v} ${unit}`);
-    const feats = Object.keys(featLabel)
-      .map((f) => `<li class="${p.features[f] ? "" : "off"}">${featLabel[f]}</li>`)
+    const feats = Object.keys(PRICE_FEAT)
+      .map((f) => `<li class="${p.features[f] ? "" : "off"}">${PRICE_FEAT[f]}</li>`)
       .join("");
+    // Price block: free is always free; paid plans show the selected interval,
+    // with an effective monthly figure + saving when annual is chosen.
+    let priceHtml;
+    if (p.price === 0) {
+      priceHtml = `<div class="price">Free<span></span></div>`;
+    } else if (annual && p.priceYear) {
+      const perMo = (p.priceYear / 12).toFixed(2).replace(/\.00$/, "");
+      priceHtml = `<div class="price">$${perMo}<span>/mo</span></div>
+        <div class="price-sub">$${p.priceYear} billed yearly${p.yearSavingPct ? ` · save ${p.yearSavingPct}%` : ""}</div>`;
+    } else {
+      priceHtml = `<div class="price">$${p.price}<span>/mo</span></div>
+        ${p.priceYear ? `<div class="price-sub">or $${p.priceYear}/yr</div>` : ""}`;
+    }
     card.innerHTML = `
       ${p.id === "pro" ? '<span class="plan-badge">Most popular</span>' : ""}
       <h3>${p.name}</h3>
-      <div class="price">${p.price === 0 ? "Free" : "$" + p.price}<span>${p.price === 0 ? "" : "/mo"}</span></div>
+      ${priceHtml}
       <div class="blurb">${esc(p.blurb)}</div>
       <ul>
         <li>${limit(p.maxDecks, "decks")}</li>
@@ -977,7 +1015,7 @@ async function startUpgrade(plan, btn) {
   btn.textContent = "Starting…";
   $("#pricing-msg").textContent = "";
   try {
-    const r = await api.post("/api/billing/checkout", { plan });
+    const r = await api.post("/api/billing/checkout", { plan, interval: billingInterval });
     if (r.dev) {
       // No Stripe configured: the upgrade already applied — reflect it.
       $("#pricing-msg").textContent = "Upgraded (dev mode — no payment taken).";

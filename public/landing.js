@@ -14,6 +14,7 @@ try {
       ${p.id === "pro" ? '<span class="plan-badge">Most popular</span>' : ""}
       <h3>${p.name}</h3>
       <div class="price">${p.price === 0 ? "Free" : "$" + p.price}<span>${p.price === 0 ? "" : "/mo"}</span></div>
+      ${p.priceYear ? `<div class="price-sub">or $${p.priceYear}/yr${p.yearSavingPct ? ` — save ${p.yearSavingPct}%` : ""}</div>` : ""}
       <div class="blurb">${esc(p.blurb)}</div>
       <ul>
         <li>${limit(p.maxDecks, "decks")}</li>

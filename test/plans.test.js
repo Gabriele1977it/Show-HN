@@ -44,3 +44,16 @@ test("listPlans returns all three tiers", () => {
   const ids = listPlans().map((p) => p.id);
   assert.deepEqual(ids, ["free", "pro", "team"]);
 });
+
+test("planPublic exposes annual pricing + saving; free has none", () => {
+  const pro = planPublic("pro");
+  assert.equal(pro.priceYear, 79);
+  // $79/yr vs $7.99×12 = $95.88 → ~18% saving.
+  assert.equal(pro.yearSavingPct, 18);
+  const team = planPublic("team");
+  assert.equal(team.priceYear, 199);
+  assert.ok(team.yearSavingPct > 0);
+  const free = planPublic("free");
+  assert.equal(free.priceYear, null);
+  assert.equal(free.yearSavingPct, 0);
+});

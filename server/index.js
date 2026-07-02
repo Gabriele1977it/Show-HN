@@ -73,6 +73,8 @@ const billing = createBilling({
     secretKey: process.env.STRIPE_SECRET_KEY,
     pricePro: process.env.STRIPE_PRICE_PRO,
     priceTeam: process.env.STRIPE_PRICE_TEAM,
+    priceProYear: process.env.STRIPE_PRICE_PRO_ANNUAL,
+    priceTeamYear: process.env.STRIPE_PRICE_TEAM_ANNUAL,
     webhookSecret: process.env.STRIPE_WEBHOOK_SECRET,
   },
 });

@@ -44,6 +44,27 @@ test("createCheckout rejects unknown plans", async () => {
   await assert.rejects(billing.createCheckout({ workspaceId: "w", plan: "gold", successUrl: "/", cancelUrl: "/" }), /Unknown plan/);
 });
 
+test("annual interval uses the yearly price and tags metadata", async () => {
+  const calls = [];
+  const fetchImpl = async (url, opts) => { calls.push(opts.body); return { ok: true, json: async () => ({ url: "https://checkout", id: "cs_2" }) }; };
+  const billing = createBilling({
+    store: fakeStore(),
+    config: { secretKey: "sk_test", pricePro: "price_pro_m", priceProYear: "price_pro_y" },
+    fetchImpl,
+  });
+  await billing.createCheckout({ workspaceId: "w1", plan: "pro", interval: "year", successUrl: "/ok", cancelUrl: "/no" });
+  assert.match(calls[0], /line_items%5B0%5D%5Bprice%5D=price_pro_y/);
+  assert.match(calls[0], /metadata%5Binterval%5D=year/);
+});
+
+test("createCheckout rejects an unknown interval and a missing annual price", async () => {
+  const store = fakeStore();
+  const billing = createBilling({ store, config: { secretKey: "sk_test", pricePro: "price_pro_m" }, fetchImpl: async () => ({ ok: true, json: async () => ({}) }) });
+  await assert.rejects(billing.createCheckout({ workspaceId: "w", plan: "pro", interval: "decade", successUrl: "/", cancelUrl: "/" }), /interval/);
+  // Annual not configured → clear error rather than a bad Stripe call.
+  await assert.rejects(billing.createCheckout({ workspaceId: "w", plan: "pro", interval: "year", successUrl: "/", cancelUrl: "/" }), /No Stripe price/);
+});
+
 test("createPortal: dev mode cancels (downgrades to free); live mode calls Stripe", async () => {
   const store = fakeStore();
   store.setWorkspacePlan("w1", "pro", { provider: "dev" });

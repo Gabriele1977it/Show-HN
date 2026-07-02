@@ -296,3 +296,11 @@ body.readonly #ai-fill-btn, body.readonly .scard .ai { display: none !important;
 .deck-empty { text-align: center; padding: 22px 12px; color: var(--muted); }
 .deck-empty p { margin: 0 0 12px; font-size: 14px; }
 .deck-empty .row { justify-content: center; gap: 10px; }
+
+/* --- billing interval toggle + annual pricing --- */
+.billing-toggle { display: inline-flex; gap: 4px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 999px; padding: 4px; margin: 4px 0 18px; }
+.billing-toggle button { border: none; background: none; border-radius: 999px; padding: 7px 16px; font: inherit; font-size: 13.5px; font-weight: 600; color: var(--muted); cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+.billing-toggle button.is-active { background: #fff; color: var(--ink); box-shadow: var(--shadow-sm); }
+.billing-toggle .save-badge { font-size: 11px; font-weight: 700; color: var(--accent-2); background: var(--accent-2-weak); border-radius: 999px; padding: 2px 7px; }
+.billing-toggle .save-badge:empty { display: none; }
+.plan-card .price-sub { color: var(--muted); font-size: 12.5px; margin-top: -6px; margin-bottom: 6px; }
