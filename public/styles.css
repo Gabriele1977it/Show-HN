@@ -268,3 +268,31 @@ body.readonly #ai-fill-btn, body.readonly .scard .ai { display: none !important;
 /* --- creator analytics --- */
 .creator-summary { background: var(--accent-weak); border: 1px solid #e0e3ff; color: var(--ink-2); border-radius: 10px; padding: 8px 12px; font-size: 13px; margin: 0 0 12px; }
 .creator-summary.hidden { display: none; }
+
+/* --- getting-started onboarding --- */
+.onboarding { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); padding: 18px 20px; margin: 0 0 18px; }
+.onboarding.hidden { display: none; }
+.onboarding .ob-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.onboarding .ob-head h2 { margin: 0; font-size: 16px; }
+.onboarding .ob-head .ob-dismiss { border: none; background: none; color: var(--muted); cursor: pointer; font-size: 13px; }
+.onboarding .ob-head .ob-dismiss:hover { color: var(--ink); }
+.onboarding .ob-sub { color: var(--muted); font-size: 13px; margin: 2px 0 12px; }
+.onboarding .ob-bar { height: 6px; border-radius: 999px; background: var(--panel-2); overflow: hidden; margin-bottom: 14px; }
+.onboarding .ob-bar > i { display: block; height: 100%; background: linear-gradient(90deg, var(--accent), #7c74ff); transition: width .3s ease; }
+.onboarding ol.ob-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.onboarding .ob-step { display: flex; align-items: flex-start; gap: 10px; padding: 8px 10px; border: 1px solid var(--line-2); border-radius: 10px; }
+.onboarding .ob-step.next { border-color: var(--accent); background: var(--accent-weak); }
+.onboarding .ob-step.done { opacity: .62; }
+.onboarding .ob-step .tick { flex: 0 0 20px; width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; border: 1.5px solid var(--line); color: var(--muted); margin-top: 1px; }
+.onboarding .ob-step.done .tick { background: var(--accent-2); border-color: var(--accent-2); color: #fff; }
+.onboarding .ob-step .ob-text { flex: 1; }
+.onboarding .ob-step .ob-label { font-weight: 600; font-size: 14px; }
+.onboarding .ob-step.done .ob-label { text-decoration: line-through; text-decoration-color: var(--muted); }
+.onboarding .ob-step .ob-hint { color: var(--muted); font-size: 12.5px; }
+.onboarding .ob-step .ob-go { align-self: center; font-size: 12.5px; border: 1px solid var(--accent); background: #fff; color: var(--accent); border-radius: 8px; padding: 6px 12px; cursor: pointer; white-space: nowrap; }
+.onboarding .ob-step .ob-go:hover { background: var(--accent); color: #fff; }
+
+/* richer empty state for the deck list */
+.deck-empty { text-align: center; padding: 22px 12px; color: var(--muted); }
+.deck-empty p { margin: 0 0 12px; font-size: 14px; }
+.deck-empty .row { justify-content: center; gap: 10px; }
