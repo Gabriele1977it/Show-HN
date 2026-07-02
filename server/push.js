@@ -11,7 +11,7 @@
 
 import webpush from "web-push";
 
-export function createPushService({ publicKey, privateKey, subject = "mailto:hello@madlabs.uk", send } = {}) {
+export function createPushService({ publicKey, privateKey, subject = "mailto:gabriele.olivari@outlook.com", send } = {}) {
   let enabled = Boolean(send || (publicKey && privateKey));
   if (!send && enabled) {
     try {
