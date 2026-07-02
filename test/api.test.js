@@ -1136,3 +1136,29 @@ test("inviting without an email just returns the key (no mail sent)", async () =
   assert.equal(m.inviteLink, undefined);
   assert.equal(sentEmails.length, 0);
 });
+
+// --- SEO language pages ----------------------------------------------------
+
+test("language landing pages render server-side and 404 unknown slugs", async () => {
+  const es = await realFetch(`${base}/learn/spanish`);
+  assert.equal(es.status, 200);
+  assert.match(es.headers.get("content-type"), /html/);
+  const html = await es.text();
+  assert.match(html, /Learn Spanish/);
+  assert.match(html, /rel="canonical"/);
+
+  const hub = await realFetch(`${base}/learn`);
+  assert.equal(hub.status, 200);
+  assert.match(await hub.text(), /\/learn\/japanese/);
+
+  // Unknown language falls back to the marketing page with a 404 status.
+  const bad = await realFetch(`${base}/learn/klingon`);
+  assert.equal(bad.status, 404);
+});
+
+test("sitemap lists the language pages", async () => {
+  const xml = await realFetch(`${base}/sitemap.xml`).then((r) => r.text());
+  assert.match(xml, /\/learn</);
+  assert.match(xml, /\/learn\/spanish</);
+  assert.match(xml, /\/learn\/korean</);
+});

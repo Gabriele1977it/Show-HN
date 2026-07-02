@@ -11,6 +11,7 @@ import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { nanoid } from "nanoid";
 import { segmentTranscript } from "./segment.js";
 import { suggestCloze, applyCloze } from "./cloze.js";
+import { LANGUAGES, getLanguage, renderLearnPage, renderLearnIndex } from "./seo-pages.js";
 import { scoreAttempt } from "./pronounce.js";
 import { deliverToWorkspace } from "./push.js";
 import { exportDeck } from "./exporters.js";
@@ -612,7 +613,8 @@ export function createApp({ store, uploadsDir, reminders, billing, mailer, enric
   });
   app.get("/sitemap.xml", (req, res) => {
     const origin = `${req.protocol}://${req.get("host")}`;
-    const urls = [`${origin}/`, `${origin}/demo`, `${origin}/marketplace`];
+    const urls = [`${origin}/`, `${origin}/demo`, `${origin}/marketplace`, `${origin}/learn`];
+    for (const l of LANGUAGES) urls.push(`${origin}/learn/${l.slug}`);
     for (const d of store.listMarketplace({ limit: 5000 })) urls.push(`${origin}/s/${d.shareId}`);
     const body = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${
       urls.map((u) => `  <url><loc>${escapeHtml(u)}</loc></url>`).join("\n")
@@ -746,6 +748,15 @@ export function createApp({ store, uploadsDir, reminders, billing, mailer, enric
   app.get("/", (_req, res) => res.sendFile(join(PUBLIC_DIR, "landing.html")));
   app.get("/app", (_req, res) => res.sendFile(join(PUBLIC_DIR, "index.html")));
   app.get("/demo", (_req, res) => res.sendFile(join(PUBLIC_DIR, "demo.html")));
+  // SEO language landing pages (server-rendered so crawlers get real content).
+  app.get("/learn", (req, res) => {
+    res.type("html").send(renderLearnIndex(`${req.protocol}://${req.get("host")}`));
+  });
+  app.get("/learn/:slug", (req, res) => {
+    const lang = getLanguage(req.params.slug);
+    if (!lang) return res.status(404).sendFile(join(PUBLIC_DIR, "landing.html"));
+    res.type("html").send(renderLearnPage(lang, `${req.protocol}://${req.get("host")}`));
+  });
   app.get("/marketplace", (_req, res) => res.sendFile(join(PUBLIC_DIR, "marketplace.html")));
   app.get("/terms", (_req, res) => res.sendFile(join(PUBLIC_DIR, "terms.html")));
   app.get("/privacy", (_req, res) => res.sendFile(join(PUBLIC_DIR, "privacy.html")));
