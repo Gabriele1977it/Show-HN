@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {
   parseYouTubeId, isYouTube, guardUrl,
   timedTextJson3ToTranscript, timedTextXmlToTranscript,
-  extractCaptionTracks, pickTrack, createImporter,
+  extractCaptionTracks, captionTracksFromPlayer, pickTrack, createImporter,
 } from "../server/importer.js";
 
 test("parseYouTubeId handles the common URL shapes", () => {
@@ -52,7 +52,36 @@ test("extractCaptionTracks + pickTrack read the watch-page JSON", () => {
   assert.equal(pickTrack(tracks).languageCode, "es");
 });
 
-test("createImporter.run pulls YouTube captions via an injected fetch", async () => {
+test("captionTracksFromPlayer reads the innertube player response", () => {
+  const player = { captions: { playerCaptionsTracklistRenderer: { captionTracks: [{ baseUrl: "u", languageCode: "fr" }] } }, videoDetails: { title: "T" } };
+  const { tracks, title } = captionTracksFromPlayer(player);
+  assert.equal(tracks.length, 1);
+  assert.equal(title, "T");
+  assert.deepEqual(captionTracksFromPlayer({}).tracks, []);
+  assert.deepEqual(captionTracksFromPlayer(null).tracks, []);
+});
+
+test("createImporter.run uses the YouTube player API first", async () => {
+  const player = { captions: { playerCaptionsTracklistRenderer: { captionTracks: [{ baseUrl: "https://www.youtube.com/api/timedtext?v=vid", languageCode: "en" }] } }, videoDetails: { title: "Innertube Demo" } };
+  const json3 = JSON.stringify({ events: [{ tStartMs: 0, segs: [{ utf8: "First line" }] }] });
+  const fetchImpl = async (url) => {
+    if (url.includes("/youtubei/v1/player")) return { ok: true, json: async () => player };
+    if (url.includes("/api/timedtext")) return { ok: true, text: async () => json3 };
+    throw new Error("watch page should not be needed");
+  };
+  const r = await createImporter({ fetchImpl }).run("https://youtu.be/dQw4w9WgXcQ");
+  assert.equal(r.source, "youtube");
+  assert.equal(r.title, "Innertube Demo");
+  assert.match(r.transcript, /\[00:00\] First line/);
+});
+
+test("createImporter.run reports yt-blocked when YouTube refuses both paths", async () => {
+  const importer = createImporter({ fetchImpl: async () => { throw new Error("403 from datacenter IP"); } });
+  const r = await importer.run("https://youtu.be/dQw4w9WgXcQ");
+  assert.equal(r.error, "yt-blocked");
+});
+
+test("createImporter.run falls back to the watch page when the player API fails", async () => {
   const html = `x{"captionTracks":[{"baseUrl":"https://www.youtube.com/api/timedtext?v=vid","languageCode":"en"}]}y"videoDetails":{"title":"Demo"}z`;
   const json3 = JSON.stringify({ events: [{ tStartMs: 0, segs: [{ utf8: "First line" }] }, { tStartMs: 4000, segs: [{ utf8: "Second line" }] }] });
   const fetchImpl = async (url) => ({
