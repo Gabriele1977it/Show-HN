@@ -42,7 +42,7 @@ before(async () => {
     enabled: true,
     run: async (url) => url.includes("bad")
       ? { error: "no-captions" }
-      : { source: "youtube", videoId: "dQw4w9WgXcQ", title: "Imported", language: "es", transcript: "[00:00] Hola mundo.\n[00:04] Buenos dias." },
+      : { source: "youtube", videoId: "dQw4w9WgXcQ", title: "Imported", language: "es", availableLangs: ["es", "en"], transcript: "[00:00] Hola mundo.\n[00:04] Buenos dias." },
   };
   // Capturing push sender so Web Push plumbing is exercised without a push service.
   sentPush = [];
@@ -1040,6 +1040,7 @@ test("import returns a transcript + segments the build form can use", async () =
   const data = await r.json();
   assert.equal(data.source, "youtube");
   assert.equal(data.videoId, "dQw4w9WgXcQ"); // client uses this to attach the video
+  assert.deepEqual(data.availableLangs, ["es", "en"]); // drives the language chips
   assert.equal(data.title, "Imported");
   assert.equal(data.language, "es");
   assert.equal(data.segmentCount, 2);

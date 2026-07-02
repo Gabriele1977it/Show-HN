@@ -199,7 +199,16 @@ export function createImporter({ fetchImpl = fetch, maxBytes = 3_000_000, timeou
     const data = await res.json();
     const transcript = supadataToTranscript(data);
     if (!transcript.trim()) return { error: "no-captions" };
-    return { source: "youtube", videoId: id, title: (await ytTitle(youtubeUrl)) || `YouTube ${id}`, language: data.lang || lang || null, transcript };
+    return {
+      source: "youtube",
+      videoId: id,
+      title: (await ytTitle(youtubeUrl)) || `YouTube ${id}`,
+      language: data.lang || lang || null,
+      // Other caption languages this video offers — lets the UI show one-click
+      // "re-import in English" choices when the default track isn't wanted.
+      availableLangs: Array.isArray(data.availableLangs) ? data.availableLangs : [],
+      transcript,
+    };
   }
 
   async function importYouTube(id, lang, url) {
@@ -251,6 +260,7 @@ export function createImporter({ fetchImpl = fetch, maxBytes = 3_000_000, timeou
       videoId: id,
       title: title || `YouTube ${id}`,
       language: track.languageCode || lang || null,
+      availableLangs: [...new Set(tracks.map((t) => t.languageCode).filter(Boolean))],
       transcript,
     };
   }
