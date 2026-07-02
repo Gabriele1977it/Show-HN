@@ -232,13 +232,37 @@ export function createApp({ store, uploadsDir, reminders, billing, mailer, enric
     res.json(store.listMembers(req.ws));
   });
 
-  app.post("/api/members", requireAdmin, (req, res) => {
+  app.post("/api/members", requireAdmin, async (req, res) => {
     if (!canAdd(planOf(req), "members", store.workspaceUsage(req.ws).members)) {
       return upgrade(res, `Your plan doesn't allow more members. Upgrade to the Team plan to invite teammates.`);
     }
     const result = store.addMember(req.ws, { name: req.body?.name, role: req.body?.role });
     if (result?.error === "invalid-role") return res.status(400).json({ error: "role must be admin, editor, or viewer" });
-    res.status(201).json(result);
+
+    // Optional email invitation: mail the member their one-click join link
+    // (which carries their access key) instead of the admin copying it by hand.
+    const out = { ...result };
+    const email = normalizeEmail(req.body?.email);
+    if (email) {
+      const origin = `${req.protocol}://${req.get("host")}`;
+      const link = `${origin}/app?key=${result.key}`;
+      const wsName = store.getWorkspace(req.ws)?.name || "an EchoDeck workspace";
+      const text = `You've been invited to join "${wsName}" on EchoDeck as ${result.role}.\n\nOpen this link to join:\n${link}\n\nKeep it private — anyone with this link can access the workspace as you.`;
+      const html = `<p>You've been invited to join <strong>${escapeHtml(wsName)}</strong> on EchoDeck as <strong>${escapeHtml(result.role)}</strong>.</p>`
+        + `<p><a href="${escapeHtml(link)}">Open EchoDeck and join &rarr;</a></p>`
+        + `<p style="color:#666;font-size:13px">Keep this link private — anyone with it can access the workspace as you.</p>`;
+      try {
+        await mailer?.send({ to: email, subject: `You're invited to ${wsName} on EchoDeck`, text, html });
+        out.invited = true;
+        out.inviteEmail = email;
+      } catch (err) {
+        console.error("[invite] email failed:", err.message);
+        out.invited = false;
+      }
+      // In dev (no email provider) hand the link back so it can still be shared.
+      if (!mailer?.enabled) out.inviteLink = link;
+    }
+    res.status(201).json(out);
   });
 
   app.delete("/api/members/:id", requireAdmin, (req, res) => {
