@@ -139,6 +139,32 @@ $("#transcribeBtn").addEventListener("click", async () => {
   }
 });
 
+// ---- URL / YouTube import (captions → transcript) ----
+$("#import-btn").addEventListener("click", async () => {
+  const f = $("#build-form");
+  const url = $("#import-url").value.trim();
+  const status = $("#import-status");
+  if (!url) { status.textContent = "Paste a YouTube link or a subtitle URL to import."; return; }
+  const btn = $("#import-btn");
+  btn.disabled = true;
+  const old = btn.textContent;
+  btn.textContent = "Importing…";
+  status.textContent = "Fetching captions — this can take a moment…";
+  try {
+    const res = await api.post("/api/import", { url, lang: f.language.value.trim() || undefined });
+    const ta = f.transcript;
+    ta.value = ta.value.trim() ? ta.value.trimEnd() + "\n\n" + res.transcript : res.transcript;
+    if (res.title && !f.title.value.trim()) f.title.value = res.title;
+    if (res.language && !f.language.value.trim()) f.language.value = res.language;
+    status.textContent = `Imported ${res.segmentCount} line${res.segmentCount === 1 ? "" : "s"} — review, then Build deck.`;
+  } catch (err) {
+    status.textContent = err.message;
+  } finally {
+    btn.textContent = old;
+    btn.disabled = false;
+  }
+});
+
 // ---- subtitle import (reads file text straight into the transcript box) ----
 $("#subBtn").addEventListener("click", () => $("#subFile").click());
 $("#subFile").addEventListener("change", async (e) => {
@@ -1101,6 +1127,7 @@ async function loadWorkspaceInfo() {
     enrichConfigured = Boolean(w.enrichConfigured);
     transcribeConfigured = Boolean(w.transcribeConfigured);
     $("#transcribeBtn").classList.toggle("hidden", !transcribeConfigured);
+    $("#import-row").classList.toggle("hidden", !w.importConfigured);
     localStorage.setItem(WS_NAME, w.name);
     $("#ws-name").textContent = w.name;
     $("#ws-panel-name").textContent = w.name;

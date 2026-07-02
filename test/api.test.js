@@ -33,11 +33,18 @@ before(async () => {
   const enrich = createEnricher({ generate: async (front, language) => ({ back: `EN:${front}`, notes: `note(${language})` }) });
   // Fake transcriber so the auto-transcription flow is exercised without a provider.
   const transcribe = createTranscriber({ transcribe: async (audioUrl) => ({ segments: [{ start: 0, end: 3, text: `heard from ${audioUrl}` }, { start: 3, end: 6, text: "second line" }] }) });
+  // Fake importer so the URL/YouTube import route is exercised without network.
+  const importer = {
+    enabled: true,
+    run: async (url) => url.includes("bad")
+      ? { error: "no-captions" }
+      : { source: "youtube", title: "Imported", language: "es", transcript: "[00:00] Hola mundo.\n[00:04] Buenos dias." },
+  };
   // Capturing push sender so Web Push plumbing is exercised without a push service.
   sentPush = [];
   const push = createPushService({ publicKey: "test-vapid-key", send: async (sub, payload) => { sentPush.push({ sub, payload }); } });
   const ownerEmails = new Set(["owner@echodeck.app"]);
-  const app = createApp({ store, uploadsDir: join(tmp, "uploads"), reminders, billing, mailer, enrich, transcribe, push, ownerEmails });
+  const app = createApp({ store, uploadsDir: join(tmp, "uploads"), reminders, billing, mailer, enrich, transcribe, importer, push, ownerEmails });
   await new Promise((res) => { server = app.listen(0, res); });
   base = `http://127.0.0.1:${server.address().port}`;
 
@@ -1016,4 +1023,45 @@ test("/demo page is served", async () => {
 test("sitemap includes the demo page", async () => {
   const xml = await realFetch(`${base}/sitemap.xml`).then((r) => r.text());
   assert.match(xml, /\/demo</);
+});
+
+// --- URL / YouTube import --------------------------------------------------
+
+test("import returns a transcript + segments the build form can use", async () => {
+  const r = await fetch(`${base}/api/import`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ" }),
+  });
+  assert.equal(r.status, 200);
+  const data = await r.json();
+  assert.equal(data.source, "youtube");
+  assert.equal(data.title, "Imported");
+  assert.equal(data.language, "es");
+  assert.equal(data.segmentCount, 2);
+  assert.equal(data.segments[0].start, 0);
+  // The imported transcript builds a real deck through the normal endpoint.
+  const deck = await fetch(`${base}/api/decks`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title: data.title, language: data.language, transcript: data.transcript }),
+  }).then(j);
+  assert.equal(deck.cards.length, 2);
+});
+
+test("import surfaces a friendly error and requires a URL", async () => {
+  const noUrl = await fetch(`${base}/api/import`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+  assert.equal(noUrl.status, 400);
+  const bad = await fetch(`${base}/api/import`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ url: "https://youtu.be/bad00000000" }),
+  });
+  assert.equal(bad.status, 422);
+  assert.match((await bad.json()).error, /captions/);
+});
+
+test("import requires a workspace key", async () => {
+  const r = await realFetch(`${base}/api/import`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ" }),
+  });
+  assert.equal(r.status, 401);
 });
