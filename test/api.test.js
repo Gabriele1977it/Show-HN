@@ -13,7 +13,7 @@ import { createEnricher } from "../server/enrich.js";
 import { createTranscriber } from "../server/transcribe.js";
 import { createPushService } from "../server/push.js";
 
-let server, base, tmp, sentReminders, sentPush, realFetch, wsKey;
+let server, base, tmp, sentReminders, sentPush, sentEmails, realFetch, wsKey;
 
 before(async () => {
   tmp = mkdtempSync(join(tmpdir(), "echodeck-"));
@@ -28,7 +28,11 @@ before(async () => {
     config: { minIntervalMs: 1e9 },
   });
   const billing = createBilling({ store, config: {} }); // dev mode (no Stripe keys)
-  const mailer = createMailer({ log: () => {} }); // dev mode (no email provider)
+  // Dev-mode mailer (enabled=false, so reset devLink still works), wrapped to
+  // capture every message sent — invitations, resets — for assertions.
+  sentEmails = [];
+  const devMailer = createMailer({ log: () => {} });
+  const mailer = { get enabled() { return devMailer.enabled; }, send: async (m) => { sentEmails.push(m); return devMailer.send(m); } };
   // Inject a fake generator so the AI-fill flow is exercised without a live key.
   const enrich = createEnricher({ generate: async (front, language) => ({ back: `EN:${front}`, notes: `note(${language})` }) });
   // Fake transcriber so the auto-transcription flow is exercised without a provider.
@@ -1086,4 +1090,49 @@ test("checkout accepts an annual interval (dev mode applies immediately)", async
   }).then(j);
   assert.equal(r.dev, true);
   assert.equal((await realFetch(`${base}/api/workspace`, { headers: hdr }).then(j)).plan, "pro");
+});
+
+// --- email invitations -----------------------------------------------------
+
+test("inviting a member with an email sends a join link carrying their key", async () => {
+  // A Team workspace (members are a Team feature).
+  const ws = await realFetch(`${base}/api/workspaces`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: "Invite Team" }),
+  }).then(j);
+  // Upgrade to Team (dev-mode checkout applies immediately) so member adds are allowed.
+  const hdr = { Authorization: `Bearer ${ws.key}`, "Content-Type": "application/json" };
+  await realFetch(`${base}/api/billing/checkout`, { method: "POST", headers: hdr, body: JSON.stringify({ plan: "team" }) });
+
+  sentEmails.length = 0;
+  const m = await realFetch(`${base}/api/members`, {
+    method: "POST", headers: hdr, body: JSON.stringify({ name: "Sam", role: "editor", email: "Sam@Example.com" }),
+  }).then(j);
+  assert.equal(m.invited, true);
+  assert.equal(m.inviteEmail, "sam@example.com"); // normalised
+  assert.ok(m.inviteLink.includes(`/app?key=${m.key}`));
+  // The email actually went out, to the invitee, containing the join link.
+  const mail = sentEmails.find((e) => e.to === "sam@example.com");
+  assert.ok(mail, "an email was sent to the invitee");
+  assert.match(mail.subject, /invited/i);
+  assert.ok(mail.text.includes(m.key));
+
+  // The emailed key really grants access to that workspace.
+  const check = await realFetch(`${base}/api/workspace`, { headers: { Authorization: `Bearer ${m.key}` } }).then(j);
+  assert.equal(check.name, "Invite Team");
+});
+
+test("inviting without an email just returns the key (no mail sent)", async () => {
+  const ws = await realFetch(`${base}/api/workspaces`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: "No Email Team" }),
+  }).then(j);
+  const hdr = { Authorization: `Bearer ${ws.key}`, "Content-Type": "application/json" };
+  await realFetch(`${base}/api/billing/checkout`, { method: "POST", headers: hdr, body: JSON.stringify({ plan: "team" }) });
+  sentEmails.length = 0;
+  const m = await realFetch(`${base}/api/members`, {
+    method: "POST", headers: hdr, body: JSON.stringify({ name: "Pat", role: "viewer" }),
+  }).then(j);
+  assert.ok(m.key);
+  assert.equal(m.invited, undefined);
+  assert.equal(m.inviteLink, undefined);
+  assert.equal(sentEmails.length, 0);
 });

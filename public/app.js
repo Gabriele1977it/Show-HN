@@ -1118,11 +1118,18 @@ let transcribeConfigured = false;
 $("#ws-madd").addEventListener("click", async () => {
   const name = $("#ws-mname").value.trim();
   const role = $("#ws-mrole").value;
+  const email = $("#ws-memail").value.trim();
   $("#ws-msg").textContent = "";
   try {
-    const m = await api.post("/api/members", { name, role });
+    const m = await api.post("/api/members", { name, role, email: email || undefined });
     $("#ws-mname").value = "";
-    $("#ws-newkey-val").value = m.key;
+    $("#ws-memail").value = "";
+    $("#ws-newkey-val").value = m.inviteLink || m.key;
+    $("#ws-newkey-label").textContent = m.invited
+      ? `✓ Invitation emailed to ${m.inviteEmail}. Their join link (also copy-able):`
+      : m.inviteLink
+        ? "Share this one-click join link (carries their access key):"
+        : "New member key (copy now — shown once):";
     $("#ws-newkey").classList.remove("hidden");
     loadMembers();
   } catch (err) { $("#ws-msg").textContent = err.message; }
@@ -1329,6 +1336,24 @@ $("#push-test").addEventListener("click", async () => {
 
 (async function start() {
   if ("serviceWorker" in navigator) { try { await navigator.serviceWorker.register("/sw.js"); } catch {} }
+  const params = new URLSearchParams(location.search);
+  // Invitation link: ?key=<memberKey> joins that workspace directly. Handled
+  // before ensureWorkspace so an invitee lands in the workspace they were
+  // invited to rather than a fresh anonymous one.
+  const inviteKey = params.get("key");
+  if (inviteKey) {
+    try {
+      const r = await fetch("/api/workspace", { headers: { Authorization: `Bearer ${inviteKey}` } });
+      if (r.ok) {
+        const ws = await r.json();
+        wsKey = inviteKey;
+        localStorage.setItem(WS_KEY, inviteKey);
+        localStorage.setItem(WS_NAME, ws.name);
+        await rememberKey(inviteKey);
+      }
+    } catch {}
+    history.replaceState(null, "", location.pathname); // don't leave the key in the URL
+  }
   await ensureWorkspace();
   await loadAccount();
   await loadDecks();
@@ -1336,7 +1361,6 @@ $("#push-test").addEventListener("click", async () => {
   // Deep links from the marketing site:
   //  ?install=<shareId> — install a marketplace deck into this workspace.
   //  ?sample=1          — build a ready-made sample deck (no signup needed).
-  const params = new URLSearchParams(location.search);
   if (params.get("install")) {
     history.replaceState(null, "", location.pathname);
     await installListing(params.get("install"), null);

@@ -70,9 +70,10 @@
               <select id="ws-mrole"><option value="editor">editor</option><option value="viewer">viewer</option><option value="admin">admin</option></select>
               <button id="ws-madd" class="ghost small">Add</button>
             </div>
+            <input id="ws-memail" type="email" placeholder="email (optional — we'll send a join link)" style="margin-top:6px" />
           </label>
           <div id="ws-newkey" class="hidden">
-            <p class="muted small" style="margin:8px 0 4px">New member key (copy now — shown once):</p>
+            <p class="muted small" id="ws-newkey-label" style="margin:8px 0 4px">New member key (copy now — shown once):</p>
             <div class="row"><input id="ws-newkey-val" readonly /><button id="ws-newkey-copy" class="ghost small">Copy</button></div>
           </div>
         </div>
