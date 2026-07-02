@@ -199,7 +199,7 @@ export function createImporter({ fetchImpl = fetch, maxBytes = 3_000_000, timeou
     const data = await res.json();
     const transcript = supadataToTranscript(data);
     if (!transcript.trim()) return { error: "no-captions" };
-    return { source: "youtube", title: (await ytTitle(youtubeUrl)) || `YouTube ${id}`, language: data.lang || lang || null, transcript };
+    return { source: "youtube", videoId: id, title: (await ytTitle(youtubeUrl)) || `YouTube ${id}`, language: data.lang || lang || null, transcript };
   }
 
   async function importYouTube(id, lang, url) {
@@ -248,6 +248,7 @@ export function createImporter({ fetchImpl = fetch, maxBytes = 3_000_000, timeou
     if (!transcript.trim()) return { error: "empty-captions" };
     return {
       source: "youtube",
+      videoId: id,
       title: title || `YouTube ${id}`,
       language: track.languageCode || lang || null,
       transcript,

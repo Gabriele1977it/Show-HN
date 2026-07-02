@@ -304,3 +304,9 @@ body.readonly #ai-fill-btn, body.readonly .scard .ai { display: none !important;
 .billing-toggle .save-badge { font-size: 11px; font-weight: 700; color: var(--accent-2); background: var(--accent-2-weak); border-radius: 999px; padding: 2px 7px; }
 .billing-toggle .save-badge:empty { display: none; }
 .plan-card .price-sub { color: var(--muted); font-size: 12.5px; margin-top: -6px; margin-bottom: 6px; }
+
+/* --- embedded YouTube player for imported decks --- */
+.yt-dock { position: sticky; top: 64px; z-index: 4; max-width: 560px; margin: 0 0 14px; border-radius: var(--radius); overflow: hidden; border: 1px solid var(--line); box-shadow: var(--shadow-md); background: #000; aspect-ratio: 16 / 9; }
+.yt-dock.hidden { display: none; }
+.yt-dock iframe { width: 100%; height: 100%; border: 0; display: block; }
+@media (max-width: 700px) { .yt-dock { position: static; max-width: 100%; } }

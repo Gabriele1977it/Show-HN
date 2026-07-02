@@ -52,6 +52,9 @@ export function securityHeaders(req, res, next) {
       "style-src 'self' 'unsafe-inline'",
       "script-src 'self'",
       "connect-src 'self'",
+      // YouTube embeds for imported decks: frames only — scripts stay 'self'
+      // (the player is driven via postMessage, no external JS loaded).
+      "frame-src 'self' https://www.youtube-nocookie.com https://www.youtube.com",
       "frame-ancestors 'self'",
       "base-uri 'self'",
       "form-action 'self' https://checkout.stripe.com",

@@ -1,5 +1,6 @@
 // EchoDeck client.
 import { onboardingSteps, onboardingProgress, nextStep } from "./onboarding.js";
+import { parseYouTubeRef, createYouTubeLoop } from "./yt-player.js";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
@@ -64,7 +65,7 @@ const fmtDue = (ms) => {
   return hrs >= 1 ? `in ${hrs}h` : `in ${Math.max(1, Math.round(d / 60000))}m`;
 };
 
-const state = { deck: null, player: $("#player") };
+const state = { deck: null, player: $("#player"), ytLoop: null };
 
 // A tiny sample deck for the "try without signup" flow (?sample=1 from the
 // landing page). Timestamped lines so cards show timecodes; no audio needed.
@@ -156,7 +157,9 @@ $("#import-btn").addEventListener("click", async () => {
     ta.value = ta.value.trim() ? ta.value.trimEnd() + "\n\n" + res.transcript : res.transcript;
     if (res.title && !f.title.value.trim()) f.title.value = res.title;
     if (res.language && !f.language.value.trim()) f.language.value = res.language;
-    status.textContent = `Imported ${res.segmentCount} line${res.segmentCount === 1 ? "" : "s"} — review, then Build deck.`;
+    // Attach the video so shadowing loops play the real YouTube segments.
+    if (res.videoId && !f.audioUrl.value.trim()) f.audioUrl.value = `youtube:${res.videoId}`;
+    status.textContent = `Imported ${res.segmentCount} line${res.segmentCount === 1 ? "" : "s"}${res.videoId ? " + attached the video for shadowing loops" : ""} — review, then Build deck.`;
   } catch (err) {
     status.textContent = err.message;
   } finally {
@@ -341,9 +344,24 @@ function renderDeck() {
   $("#study-deck").classList.remove("hidden");
   $("#study-title").textContent = d.title;
   const dueCount = d.cards.filter((c) => c.srs.due <= Date.now()).length;
-  $("#study-meta").textContent = `${esc(d.language || "—")} · ${d.cards.length} cards · ${d.audioUrl ? "audio attached" : "no audio"}`;
+  const ytId = parseYouTubeRef(d.audioUrl);
+  $("#study-meta").textContent = `${esc(d.language || "—")} · ${d.cards.length} cards · ${ytId ? "video attached" : d.audioUrl ? "audio attached" : "no audio"}`;
   $("#due-badge").textContent = dueCount;
-  if (d.audioUrl) state.player.src = d.audioUrl;
+  // Playback source: a YouTube deck mounts the embedded player (loops drive the
+  // real video); anything else uses the plain <audio> element.
+  const dock = $("#yt-dock");
+  if (ytId) {
+    if (state.ytLoop?.videoId !== ytId) {
+      state.ytLoop?.destroy();
+      state.ytLoop = createYouTubeLoop({ container: dock, videoId: ytId });
+    }
+    dock.classList.remove("hidden");
+  } else {
+    state.ytLoop?.destroy();
+    state.ytLoop = null;
+    dock.classList.add("hidden");
+    if (d.audioUrl) state.player.src = d.audioUrl;
+  }
 
   if (d.shareId) showShareBar(`${location.origin}/s/${d.shareId}`);
   else $("#share-bar").classList.add("hidden");
@@ -419,6 +437,13 @@ function renderCard(card, idx) {
 // ---- shadowing playback ----
 let loopStop = null;
 function playLoop(start, end, speed = 1) {
+  // YouTube deck: drive the embedded player instead of the <audio> element.
+  if (state.ytLoop) {
+    if (loopStop) loopStop();
+    state.ytLoop.playLoop(start, end, speed);
+    loopStop = () => { state.ytLoop?.stop(); loopStop = null; };
+    return;
+  }
   const p = state.player;
   if (!p.src) return;
   if (loopStop) loopStop();
