@@ -264,6 +264,10 @@ Subtitle text here"></textarea>
             <button id="manage-btn" class="ghost small hidden">Manage subscription</button>
           </div>
         </div>
+        <div class="billing-toggle" role="group" aria-label="Billing interval">
+          <button type="button" id="bill-month" class="is-active" data-interval="month">Monthly</button>
+          <button type="button" id="bill-year" data-interval="year">Annual <span class="save-badge" id="bill-save"></span></button>
+        </div>
         <div id="pricing-cards" class="pricing-grid"></div>
         <p id="pricing-msg" class="muted small"></p>
       </section>

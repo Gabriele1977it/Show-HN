@@ -222,6 +222,8 @@ export function createApp({ store, uploadsDir, reminders, billing, mailer, enric
       transcribeConfigured: Boolean(transcribe?.enabled),
       // Whether URL/YouTube import is enabled (drives the "Import from URL" row).
       importConfigured: Boolean(importer?.enabled),
+      // Whether annual billing can be offered (drives the monthly/annual toggle).
+      annualBilling: Boolean(billing?.annualAvailable),
     });
   });
 
@@ -260,10 +262,11 @@ export function createApp({ store, uploadsDir, reminders, billing, mailer, enric
   app.post("/api/billing/checkout", requireAdmin, async (req, res) => {
     const plan = req.body?.plan;
     if (plan !== "pro" && plan !== "team") return res.status(400).json({ error: "Choose the pro or team plan." });
+    const interval = req.body?.interval === "year" ? "year" : "month";
     const origin = `${req.protocol}://${req.get("host")}`;
     try {
       const result = await billing.createCheckout({
-        workspaceId: req.ws, plan,
+        workspaceId: req.ws, plan, interval,
         successUrl: `${origin}/?upgraded=${plan}`,
         cancelUrl: `${origin}/?upgrade=cancelled`,
       });

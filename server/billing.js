@@ -11,10 +11,20 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 
 export function createBilling({ store, config = {}, fetchImpl = fetch }) {
   const enabled = Boolean(config.secretKey);
-  const prices = { pro: config.pricePro, team: config.priceTeam };
+  // Prices are keyed by plan and billing interval. Monthly keys keep their
+  // original names for backward compatibility; annual keys are optional.
+  const prices = {
+    pro: { month: config.pricePro, year: config.priceProYear },
+    team: { month: config.priceTeam, year: config.priceTeamYear },
+  };
+  // Annual checkout is offerable when either we're in dev mode (upgrade applies
+  // immediately, no Stripe price needed) or both live annual prices are set.
+  // The UI uses this to avoid showing an annual option that would error.
+  const annualAvailable = !enabled || Boolean(prices.pro.year && prices.team.year);
 
-  async function createCheckout({ workspaceId, plan, successUrl, cancelUrl }) {
+  async function createCheckout({ workspaceId, plan, interval = "month", successUrl, cancelUrl }) {
     if (plan !== "pro" && plan !== "team") throw new Error("Unknown plan");
+    if (interval !== "month" && interval !== "year") throw new Error("Unknown billing interval");
 
     if (!enabled) {
       // Dev mode: no Stripe configured — upgrade immediately so the flow works.
@@ -22,8 +32,8 @@ export function createBilling({ store, config = {}, fetchImpl = fetch }) {
       return { url: successUrl, dev: true };
     }
 
-    const price = prices[plan];
-    if (!price) throw new Error(`No Stripe price configured for the ${plan} plan`);
+    const price = prices[plan][interval];
+    if (!price) throw new Error(`No Stripe price configured for the ${plan} plan (${interval})`);
     const body = new URLSearchParams({
       mode: "subscription",
       "line_items[0][price]": price,
@@ -32,8 +42,10 @@ export function createBilling({ store, config = {}, fetchImpl = fetch }) {
       cancel_url: cancelUrl,
       "metadata[workspaceId]": workspaceId,
       "metadata[plan]": plan,
+      "metadata[interval]": interval,
       "subscription_data[metadata][workspaceId]": workspaceId,
       "subscription_data[metadata][plan]": plan,
+      "subscription_data[metadata][interval]": interval,
     });
     const res = await fetchImpl("https://api.stripe.com/v1/checkout/sessions", {
       method: "POST",
@@ -109,5 +121,5 @@ export function createBilling({ store, config = {}, fetchImpl = fetch }) {
     }
   }
 
-  return { enabled, createCheckout, createPortal, verifyWebhook, applyEvent };
+  return { enabled, annualAvailable, createCheckout, createPortal, verifyWebhook, applyEvent };
 }

@@ -1065,3 +1065,25 @@ test("import requires a workspace key", async () => {
   });
   assert.equal(r.status, 401);
 });
+
+// --- annual billing --------------------------------------------------------
+
+test("/api/plans exposes annual pricing for paid tiers", async () => {
+  const plans = await fetch(`${base}/api/plans`).then(j);
+  const pro = plans.find((p) => p.id === "pro");
+  assert.equal(pro.priceYear, 79);
+  assert.ok(pro.yearSavingPct > 0);
+  assert.equal(plans.find((p) => p.id === "free").priceYear, null);
+});
+
+test("checkout accepts an annual interval (dev mode applies immediately)", async () => {
+  const ws = await realFetch(`${base}/api/workspaces`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: "Annual" }),
+  }).then(j);
+  const hdr = { Authorization: `Bearer ${ws.key}`, "Content-Type": "application/json" };
+  const r = await realFetch(`${base}/api/billing/checkout`, {
+    method: "POST", headers: hdr, body: JSON.stringify({ plan: "pro", interval: "year" }),
+  }).then(j);
+  assert.equal(r.dev, true);
+  assert.equal((await realFetch(`${base}/api/workspace`, { headers: hdr }).then(j)).plan, "pro");
+});

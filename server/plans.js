@@ -15,13 +15,13 @@ export const PLANS = {
     blurb: "Try it out — a few decks to get going.",
   },
   pro: {
-    id: "pro", name: "Pro", price: 7.99,
+    id: "pro", name: "Pro", price: 7.99, priceYear: 79,
     maxDecks: Infinity, maxCards: Infinity, maxMembers: 1,
     features: { sharing: true, reminders: true, stats: true, enrich: true },
     blurb: "For serious language learners and independent creators: unlimited decks, sharing, reminders, stats + AI card fill.",
   },
   team: {
-    id: "team", name: "Team", price: 19.99,
+    id: "team", name: "Team", price: 19.99, priceYear: 199,
     maxDecks: Infinity, maxCards: Infinity, maxMembers: 10,
     features: { sharing: true, reminders: true, stats: true, enrich: true },
     blurb: "Everything in Pro, plus up to 10 teammates with roles.",
@@ -51,8 +51,11 @@ export function canAdd(planId, kind, currentCount, count = 1) {
 export function planPublic(planId) {
   const p = getPlan(planId);
   const n = (v) => (v === Infinity ? null : v);
+  // Annual price + the % saved vs. paying monthly, so the UI can show a badge.
+  const priceYear = p.priceYear ?? null;
+  const yearSavingPct = priceYear && p.price ? Math.round((1 - priceYear / (p.price * 12)) * 100) : 0;
   return {
-    id: p.id, name: p.name, price: p.price, blurb: p.blurb,
+    id: p.id, name: p.name, price: p.price, priceYear, yearSavingPct, blurb: p.blurb,
     maxDecks: n(p.maxDecks), maxCards: n(p.maxCards), maxMembers: n(p.maxMembers),
     features: { ...p.features },
   };
