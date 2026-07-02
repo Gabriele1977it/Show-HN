@@ -1,4 +1,6 @@
 // EchoDeck client.
+import { onboardingSteps, onboardingProgress, nextStep } from "./onboarding.js";
+
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 
@@ -8,6 +10,21 @@ const WS_NAME = "echodeck_ws_name";
 const SESSION = "echodeck_session";
 let wsKey = localStorage.getItem(WS_KEY) || "";
 let sessionToken = localStorage.getItem(SESSION) || "";
+
+// --- getting-started onboarding ---
+// Client-side activation flags (reviewed / shadowed can't be inferred from the
+// deck list) plus a dismissal flag, all kept per-browser in localStorage.
+const OB_FLAGS = "echodeck_ob_flags";
+const OB_DISMISSED = "echodeck_ob_dismissed";
+const obFlags = () => { try { return JSON.parse(localStorage.getItem(OB_FLAGS)) || {}; } catch { return {}; } };
+function markOnboarding(flag) {
+  const f = obFlags();
+  if (f[flag]) return;
+  f[flag] = true;
+  localStorage.setItem(OB_FLAGS, JSON.stringify(f));
+  renderOnboarding();
+}
+let lastDecks = [];
 const authHeaders = (extra = {}) => (wsKey ? { Authorization: `Bearer ${wsKey}`, ...extra } : extra);
 
 const api = {
@@ -179,10 +196,18 @@ function showBuildError(err) {
 // ---- deck list ----
 async function loadDecks() {
   const decks = await api.get("/api/decks");
+  lastDecks = decks;
+  renderOnboarding();
   const ul = $("#deck-list");
   ul.innerHTML = "";
   if (!decks.length) {
-    ul.innerHTML = `<li class="muted small">No decks yet — build one on the left.</li>`;
+    const li = document.createElement("li");
+    li.className = "deck-empty";
+    li.innerHTML = `
+      <p>No decks yet. Build one from a transcript on the left — or start with a ready-made sample.</p>
+      <div class="row"><button id="empty-sample" class="primary small">Load a sample deck</button></div>`;
+    ul.appendChild(li);
+    $("#empty-sample").addEventListener("click", buildSample);
     return;
   }
   for (const d of decks) {
@@ -218,6 +243,58 @@ async function refreshCreatorSummary() {
   if (!s || s.sharedCount === 0) { el.classList.add("hidden"); return; }
   el.innerHTML = `📣 <strong>${s.sharedCount}</strong> shared${s.listedCount ? ` (${s.listedCount} listed)` : ""} · 👁 <strong>${s.totalViews}</strong> view${s.totalViews === 1 ? "" : "s"} · ⬇ <strong>${s.totalInstalls}</strong> install${s.totalInstalls === 1 ? "" : "s"}`;
   el.classList.remove("hidden");
+}
+
+// Render the "getting started" checklist. Hidden once every step is done or the
+// learner dismisses it; steps derive from the deck list plus activation flags.
+// Each step's action jumps the user straight to the relevant place in the app.
+const OB_ACTIONS = {
+  build: { text: "Start", run: () => { goTo("build"); $("#build-form")?.title?.focus(); } },
+  review: { text: "Open a deck", run: () => { goTo("build"); if (lastDecks[0]) openDeck(lastDecks[0].id); } },
+  shadow: { text: "How", run: () => { goTo("build"); if (lastDecks[0]) openDeck(lastDecks[0].id); } },
+  share: { text: "Open a deck", run: () => { goTo("build"); if (lastDecks[0]) openDeck(lastDecks[0].id); } },
+};
+function renderOnboarding() {
+  const host = $("#onboarding");
+  if (!host) return;
+  if (localStorage.getItem(OB_DISMISSED)) { host.classList.add("hidden"); return; }
+  const steps = onboardingSteps({ decks: lastDecks, flags: obFlags() });
+  const prog = onboardingProgress(steps);
+  if (prog.complete) { host.classList.add("hidden"); return; }
+  const next = nextStep(steps);
+  host.innerHTML = `
+    <div class="ob-head">
+      <h2>Get started with EchoDeck</h2>
+      <button class="ob-dismiss" type="button">Dismiss</button>
+    </div>
+    <p class="ob-sub">${prog.done} of ${prog.total} done — a few minutes to your first study session.</p>
+    <div class="ob-bar"><i style="width:${prog.percent}%"></i></div>
+    <ol class="ob-steps"></ol>`;
+  const ol = $("ol.ob-steps", host);
+  for (const s of steps) {
+    const li = document.createElement("li");
+    li.className = "ob-step" + (s.done ? " done" : (next && s.id === next.id ? " next" : ""));
+    li.innerHTML = `
+      <span class="tick">${s.done ? "✓" : ""}</span>
+      <span class="ob-text"><span class="ob-label">${esc(s.label)}</span><span class="ob-hint"> — ${esc(s.hint)}</span></span>`;
+    if (!s.done && OB_ACTIONS[s.id]) {
+      const go = document.createElement("button");
+      go.type = "button";
+      go.className = "ob-go";
+      go.textContent = OB_ACTIONS[s.id].text;
+      go.addEventListener("click", OB_ACTIONS[s.id].run);
+      li.appendChild(go);
+    }
+    ol.appendChild(li);
+  }
+  $(".ob-dismiss", host).addEventListener("click", () => { localStorage.setItem(OB_DISMISSED, "1"); host.classList.add("hidden"); });
+  host.classList.remove("hidden");
+}
+
+// Switch to a top-level tab programmatically (used by onboarding actions).
+function goTo(view) {
+  const tab = $$(".tab").find((t) => t.dataset.view === view);
+  if (tab) tab.click();
 }
 
 // ---- deck detail ----
@@ -562,6 +639,7 @@ async function scorePronunciation(card, heard) {
   let res;
   try { res = await api.post(`/api/cards/${card.id}/pronounce`, { heard }); }
   catch { return; }
+  markOnboarding("shadowed");
   const host = $("#pronounce-result");
   const words = res.words.map((w) => `<span class="w ${w.ok ? "ok" : "miss"}">${esc(w.token)}</span>`).join(" ");
   host.innerHTML = `
@@ -630,6 +708,7 @@ function highlightTerm(text, term) {
 async function gradeCard(grade) {
   const c = review.queue[review.idx];
   await api.post(`/api/cards/${c.id}/review`, { grade });
+  markOnboarding("reviewed");
   review.idx += 1;
   if (review.idx >= review.queue.length) {
     closeReview(true);
