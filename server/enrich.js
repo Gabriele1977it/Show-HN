@@ -32,7 +32,19 @@ const SYSTEM = [
   "or trivial, translate/echo it and keep the note minimal.",
 ].join(" ");
 
-export function createEnricher({ apiKey, model = process.env.ECHODECK_LLM_MODEL || "claude-opus-4-8", generate } = {}) {
+// Model: cheap-by-default. Card fills are short, structured completions — the
+// budget tier handles them well, and the operator pays per token. Override via
+// ECHODECK_LLM_MODEL (or its alias ANTHROPIC_MODEL).
+const DEFAULT_MODEL = "claude-haiku-4-5-20251001";
+
+export function createEnricher({
+  apiKey,
+  model = process.env.ECHODECK_LLM_MODEL || process.env.ANTHROPIC_MODEL || DEFAULT_MODEL,
+  // Hard per-call output cap: a translation + ~40-word note fits comfortably in
+  // 300 tokens, so a runaway response can never bill more than this.
+  maxTokens = Number(process.env.ECHODECK_LLM_MAX_TOKENS) || 300,
+  generate,
+} = {}) {
   const enabled = Boolean(generate || apiKey);
   const client = !generate && apiKey ? new Anthropic({ apiKey }) : null;
 
@@ -41,10 +53,11 @@ export function createEnricher({ apiKey, model = process.env.ECHODECK_LLM_MODEL 
     const lang = String(language || "").trim() || "the target language";
     const response = await client.messages.create({
       model,
-      max_tokens: 1024,
+      max_tokens: maxTokens,
       system: SYSTEM,
       output_config: { format: { type: "json_schema", schema: CARD_SCHEMA } },
-      messages: [{ role: "user", content: `Target language: ${lang}\nSentence: ${front}` }],
+      // Cap the input too: card fronts are sentences, not documents.
+      messages: [{ role: "user", content: `Target language: ${lang}\nSentence: ${String(front).slice(0, 500)}` }],
     });
     const text = response.content.find((b) => b.type === "text")?.text ?? "{}";
     const parsed = JSON.parse(text);
@@ -56,6 +69,7 @@ export function createEnricher({ apiKey, model = process.env.ECHODECK_LLM_MODEL 
   return {
     enabled,
     model,
+    maxTokens,
     // Returns { back, notes } or { error }.
     async enrich(front, language) {
       if (!enabled) return { error: "not-configured" };

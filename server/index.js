@@ -110,12 +110,18 @@ const importer = process.env.ECHODECK_IMPORT_DISABLED === "1"
   ? { enabled: false }
   : createImporter({ apiKey: process.env.SUPADATA_API_KEY });
 
-const app = createApp({ store, uploadsDir: UPLOADS_DIR, reminders, billing, mailer, enrich, transcribe, importer, push, ownerEmails });
+const app = createApp({
+  store, uploadsDir: UPLOADS_DIR, reminders, billing, mailer, enrich, transcribe, importer, push, ownerEmails,
+  // Cost backstop: max AI card fills per workspace per day (default 300).
+  aiLimits: { perWorkspacePerDay: Number(process.env.ECHODECK_AI_DAILY_LIMIT) || undefined },
+});
 
 const server = app.listen(PORT, () => {
   console.log(`EchoDeck running on http://localhost:${PORT}`);
   console.log(billing.enabled ? "Stripe billing enabled." : "Billing in dev mode (no Stripe keys).");
-  console.log(enrich.enabled ? `AI card fill enabled (model: ${enrich.model}).` : "AI card fill disabled (no ANTHROPIC_API_KEY).");
+  console.log(enrich.enabled
+    ? `AI card fill enabled (model: ${enrich.model}, max ${enrich.maxTokens} tokens/call, ${Number(process.env.ECHODECK_AI_DAILY_LIMIT) || 300} fills/workspace/day).`
+    : "AI card fill disabled (no ANTHROPIC_API_KEY).");
   console.log(transcribe.enabled ? "Auto-transcription enabled." : "Auto-transcription disabled (no TRANSCRIBE_WEBHOOK_URL).");
   console.log(importer.enabled ? `URL / YouTube import enabled${process.env.SUPADATA_API_KEY ? " (Supadata transcript API)" : " (free best-effort)"}.` : "URL / YouTube import disabled (ECHODECK_IMPORT_DISABLED).");
   console.log(push.enabled ? "Web Push enabled." : "Web Push disabled (no VAPID keys).");

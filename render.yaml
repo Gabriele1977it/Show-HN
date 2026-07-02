@@ -52,10 +52,18 @@ services:
       # ...or point EMAIL_WEBHOOK_URL at your own relay instead.
       - key: EMAIL_WEBHOOK_URL
         sync: false
-      # AI card fill (Claude) — optional.
+      # AI card fill (Claude) — optional. Model defaults to the budget tier;
+      # ANTHROPIC_MODEL is an alias for ECHODECK_LLM_MODEL. The token cap and
+      # daily per-workspace fill limit keep API spend bounded.
       - key: ANTHROPIC_API_KEY
         sync: false
       - key: ECHODECK_LLM_MODEL
+        sync: false
+      - key: ANTHROPIC_MODEL
+        sync: false
+      - key: ECHODECK_LLM_MAX_TOKENS
+        sync: false
+      - key: ECHODECK_AI_DAILY_LIMIT
         sync: false
       # Auto-transcription (Whisper/Deepgram/etc. relay) — optional.
       - key: TRANSCRIBE_WEBHOOK_URL
