@@ -310,3 +310,8 @@ body.readonly #ai-fill-btn, body.readonly .scard .ai { display: none !important;
 .yt-dock.hidden { display: none; }
 .yt-dock iframe { width: 100%; height: 100%; border: 0; display: block; }
 @media (max-width: 700px) { .yt-dock { position: static; max-width: 100%; } }
+
+/* --- build-form video preview (attached YouTube video) --- */
+.yt-preview { margin-top: 8px; max-width: 320px; aspect-ratio: 16 / 9; border-radius: 10px; overflow: hidden; border: 1px solid var(--line); background: #000; }
+.yt-preview.hidden { display: none; }
+.yt-preview iframe { width: 100%; height: 100%; border: 0; display: block; }
