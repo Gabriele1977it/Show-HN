@@ -10,6 +10,7 @@ import { dirname, join, extname } from "node:path";
 import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { nanoid } from "nanoid";
 import { segmentTranscript } from "./segment.js";
+import { suggestCloze, applyCloze } from "./cloze.js";
 import { scoreAttempt } from "./pronounce.js";
 import { deliverToWorkspace } from "./push.js";
 import { exportDeck } from "./exporters.js";
@@ -60,6 +61,9 @@ export function createApp({ store, uploadsDir, reminders, billing, mailer, enric
   app.use(securityHeaders);
   // Throttle auth endpoints to blunt credential stuffing / signup spam.
   const authLimiter = rateLimit(createRateLimiter(rateLimits.auth ?? { windowMs: 15 * 60 * 1000, max: 40 }));
+  // The public no-signup demo runs without a workspace key, so throttle it per
+  // IP to keep it from being used as free, unauthenticated compute.
+  const demoLimiter = rateLimit(createRateLimiter(rateLimits.demo ?? { windowMs: 15 * 60 * 1000, max: 60 }));
   // Owner allowlist: these accounts get the top (Team) plan automatically.
   const isOwner = (email) => Boolean(email) && ownerEmails.has(String(email).toLowerCase());
   const compOwnerWorkspaces = (userId) => {
@@ -91,6 +95,8 @@ export function createApp({ store, uploadsDir, reminders, billing, mailer, enric
   app.use("/api", (req, res, next) => {
     if (req.method === "POST" && req.path === "/workspaces") return next();
     if (req.path.startsWith("/shared/")) return next();
+    // The no-signup demo (build cards / score a shadow attempt) is public.
+    if (req.path.startsWith("/demo/")) return next();
     // The marketplace catalog is public (browse without a key); installing a
     // listed deck is a POST and still requires a workspace key.
     if (req.method === "GET" && req.path.startsWith("/marketplace")) return next();
@@ -312,6 +318,38 @@ export function createApp({ store, uploadsDir, reminders, billing, mailer, enric
     res.json(result);
   });
 
+  // --- no-signup demo --------------------------------------------------
+  // Turn a pasted transcript into cards (with suggested cloze blanks) without
+  // an account or any persistence — this is the "try it before you sign up"
+  // widget on the marketing site. Reuses the exact segmentation + cloze engine
+  // the real app uses, so what a visitor sees is genuine, not a mock. Inputs
+  // are capped so the endpoint can't be abused as unbounded free compute.
+  const DEMO_MAX_INPUT = 20000;   // characters of transcript accepted
+  const DEMO_MAX_CARDS = 12;      // cards returned (the "aha", not the whole app)
+  app.post("/api/demo/build", demoLimiter, (req, res) => {
+    const transcript = String(req.body?.transcript ?? "");
+    if (!transcript.trim()) return res.status(400).json({ error: "Paste some text, subtitles, or a transcript to build cards from." });
+    if (transcript.length > DEMO_MAX_INPUT) {
+      return res.status(413).json({ error: `That's a lot of text for the demo — try up to ${DEMO_MAX_INPUT.toLocaleString()} characters, or sign up free to build the full deck.` });
+    }
+    const maxChars = Number(req.body?.maxChars) || undefined;
+    const all = segmentTranscript(transcript, { maxChars });
+    const segments = all.slice(0, DEMO_MAX_CARDS).map((seg) => {
+      const term = suggestCloze(seg.text);
+      const cloze = term ? applyCloze(seg.text, term) : null;
+      return { text: seg.text, start: seg.start, end: seg.end, cloze };
+    });
+    res.json({ segments, total: all.length, truncated: all.length > segments.length });
+  });
+
+  // Score a shadowing attempt in the demo (target text vs. what the browser
+  // heard). Same pure scorer the app uses; no card / workspace involved.
+  app.post("/api/demo/score", demoLimiter, (req, res) => {
+    const target = String(req.body?.target ?? "");
+    if (!target.trim()) return res.status(400).json({ error: "Missing target text." });
+    res.json(scoreAttempt(target, String(req.body?.heard ?? "")));
+  });
+
   // --- decks -----------------------------------------------------------
   app.post("/api/decks", (req, res) => {
     const { title, language, audioUrl, transcript, maxChars } = req.body ?? {};
@@ -509,7 +547,7 @@ export function createApp({ store, uploadsDir, reminders, billing, mailer, enric
   });
   app.get("/sitemap.xml", (req, res) => {
     const origin = `${req.protocol}://${req.get("host")}`;
-    const urls = [`${origin}/`, `${origin}/marketplace`];
+    const urls = [`${origin}/`, `${origin}/demo`, `${origin}/marketplace`];
     for (const d of store.listMarketplace({ limit: 5000 })) urls.push(`${origin}/s/${d.shareId}`);
     const body = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${
       urls.map((u) => `  <url><loc>${escapeHtml(u)}</loc></url>`).join("\n")
@@ -642,6 +680,7 @@ export function createApp({ store, uploadsDir, reminders, billing, mailer, enric
   // Marketing landing page at the root; the app itself lives at /app.
   app.get("/", (_req, res) => res.sendFile(join(PUBLIC_DIR, "landing.html")));
   app.get("/app", (_req, res) => res.sendFile(join(PUBLIC_DIR, "index.html")));
+  app.get("/demo", (_req, res) => res.sendFile(join(PUBLIC_DIR, "demo.html")));
   app.get("/marketplace", (_req, res) => res.sendFile(join(PUBLIC_DIR, "marketplace.html")));
   app.get("/terms", (_req, res) => res.sendFile(join(PUBLIC_DIR, "terms.html")));
   app.get("/privacy", (_req, res) => res.sendFile(join(PUBLIC_DIR, "privacy.html")));

@@ -947,3 +947,73 @@ test("push test is gated on the Free plan; subscriptions are workspace-scoped", 
   // ...but the test-send (like reminders) is a paid feature.
   assert.equal((await realFetch(`${base}/api/push/test`, { method: "POST", headers: hdr, body: "{}" })).status, 402);
 });
+
+// --- no-signup demo --------------------------------------------------------
+
+test("demo build works without any workspace key and never persists", async () => {
+  // realFetch = no auto-injected Authorization header, proving it's public.
+  const r = await realFetch(`${base}/api/demo/build`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ transcript: "[00:00] Hola mundo bonito.\n[00:04] Buenos dias a todos." }),
+  });
+  assert.equal(r.status, 200);
+  const data = await r.json();
+  assert.equal(data.segments.length, 2);
+  // Timestamps are parsed through the real segmenter.
+  assert.equal(data.segments[0].start, 0);
+  // A cloze blank is suggested for a spaced sentence (longest word masked).
+  assert.ok(data.segments[0].cloze);
+  assert.match(data.segments[0].cloze.masked, /＿＿＿/);
+  assert.ok(data.segments[0].text.includes(data.segments[0].cloze.answer));
+});
+
+test("demo build caps the number of returned cards and reports truncation", async () => {
+  const lines = Array.from({ length: 30 }, (_, i) => `Sentence number ${i} here.`).join(" ");
+  const data = await realFetch(`${base}/api/demo/build`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ transcript: lines, maxChars: 30 }),
+  }).then(j);
+  assert.equal(data.segments.length, 12);
+  assert.ok(data.total > 12);
+  assert.equal(data.truncated, true);
+});
+
+test("demo build rejects empty and oversized input", async () => {
+  const empty = await realFetch(`${base}/api/demo/build`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ transcript: "   " }),
+  });
+  assert.equal(empty.status, 400);
+  const huge = await realFetch(`${base}/api/demo/build`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ transcript: "x".repeat(20001) }),
+  });
+  assert.equal(huge.status, 413);
+});
+
+test("demo score returns word-level accuracy without a card or key", async () => {
+  const data = await realFetch(`${base}/api/demo/score`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ target: "the quick brown fox", heard: "the quick fox" }),
+  }).then(j);
+  assert.equal(data.total, 4);
+  assert.equal(data.matched, 3);
+  assert.equal(data.score, 75);
+  assert.ok(["again", "hard", "good", "easy"].includes(data.suggestedGrade));
+  const missing = await realFetch(`${base}/api/demo/score`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ heard: "x" }),
+  });
+  assert.equal(missing.status, 400);
+});
+
+test("/demo page is served", async () => {
+  const r = await realFetch(`${base}/demo`);
+  assert.equal(r.status, 200);
+  const html = await r.text();
+  assert.match(html, /no signup/i);
+  assert.match(html, /demo\.js/);
+});
+
+test("sitemap includes the demo page", async () => {
+  const xml = await realFetch(`${base}/sitemap.xml`).then((r) => r.text());
+  assert.match(xml, /\/demo</);
+});
