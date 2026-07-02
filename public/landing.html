@@ -13,6 +13,7 @@
     <meta name="twitter:title" content="EchoDeck — native audio into flashcards & shadowing" />
     <meta name="twitter:description" content="Auto-transcribe, shadow & score, AI card backs, spaced repetition — and a deck marketplace." />
     <meta name="twitter:image" content="/og.svg" />
+    <link rel="icon" href="/icon.svg" />
     <link rel="stylesheet" href="/styles.css" />
     <style>
       .lp-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 28px; max-width: 1120px; margin: 0 auto; }
@@ -125,7 +126,13 @@
     <div class="pricing-wrap">
       <section class="section" id="pricing">
         <h2 class="title">Simple, honest pricing</h2>
-        <p class="lede">Start free. Upgrade when you're ready — cancel anytime. Prices in USD, billed monthly; AI card-fill is subject to fair-use limits.</p>
+        <p class="lede">Start free. Upgrade when you're ready — cancel anytime. Prices in USD; AI card-fill is subject to fair-use limits.</p>
+        <div style="text-align:center;margin-bottom:26px">
+          <div class="billing-toggle" role="group" aria-label="Billing interval">
+            <button type="button" id="lp-bill-month" class="is-active" data-interval="month">Monthly</button>
+            <button type="button" id="lp-bill-year" data-interval="year">Annual <span class="save-badge" id="lp-bill-save"></span></button>
+          </div>
+        </div>
         <div class="pricing-grid" id="lp-pricing"></div>
       </section>
     </div>
