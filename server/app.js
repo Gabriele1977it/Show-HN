@@ -56,7 +56,7 @@ function sendExport(res, deck, cards, format) {
   res.send(body);
 }
 
-export function createApp({ store, uploadsDir, reminders, billing, mailer, enrich, transcribe, importer, push, ownerEmails = new Set(), rateLimits = {} }) {
+export function createApp({ store, uploadsDir, reminders, billing, mailer, enrich, transcribe, importer, push, ownerEmails = new Set(), rateLimits = {}, aiLimits = {} }) {
   const app = express();
   app.set("trust proxy", 1); // behind a host's load balancer; lets req.ip work
   app.use(securityHeaders);
@@ -67,6 +67,20 @@ export function createApp({ store, uploadsDir, reminders, billing, mailer, enric
   const demoLimiter = rateLimit(createRateLimiter(rateLimits.demo ?? { windowMs: 15 * 60 * 1000, max: 60 }));
   // URL/YouTube import makes an outbound fetch per call, so throttle it per IP.
   const importLimiter = rateLimit(createRateLimiter(rateLimits.import ?? { windowMs: 15 * 60 * 1000, max: 30 }));
+  // Per-workspace daily cap on AI card fills — the hard backstop behind the
+  // pricing page's "fair-use limits" line, so no single workspace can run up
+  // the operator's Anthropic bill. In-memory (single-process deployment).
+  const aiDailyLimit = aiLimits.perWorkspacePerDay ?? 300;
+  const aiUsage = new Map();
+  function takeAiQuota(ws, n = 1) {
+    const day = new Date().toISOString().slice(0, 10);
+    const key = `${ws}:${day}`;
+    if (aiUsage.size > 5000) { for (const k of aiUsage.keys()) if (!k.endsWith(day)) aiUsage.delete(k); }
+    const used = aiUsage.get(key) ?? 0;
+    if (used + n > aiDailyLimit) return { ok: false, remaining: Math.max(0, aiDailyLimit - used) };
+    aiUsage.set(key, used + n);
+    return { ok: true, remaining: aiDailyLimit - used - n };
+  }
   // Owner allowlist: these accounts get the top (Team) plan automatically.
   const isOwner = (email) => Boolean(email) && ownerEmails.has(String(email).toLowerCase());
   const compOwnerWorkspaces = (userId) => {
@@ -708,6 +722,9 @@ export function createApp({ store, uploadsDir, reminders, billing, mailer, enric
     if (!enrich?.enabled) return res.status(503).json({ error: "AI fill isn't configured on this server." });
     const card = store.getCard(req.params.id, req.ws);
     if (!card) return res.status(404).json({ error: "Card not found" });
+    if (!takeAiQuota(req.ws).ok) {
+      return res.status(429).json({ error: "This workspace has reached today's AI-fill limit — it resets tomorrow." });
+    }
     const overwrite = req.body?.overwrite === true;
     const deck = store.getDeck(card.deckId, req.ws);
     let result;
@@ -731,6 +748,10 @@ export function createApp({ store, uploadsDir, reminders, billing, mailer, enric
     const deck = store.getDeck(req.params.id, req.ws);
     if (!deck) return res.status(404).json({ error: "Deck not found" });
     const targets = deck.cards.filter((c) => !c.back).slice(0, 40);
+    const quota = takeAiQuota(req.ws, targets.length);
+    if (!quota.ok) {
+      return res.status(429).json({ error: `This would exceed today's AI-fill limit (${quota.remaining} fill${quota.remaining === 1 ? "" : "s"} left) — try again tomorrow.` });
+    }
     let updated = 0;
     for (const c of targets) {
       let result;
