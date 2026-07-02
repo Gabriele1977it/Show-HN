@@ -127,6 +127,17 @@ export function captionTracksFromPlayer(player) {
   return { tracks: Array.isArray(tracks) ? tracks : [], title: player?.videoDetails?.title || null };
 }
 
+/** Supadata transcript response → `[mm:ss] text` lines (content items carry offset in ms). */
+export function supadataToTranscript(data) {
+  const items = Array.isArray(data?.content) ? data.content : [];
+  const lines = [];
+  for (const it of items) {
+    const text = String(it?.text ?? "").replace(/\s+/g, " ").trim();
+    if (text) lines.push(`${stamp((Number(it.offset) || 0) / 1000)} ${text}`);
+  }
+  return lines.join("\n");
+}
+
 /** Choose a caption track: prefer the requested language, then a human (non-asr) track. */
 export function pickTrack(tracks, lang) {
   if (!tracks.length) return null;
@@ -134,7 +145,7 @@ export function pickTrack(tracks, lang) {
   return byLang || tracks.find((t) => t.kind !== "asr") || tracks[0];
 }
 
-export function createImporter({ fetchImpl = fetch, maxBytes = 3_000_000, timeoutMs = 15000 } = {}) {
+export function createImporter({ fetchImpl = fetch, maxBytes = 3_000_000, timeoutMs = 15000, apiKey } = {}) {
   const enabled = true; // needs only outbound network, which production has
 
   async function fetchRes(url, opts = {}) {
@@ -170,7 +181,35 @@ export function createImporter({ fetchImpl = fetch, maxBytes = 3_000_000, timeou
     return res.json();
   }
 
-  async function importYouTube(id, lang) {
+  // Fetch a video's title without scraping (oembed is public + server-friendly).
+  async function ytTitle(url) {
+    try {
+      const res = await fetchRes(`https://www.youtube.com/oembed?format=json&url=${encodeURIComponent(url)}`);
+      return (await res.json())?.title || null;
+    } catch { return null; }
+  }
+
+  // Supadata transcript API — reliable from any IP (the reason to configure a
+  // key). Takes the YouTube URL directly and returns timestamped segments.
+  async function fetchViaSupadata(youtubeUrl, id, lang) {
+    const u = new URL("https://api.supadata.ai/v1/youtube/transcript");
+    u.searchParams.set("url", youtubeUrl);
+    if (lang) u.searchParams.set("lang", lang);
+    const res = await fetchRes(u.href, { headers: { "x-api-key": apiKey } });
+    const data = await res.json();
+    const transcript = supadataToTranscript(data);
+    if (!transcript.trim()) return { error: "no-captions" };
+    return { source: "youtube", title: (await ytTitle(youtubeUrl)) || `YouTube ${id}`, language: data.lang || lang || null, transcript };
+  }
+
+  async function importYouTube(id, lang, url) {
+    // When a transcript API key is configured, use it exclusively — it's the
+    // reliable path and the reason the operator paid for it. Errors surface
+    // clearly (bad key / quota / no transcript) rather than silently degrading.
+    if (apiKey) {
+      try { return await fetchViaSupadata(url || `https://youtu.be/${id}`, id, lang); }
+      catch (e) { return { error: "api-failed", message: `Transcript service error: ${e.message}` }; }
+    }
     let tracks = [], title = null, reached = false;
     // 1) Try the player API first (JSON, robust).
     try {
@@ -240,7 +279,7 @@ export function createImporter({ fetchImpl = fetch, maxBytes = 3_000_000, timeou
       try { u = guardUrl(rawUrl); } catch (e) { return { error: "blocked", message: e.message }; }
       try {
         const ytId = parseYouTubeId(u.href);
-        return ytId ? await importYouTube(ytId, lang) : await importDirect(u);
+        return ytId ? await importYouTube(ytId, lang, u.href) : await importDirect(u);
       } catch (e) {
         return { error: "fetch-failed", message: e.message };
       }

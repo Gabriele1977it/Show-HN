@@ -60,6 +60,10 @@ services:
       # Auto-transcription (Whisper/Deepgram/etc. relay) — optional.
       - key: TRANSCRIBE_WEBHOOK_URL
         sync: false
+      # YouTube transcript API (Supadata) — optional; makes YouTube import
+      # reliable from the server. Free best-effort scrape is used if unset.
+      - key: SUPADATA_API_KEY
+        sync: false
       # Web Push (npx web-push generate-vapid-keys) — optional.
       - key: VAPID_PUBLIC_KEY
         sync: false
