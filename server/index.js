@@ -88,8 +88,13 @@ const ownerEmails = new Set(
     .filter(Boolean),
 );
 
-// Email: POST to EMAIL_WEBHOOK_URL when set (provider relay), else log (dev).
-const mailer = createMailer({ webhookUrl: process.env.EMAIL_WEBHOOK_URL });
+// Email: Resend (RESEND_API_KEY + EMAIL_FROM) or a webhook relay
+// (EMAIL_WEBHOOK_URL); with neither set it logs (dev).
+const mailer = createMailer({
+  apiKey: process.env.RESEND_API_KEY,
+  from: process.env.EMAIL_FROM,
+  webhookUrl: process.env.EMAIL_WEBHOOK_URL,
+});
 
 // AI card-back fill: enabled when an Anthropic API key is present. Model is
 // configurable via ECHODECK_LLM_MODEL.
@@ -112,6 +117,7 @@ const server = app.listen(PORT, () => {
   console.log(transcribe.enabled ? "Auto-transcription enabled." : "Auto-transcription disabled (no TRANSCRIBE_WEBHOOK_URL).");
   console.log(importer.enabled ? "URL / YouTube import enabled." : "URL / YouTube import disabled (ECHODECK_IMPORT_DISABLED).");
   console.log(push.enabled ? "Web Push enabled." : "Web Push disabled (no VAPID keys).");
+  console.log(mailer.enabled ? `Email enabled (${mailer.mode}).` : "Email in dev mode (logs only — set RESEND_API_KEY + EMAIL_FROM to send).");
   // Background polling only runs when explicitly enabled.
   if (process.env.REMINDER_ENABLED === "1" || process.env.REMINDER_ENABLED === "true") {
     reminders.start();
