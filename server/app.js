@@ -12,6 +12,7 @@ import { nanoid } from "nanoid";
 import { segmentTranscript } from "./segment.js";
 import { suggestCloze, applyCloze } from "./cloze.js";
 import { LANGUAGES, getLanguage, renderLearnPage, renderLearnIndex } from "./seo-pages.js";
+import { listStarters, getStarter } from "./starters.js";
 import { scoreAttempt } from "./pronounce.js";
 import { deliverToWorkspace } from "./push.js";
 import { exportDeck } from "./exporters.js";
@@ -117,6 +118,8 @@ export function createApp({ store, uploadsDir, reminders, billing, mailer, enric
     // The marketplace catalog is public (browse without a key); installing a
     // listed deck is a POST and still requires a workspace key.
     if (req.method === "GET" && req.path.startsWith("/marketplace")) return next();
+    // The bundled starter catalog is public too (shown on the marketing pages).
+    if (req.method === "GET" && req.path.startsWith("/starters")) return next();
     if (req.path.startsWith("/auth/") || req.path.startsWith("/account")) return next();
     if (req.path === "/billing/webhook" || req.path === "/plans") return next();
     const key = (req.get("authorization") || "").replace(/^Bearer\s+/i, "").trim();
@@ -659,6 +662,28 @@ export function createApp({ store, uploadsDir, reminders, billing, mailer, enric
   app.get("/api/marketplace", (req, res) => {
     const limit = Math.min(Number(req.query.limit) || 60, 200);
     res.json(store.listMarketplace({ q: req.query.q ?? "", language: req.query.language ?? "", limit }));
+  });
+
+  // Bundled starter decks: quality content that ships with the app so the
+  // catalog is never empty. Browsing is public; installing clones the starter
+  // into the caller's workspace via the normal deck/card primitives (so plan
+  // limits and SRS behave exactly like any other deck).
+  app.get("/api/starters", (_req, res) => res.json(listStarters()));
+
+  app.post("/api/starters/:id/install", (req, res) => {
+    const starter = getStarter(req.params.id);
+    if (!starter) return res.status(404).json({ error: "Starter deck not found" });
+    const use = store.workspaceUsage(req.ws);
+    if (!canAdd(planOf(req), "decks", use.decks)) {
+      return upgrade(res, `You've reached the deck limit on the Free plan. Upgrade for unlimited decks.`);
+    }
+    if (!canAdd(planOf(req), "cards", use.cards, starter.cards.length)) {
+      return upgrade(res, `Installing this deck would exceed your card limit. Upgrade for unlimited cards.`);
+    }
+    const deck = store.createDeck(req.ws, { title: starter.title, language: starter.language });
+    const cards = store.addCards(deck.id, starter.cards.map((c) => ({ text: c.front, start: null, end: null })), req.ws);
+    cards.forEach((card, i) => store.updateCard(card.id, { back: starter.cards[i].back, notes: starter.cards[i].notes }, req.ws));
+    res.status(201).json({ deckId: deck.id, title: starter.title, cards: cards.length });
   });
 
   // Install (clone) a listed deck into the caller's workspace. Subject to the
