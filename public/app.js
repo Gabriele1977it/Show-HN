@@ -1311,7 +1311,14 @@ $("#acct-logout").addEventListener("click", async () => {
   await acctJson("/api/auth/logout", { method: "POST" }).catch(() => {});
   sessionToken = "";
   localStorage.removeItem(SESSION);
-  renderSignedOut();
+  // Signing out must also drop workspace access on this device: the member key
+  // grants full data access without a password, so leaving it behind would let
+  // the next person on this browser read every deck. Logging back in restores
+  // the keys from the account's keychain.
+  wsKey = "";
+  localStorage.removeItem(WS_KEY);
+  localStorage.removeItem(WS_NAME);
+  location.reload();
 });
 
 async function authSubmit(url) {
