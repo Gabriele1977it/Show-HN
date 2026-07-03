@@ -2,6 +2,11 @@
 import { onboardingSteps, onboardingProgress, nextStep } from "./onboarding.js";
 import { parseYouTubeRef, createYouTubeLoop, embedUrl } from "./yt-player.js";
 import { bcp47, isoOf, nameOf } from "./lang.js";
+import { createSpeaker } from "./tts.js";
+
+// Browser TTS: gives audio-less cards (pasted text, starter decks) a
+// listen-and-shadow option. No-op when the browser lacks speech synthesis.
+const speaker = createSpeaker();
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
@@ -450,7 +455,7 @@ function renderCard(card, idx) {
     <input class="back-input" placeholder="Translation / meaning (back of card)" value="${esc(card.back)}" />
     <div class="card-notes ${card.notes ? "" : "hidden"}">${esc(card.notes || "")}</div>
     <div class="tools">
-      ${hasAudio ? '<button class="play">▶ Shadow loop</button>' : ""}
+      ${hasAudio ? '<button class="play">▶ Shadow loop</button>' : speaker.available ? '<button class="play speak" title="Hear this sentence with your browser\'s voice">🔊 Speak</button>' : ""}
       <button class="save ghost">Save back</button>
       ${enrichConfigured ? '<button class="ai ghost" title="Fill translation + notes with AI">✨ AI fill</button>' : ""}
     </div>`;
@@ -490,6 +495,7 @@ function renderCard(card, idx) {
     el.replaceWith(renderCard(card, idx));
   });
   if (hasAudio) $(".play", el).addEventListener("click", () => playLoop(card.start, card.end));
+  else $(".speak", el)?.addEventListener("click", () => speaker.speak(card.front, { lang: bcp47(state.deck?.language) || undefined }));
   return el;
 }
 
@@ -724,6 +730,10 @@ $("#rev-play").addEventListener("click", () => {
   const c = review.queue[review.idx];
   if (c) playLoop(c.start, c.end, Number($("#rev-speed").value));
 });
+$("#rev-speak").addEventListener("click", () => {
+  const c = review.queue[review.idx];
+  if (c) speaker.speak(c.front, { lang: bcp47(state.deck?.language) || undefined, rate: Number($("#rev-speed").value) });
+});
 
 // ---- pronunciation scoring (record yourself shadowing) ----
 // Uses the browser's Web Speech API for on-device transcription (no server
@@ -802,10 +812,13 @@ function showCard() {
   $("#review-back").classList.add("hidden");
   $("#grade-buttons").classList.add("hidden");
   $("#show-answer").classList.remove("hidden");
-  // Shadowing controls: the loop needs audio+timing, but record-and-score works
-  // for any card, so show the panel whenever recognition is available.
-  $("#review-shadow").classList.toggle("hidden", !(state.deck.audioUrl && c.start != null) && !SpeechRec);
-  $("#rev-play").classList.toggle("hidden", !(state.deck.audioUrl && c.start != null));
+  // Shadowing controls: the loop needs audio+timing; TTS covers cards without
+  // either; record-and-score works for any card.
+  const hasLoop = Boolean(state.deck.audioUrl && c.start != null);
+  $("#review-shadow").classList.toggle("hidden", !hasLoop && !SpeechRec && !speaker.available);
+  $("#rev-play").classList.toggle("hidden", !hasLoop);
+  $("#rev-speak").classList.toggle("hidden", hasLoop || !speaker.available);
+  speaker.stop(); // a new card cuts off the previous card's speech
   resetPronounce();
 }
 function showAnswer() {
@@ -842,6 +855,7 @@ async function gradeCard(grade) {
 }
 function closeReview(done) {
   if (loopStop) loopStop();
+  speaker.stop();
   $("#review-overlay").classList.add("hidden");
   if (done) renderDeck();
 }
