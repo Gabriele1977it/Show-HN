@@ -321,3 +321,6 @@ body.readonly #ai-fill-btn, body.readonly .scard .ai { display: none !important;
 .import-langs:empty { display: none; }
 .lang-chip { font-size: 12.5px; border: 1px solid var(--accent); background: var(--accent-weak); color: var(--accent); border-radius: 999px; padding: 4px 12px; cursor: pointer; font-weight: 600; }
 .lang-chip:hover { background: var(--accent); color: #fff; }
+
+/* --- starter deck badge --- */
+.starter-badge { font-size: 11px; font-weight: 700; color: var(--accent); background: var(--accent-weak); border: 1px solid #e0e3ff; border-radius: 999px; padding: 2px 8px; margin-right: 4px; }

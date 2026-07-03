@@ -1166,3 +1166,55 @@ test("sitemap lists the language pages", async () => {
   assert.match(xml, /\/learn\/spanish</);
   assert.match(xml, /\/learn\/korean</);
 });
+
+// --- bundled starter decks ---------------------------------------------------
+
+test("starter catalog is public and lists every language pack", async () => {
+  const r = await realFetch(`${base}/api/starters`);
+  assert.equal(r.status, 200);
+  const starters = await r.json();
+  assert.ok(starters.length >= 8, "ships with at least 8 starter decks");
+  for (const s of starters) {
+    assert.ok(s.id && s.title && s.language && s.description);
+    assert.ok(s.cardCount >= 8, `${s.id} has a real amount of content`);
+    assert.equal(s.starter, true);
+    assert.equal(s.cards, undefined, "catalog view must not ship card bodies");
+  }
+});
+
+test("installing a starter clones it with backs + notes into the workspace", async () => {
+  const starters = await fetch(`${base}/api/starters`).then(j);
+  const pick = starters.find((s) => s.language === "Spanish");
+  const r = await fetch(`${base}/api/starters/${pick.id}/install`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+  assert.equal(r.status, 201);
+  const res = await r.json();
+  assert.equal(res.cards, pick.cardCount);
+  const deck = await fetch(`${base}/api/decks/${res.deckId}`).then(j);
+  assert.equal(deck.title, pick.title);
+  assert.equal(deck.language, "Spanish");
+  assert.equal(deck.cards.length, pick.cardCount);
+  // Cards arrive ready to study: front, back and a note.
+  assert.ok(deck.cards.every((c) => c.front && c.back && c.notes));
+  // And they're due for review like any new card.
+  const due = await fetch(`${base}/api/decks/${res.deckId}/due`).then(j);
+  assert.equal(due.length, pick.cardCount);
+});
+
+test("starter install respects plan limits and 404s unknown ids", async () => {
+  assert.equal((await fetch(`${base}/api/starters/nope/install`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" })).status, 404);
+  // A Free workspace can install up to its 3-deck limit, then gets a 402.
+  const ws = await realFetch(`${base}/api/workspaces`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: "Starter Free" }),
+  }).then(j);
+  const hdr = { Authorization: `Bearer ${ws.key}`, "Content-Type": "application/json" };
+  const starters = await realFetch(`${base}/api/starters`).then(j);
+  for (let i = 0; i < 3; i++) {
+    const r = await realFetch(`${base}/api/starters/${starters[i].id}/install`, { method: "POST", headers: hdr, body: "{}" });
+    assert.equal(r.status, 201, `install ${i + 1} within the Free limit`);
+  }
+  const blocked = await realFetch(`${base}/api/starters/${starters[3].id}/install`, { method: "POST", headers: hdr, body: "{}" });
+  assert.equal(blocked.status, 402);
+  assert.equal((await blocked.json()).upgrade, true);
+  // Anonymous callers can't install.
+  assert.equal((await realFetch(`${base}/api/starters/${starters[0].id}/install`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" })).status, 401);
+});

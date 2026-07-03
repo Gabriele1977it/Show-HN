@@ -630,16 +630,20 @@ let discoverTimer = null;
 $("#disc-q").addEventListener("input", () => { clearTimeout(discoverTimer); discoverTimer = setTimeout(renderDiscover, 150); });
 $("#disc-lang").addEventListener("change", renderDiscover);
 
+let startersAll = [];
 async function loadMarketplace() {
   const status = $("#disc-status");
   status.style.display = "block";
   status.textContent = "Loading decks…";
   try {
-    discoverAll = await api.get("/api/marketplace?limit=200");
+    [startersAll, discoverAll] = await Promise.all([
+      api.get("/api/starters").catch(() => []),
+      api.get("/api/marketplace?limit=200"),
+    ]);
   } catch { status.textContent = "Couldn't load the marketplace."; return; }
   const sel = $("#disc-lang");
   const chosen = sel.value;
-  const langs = [...new Set(discoverAll.map((d) => d.language).filter(Boolean))].sort();
+  const langs = [...new Set([...startersAll, ...discoverAll].map((d) => d.language).filter(Boolean))].sort();
   sel.innerHTML = `<option value="">All languages</option>` + langs.map((l) => `<option value="${esc(l)}">${esc(l)}</option>`).join("");
   sel.value = langs.includes(chosen) ? chosen : "";
   renderDiscover();
@@ -648,15 +652,17 @@ async function loadMarketplace() {
 function renderDiscover() {
   const q = $("#disc-q").value.trim().toLowerCase();
   const lang = $("#disc-lang").value;
-  const list = discoverAll.filter((d) =>
+  const match = (d) =>
     (!lang || (d.language || "") === lang) &&
-    (!q || `${d.title} ${d.description || ""} ${d.language || ""}`.toLowerCase().includes(q)));
+    (!q || `${d.title} ${d.description || ""} ${d.language || ""}`.toLowerCase().includes(q));
+  // Starters lead the grid so a fresh catalog never looks empty.
+  const list = [...startersAll.filter(match), ...discoverAll.filter(match)];
   const grid = $("#disc-grid");
   const status = $("#disc-status");
   grid.innerHTML = "";
   if (!list.length) {
     status.style.display = "block";
-    status.textContent = discoverAll.length ? "No decks match your search." : "No decks published yet — list one of yours to seed it.";
+    status.textContent = "No decks match your search.";
     return;
   }
   status.style.display = "none";
@@ -665,7 +671,7 @@ function renderDiscover() {
     el.className = "mkt-card";
     el.innerHTML = `
       <h3>${esc(d.title)}</h3>
-      <div class="creator">by ${esc(d.creator)}</div>
+      <div class="creator">${d.starter ? '<span class="starter-badge">★ Starter</span> by EchoDeck' : `by ${esc(d.creator)}`}</div>
       <div class="desc">${esc(d.description || "No description provided.")}</div>
       <div class="mkt-meta">
         <span class="deck-chip">${esc(d.language || "—")}</span>
@@ -674,11 +680,25 @@ function renderDiscover() {
       </div>
       <div class="cta">
         <button class="primary install">Add to my decks</button>
-        <a class="ghost" style="text-decoration:none" href="/s/${encodeURIComponent(d.shareId)}" target="_blank" rel="noopener">Preview ↗</a>
+        ${d.starter ? "" : `<a class="ghost" style="text-decoration:none" href="/s/${encodeURIComponent(d.shareId)}" target="_blank" rel="noopener">Preview ↗</a>`}
       </div>`;
     const btn = $(".install", el);
-    btn.addEventListener("click", () => installListing(d.shareId, btn));
+    if (d.starter) btn.addEventListener("click", () => installStarter(d.id, btn));
+    else btn.addEventListener("click", () => installListing(d.shareId, btn));
     grid.appendChild(el);
+  }
+}
+
+async function installStarter(id, btn) {
+  if (btn) { btn.disabled = true; btn.textContent = "Adding…"; }
+  try {
+    const res = await api.post(`/api/starters/${encodeURIComponent(id)}/install`, {});
+    await loadDecks();
+    await openDeck(res.deckId);
+  } catch (err) {
+    if (btn) { btn.disabled = false; btn.textContent = "Add to my decks"; }
+    if (err.upgrade) { showView("pricing"); loadPricing(); }
+    else alert(err.message);
   }
 }
 
@@ -1444,10 +1464,14 @@ $("#push-test").addEventListener("click", async () => {
   initPush();
   // Deep links from the marketing site:
   //  ?install=<shareId> — install a marketplace deck into this workspace.
+  //  ?starter=<id>      — install a bundled starter deck.
   //  ?sample=1          — build a ready-made sample deck (no signup needed).
   if (params.get("install")) {
     history.replaceState(null, "", location.pathname);
     await installListing(params.get("install"), null);
+  } else if (params.get("starter")) {
+    history.replaceState(null, "", location.pathname);
+    await installStarter(params.get("starter"), null);
   } else if (params.get("sample")) {
     history.replaceState(null, "", location.pathname);
     await buildSample();
