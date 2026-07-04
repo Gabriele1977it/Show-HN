@@ -1,139 +1,165 @@
-# SWE-Bench Copilot — Phase 1: Real AI Integration
+# SWE-Bench Copilot (MadlabsUk)
 
-This folder contains the rebuilt backend core for the SWE-Bench Copilot MVP.
-It replaces the 3-second `setTimeout` mock with a real call to Anthropic's
-Claude API. Your UI pages, Clerk auth, `proxy.ts`, and database schema stay
-exactly as they are — **only the three files in `lib/` change.**
+A web app for small software teams adopting AI workflows: paste a GitHub
+issue, a real AI agent (Anthropic Claude) writes the code fix, scores its own
+work, and drops the diff into a review queue where a senior engineer clicks
+**Approve** or **Reject**.
 
----
+This is a **complete rebuild from scratch** — everything from the original
+MVP plus Phase 1 (real AI integration, no more mock timer) already done:
 
-## Review of the current code (why these files were rebuilt)
-
-1. **The mock lived inside `lib/db.ts`.** Mixing AI logic with database code
-   makes both hard to change. The AI workflow now lives in its own file,
-   `lib/agent.ts`, and `lib/db.ts` is pure database code again.
-2. **No error path.** If the AI (or anything else) failed, a task would be
-   stuck on "running" forever. There is now a `failed` status: the task's
-   diff panel shows the human-readable reason.
-3. **Server Actions were unauthenticated.** Server Actions are public HTTP
-   endpoints — anyone on the internet could have inserted tasks into your
-   database without logging in. Both actions now check Clerk's `auth()` first.
-4. **No input validation.** The ingest action now requires a real GitHub
-   issue URL shape, and the status action only accepts known statuses.
-5. **`project_name` was hardcoded to `'Client Repo'`.** It is now derived
-   from the URL (e.g. `vercel/next.js`).
-6. **`ssl: { rejectUnauthorized: false }`** skips certificate verification.
-   Kept for now so nothing breaks, but flagged in a comment — before launch,
-   download Aiven's `ca.pem` and verify properly.
-7. **Model choice:** the handoff suggested Claude 3.5 Sonnet — that model was
-   retired in October 2025. This uses `claude-opus-4-8`, the current
-   most capable Opus model, with adaptive thinking and streaming.
-
-The rest of the architecture (Next.js 16 + Clerk + Aiven Postgres + the
-Kanban/admin UI) is sound. No full rebuild needed.
+- Next.js 16 (App Router, TypeScript, Tailwind CSS v4, `proxy.ts` for middleware)
+- Clerk authentication (login / signup)
+- PostgreSQL (Aiven) via `pg`
+- Anthropic Claude API (`claude-opus-4-8`) writing real diffs
+- Dark-themed landing page, Kanban dashboard, admin ops queue, task detail
+  page with scores + diff + Approve/Reject
+- Auto-refreshing board while the agent works, and a `failed` status with
+  the human-readable reason when something goes wrong
+- `npm run db:setup` creates the database table for you — no SQL to type
 
 ---
 
-## Step 1 — Install the Anthropic SDK
+## Setup from zero (Mac)
 
-In Terminal, inside your project folder:
+You need three free-tier cloud accounts (Aiven, Clerk, Anthropic). Each step
+tells you exactly what to copy where. Total time: ~20 minutes.
+
+### Step 0 — Install Node.js (skip if you already have it)
+
+Check first, in Terminal:
 
 ```bash
-npm install @anthropic-ai/sdk
+node --version
 ```
 
-## Step 2 — Add the API key
+If that prints `v20` or higher you're fine. Otherwise download the LTS
+installer from https://nodejs.org and run it.
+
+### Step 1 — Get this code onto your Mac
 
 ```bash
+cd ~/Documents
+git clone -b claude/swe-bench-copilot-review-lo60tw https://github.com/Gabriele1977it/Show-HN.git
+cd Show-HN/swe-bench-copilot
+```
+
+(Alternative without git: on the GitHub page, pick the
+`claude/swe-bench-copilot-review-lo60tw` branch, press **Code → Download
+ZIP**, unzip, then `cd` into the `swe-bench-copilot` folder inside it.)
+
+### Step 2 — Install the dependencies
+
+```bash
+npm install
+```
+
+### Step 3 — Create your three cloud services
+
+1. **Database (Aiven):** at https://console.aiven.io create a free
+   PostgreSQL service. When it's running, copy the **Service URI** (starts
+   with `postgres://`).
+2. **Login (Clerk):** at https://dashboard.clerk.com create an application
+   (enable Email + Google). Open **API Keys** and keep the page open — you
+   need the *Publishable key* (`pk_test_...`) and *Secret key* (`sk_test_...`).
+3. **AI (Anthropic):** at https://platform.claude.com create an API key
+   (`sk-ant-...`). You'll need a small credit balance ($5 is plenty to start;
+   each task costs a few cents).
+
+### Step 4 — Create your .env.local
+
+```bash
+cp .env.local.example .env.local
 nano .env.local
 ```
 
-Add these lines at the bottom (get the key from https://platform.claude.com → API Keys):
+Paste your real values over the placeholders. Save with `Ctrl+O`, `Enter`,
+exit with `Ctrl+X`.
 
-```env
-ANTHROPIC_API_KEY=sk-ant-...
-# Optional, for higher GitHub rate limits / private repos:
-# GITHUB_TOKEN=ghp_...
-```
-
-Save with `Ctrl+O`, `Enter`, then exit with `Ctrl+X`.
-
-## Step 3 — Create lib/agent.ts (new file)
+### Step 5 — Create the database table
 
 ```bash
-nano lib/agent.ts
+npm run db:setup
 ```
 
-Paste the full contents of [`lib/agent.ts`](lib/agent.ts) from this folder. Save and exit.
+You should see: `✅ Database ready — 'tasks' table exists (0 rows).`
 
-## Step 4 — Replace lib/db.ts
+### Step 6 — Run it
 
 ```bash
-nano lib/db.ts
+npm run dev
 ```
 
-Delete everything (`Ctrl+K` repeatedly, or select-all and delete), paste the
-full contents of [`lib/db.ts`](lib/db.ts) from this folder. Save and exit.
-
-## Step 5 — Replace lib/actions.ts
-
-```bash
-nano lib/actions.ts
-```
-
-Same again — replace with the contents of [`lib/actions.ts`](lib/actions.ts). Save and exit.
-
-## Step 6 — Restart and test
-
-```bash
-npm run dev -- -p 3001
-```
-
-Open http://localhost:3001/dashboard, log in, and submit a real public
-GitHub issue URL, for example:
+Open http://localhost:3001 (port 3001 is already configured because 3000 is
+busy on your machine). Sign up, then on the dashboard paste a real public
+GitHub issue URL, e.g.:
 
 ```
-https://github.com/vercel/next.js/issues/12345
+https://github.com/expressjs/express/issues/5555
 ```
 
-The task appears as **running**, and after roughly 30–90 seconds (real AI
-work, not a timer) it moves to **review** with a genuine diff, the agent's
-notes, and its self-assessed scores. Refresh the page to see the update.
-If anything goes wrong (bad URL, missing API key, GitHub rate limit), the
-task moves to **failed** with the reason shown in the diff panel.
+The card appears under **In Progress** and the board refreshes itself; after
+~30–90 seconds of real AI work it moves to **Needs Review**. Click
+**View diff →** to see the proposed change, the agent's notes, the scores,
+and the Approve / Reject buttons.
 
 ---
 
-## How it works now
+## Project structure
+
+```
+swe-bench-copilot/
+├── proxy.ts                      # Clerk middleware (Next 16 uses proxy.ts)
+├── app/
+│   ├── page.tsx                  # Dark landing page
+│   ├── login/[[...rest]]/        # Clerk <SignIn />
+│   ├── signup/[[...rest]]/       # Clerk <SignUp />
+│   ├── dashboard/page.tsx        # Kanban board + issue ingest form
+│   ├── admin/page.tsx            # Ops queue (all tasks, table view)
+│   └── admin/tasks/[id]/page.tsx # Scores + diff + Approve/Reject
+├── components/AutoRefresh.tsx    # Refreshes the board while agent runs
+├── lib/
+│   ├── db.ts                     # Postgres queries (no AI logic here)
+│   ├── agent.ts                  # The real AI workflow (Claude API)
+│   └── actions.ts                # Server Actions (auth-checked, validated)
+├── scripts/setup-db.mjs          # npm run db:setup
+└── .env.local.example            # Template for your secrets
+```
+
+## How a task flows
 
 ```
 User submits issue URL
         │
-ingestIssueAction  (checks Clerk login, validates URL)
+ingestIssueAction   (checks Clerk login, validates the URL)
         │
-createTask         (row inserted, status = 'running')
+createTask          (row inserted, status = 'running')
         │
-runAgentWorkflow   (background — the page responds immediately)
+runAgentWorkflow    (background — the page responds immediately)
         ├─ fetches the issue title/body from the GitHub API
-        ├─ sends it to Claude (claude-opus-4-8, streaming, adaptive thinking)
-        │    → the API enforces a JSON schema, so the reply always contains
-        │      agent_diff, summary, tests_passed, tests_failed, code_quality
-        ├─ success → completeTask  (status = 'review', scores filled in)
-        └─ failure → failTask      (status = 'failed', reason in diff panel)
+        ├─ sends it to Claude (claude-opus-4-8, streaming, adaptive thinking;
+        │   the API enforces a JSON schema so the reply always parses)
+        ├─ success → status 'review' with diff + notes + scores
+        └─ failure → status 'failed' with the reason in the diff panel
 ```
 
-## Honest limitations (so you can pitch this accurately)
+## Honest limitations (for your pitch)
 
-- **The test scores are the AI's self-estimate**, not a real SWE-Bench
-  harness run. Actually executing the repo's test suite against the diff
-  requires sandboxed code execution — that is a later phase, and it pairs
-  naturally with Phase 2 (GitHub sync), when you'll have a clone of the repo.
-- **The AI can't see the repository yet**, only the issue text, so diffs are
-  a well-reasoned proposal with stated assumptions. Phase 2 fixes this too.
-- **Background work and Vercel:** the fire-and-forget call works perfectly
-  on `localhost`. On Vercel (Phase 4), serverless functions can be frozen
-  after the response is sent, so the workflow will need `waitUntil()` or a
-  job queue (e.g. Inngest, QStash). Noted here so it doesn't surprise you.
-- **Cost:** each task is one Claude call — typically a few cents. If you
-  later want cheaper runs at lower quality, `claude-haiku-4-5` is the
-  budget option; that's a business decision, the code change is one line.
+- **Test scores are the AI's self-estimate**, not a real SWE-Bench harness
+  run — actually executing the repo's tests needs sandboxed code execution
+  (pairs with Phase 2, when the app can clone the repo).
+- **The AI sees only the issue text**, not the codebase, so diffs are a
+  well-reasoned proposal with stated assumptions. Phase 2 fixes this.
+- **Fire-and-forget works on localhost.** On Vercel (Phase 4), background
+  work needs `waitUntil()` or a job queue (Inngest / QStash).
+- `ssl: { rejectUnauthorized: false }` in `lib/db.ts` and the setup script
+  skips certificate checks — fine for development; before launch, use
+  Aiven's `ca.pem`.
+
+## Roadmap
+
+- ✅ Phase 1 — Real AI integration (done, this build)
+- Phase 2 — GitHub OAuth + repo sync: watch `ai-task` labels, clone the
+  repo, open real Pull Requests
+- Phase 3 — Stripe payments ($49/mo paywall)
+- Phase 4 — Deploy to Vercel + custom domain (swe.madlabs.uk)

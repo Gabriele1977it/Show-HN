@@ -26,7 +26,19 @@ export type Task = {
   created_at: string;
 };
 
-const formatTask = (data: any): Task => ({
+type TaskRow = {
+  id: string;
+  issue_url: string;
+  status: string;
+  agent_diff: string;
+  tests_passed: number | null;
+  tests_failed: number | null;
+  code_quality: string | null;
+  project_name: string;
+  created_at: string;
+};
+
+const formatTask = (data: TaskRow): Task => ({
   ...data,
   evaluation_score: {
     tests_passed: data.tests_passed || 0,
