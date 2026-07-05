@@ -8,12 +8,14 @@ import multer from "multer";
 import { fileURLToPath } from "node:url";
 import { dirname, join, extname } from "node:path";
 import { existsSync, mkdirSync } from "node:fs";
+import { randomBytes } from "node:crypto";
 import { nanoid } from "nanoid";
 import { segmentTranscript } from "./segment.js";
 import { exportDeck } from "./exporters.js";
 import { normalizeEmail } from "./auth.js";
+import { createClerkAuth } from "./clerk.js";
 import { canAdd, hasFeature, planPublic, listPlans } from "./plans.js";
-import { createRateLimiter, rateLimit, securityHeaders } from "./security.js";
+import { createRateLimiter, rateLimit, createSecurityHeaders } from "./security.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = join(__dirname, "..", "public");
@@ -28,10 +30,12 @@ function sendExport(res, deck, cards, format) {
   res.send(body);
 }
 
-export function createApp({ store, uploadsDir, reminders, billing, mailer, ownerEmails = new Set(), rateLimits = {} }) {
+export function createApp({ store, uploadsDir, reminders, billing, mailer, clerk = createClerkAuth(), ownerEmails = new Set(), rateLimits = {} }) {
   const app = express();
   app.set("trust proxy", 1); // behind a host's load balancer; lets req.ip work
-  app.use(securityHeaders);
+  app.use(createSecurityHeaders({ clerkOrigin: clerk.frontendApiOrigin }));
+  // Clerk session verification (skipped entirely when Clerk isn't configured).
+  if (clerk.enabled) app.use(clerk.middleware);
   // Throttle auth endpoints to blunt credential stuffing / signup spam.
   const authLimiter = rateLimit(createRateLimiter(rateLimits.auth ?? { windowMs: 15 * 60 * 1000, max: 40 }));
   // Owner allowlist: these accounts get the top (Team) plan automatically.
@@ -115,6 +119,48 @@ export function createApp({ store, uploadsDir, reminders, billing, mailer, owner
   app.post("/api/auth/logout", (req, res) => {
     store.deleteSession((req.get("x-session") || "").trim());
     res.status(204).end();
+  });
+
+  // --- Clerk (hosted auth) ----------------------------------------------
+  // The browser asks whether Clerk is configured; the publishable key is
+  // public by design, so handing it out is safe.
+  app.get("/api/auth/clerk", (_req, res) => {
+    res.json({ enabled: clerk.enabled, publishableKey: clerk.publishableKey });
+  });
+
+  // Exchange a verified Clerk session (cookie or Bearer token, checked by the
+  // Clerk middleware) for an EchoDeck session. Links to the existing account
+  // with the same verified email, or creates one on first sign-in — so
+  // workspaces, keychains, and billing keep working unchanged.
+  app.post("/api/auth/clerk/session", authLimiter, async (req, res) => {
+    if (!clerk.enabled) return res.status(503).json({ error: "Clerk is not configured on this server." });
+    const clerkUserId = clerk.sessionUserId(req);
+    if (!clerkUserId) return res.status(401).json({ error: "Not signed in to Clerk." });
+
+    let email;
+    try {
+      email = normalizeEmail(await clerk.fetchEmail(clerkUserId));
+    } catch (err) {
+      console.error("[clerk] user lookup failed:", err?.message || err);
+      return res.status(502).json({ error: "Could not verify your Clerk account." });
+    }
+    if (!email) return res.status(400).json({ error: "Your Clerk account has no usable email address." });
+
+    let user = store.getUserByEmail(email);
+    let newKey;
+    if (!user) {
+      // First Clerk sign-in: create the account with an unguessable placeholder
+      // password (sign-in happens via Clerk; password reset can still set one)
+      // and a personal workspace, mirroring the signup route.
+      user = store.createUser({ email, password: randomBytes(24).toString("hex") });
+      const ws = store.createWorkspace({ name: `${email.split("@")[0]}'s workspace` });
+      store.addKeyToAccount(user.id, ws.key);
+      if (isOwner(email)) store.setWorkspacePlan(ws.id, "team");
+      newKey = ws.key;
+    }
+    if (isOwner(email)) compOwnerWorkspaces(user.id);
+    const token = store.createSession(user.id);
+    res.json({ token, email, ...(newKey ? { key: newKey } : {}), account: store.getAccount(user.id) });
   });
 
   // Request a password-reset link. Always responds the same way so the endpoint

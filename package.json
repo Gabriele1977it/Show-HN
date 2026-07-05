@@ -13,6 +13,7 @@
     "test": "node --test && ECHODECK_TEST_STORE=sqlite node --test test/api.test.js"
   },
   "dependencies": {
+    "@clerk/express": "^2.1.35",
     "better-sqlite3": "^12.11.1",
     "express": "^4.19.2",
     "multer": "^2.2.0",

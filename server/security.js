@@ -35,27 +35,36 @@ export function rateLimit(limiter, keyFn = (req) => req.ip || req.socket?.remote
   };
 }
 
-/** Sensible security headers for an app that serves its own HTML + JSON API. */
-export function securityHeaders(req, res, next) {
-  res.setHeader("X-Content-Type-Options", "nosniff");
-  res.setHeader("X-Frame-Options", "SAMEORIGIN");
-  res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
-  res.setHeader("X-DNS-Prefetch-Control", "off");
-  res.setHeader("Permissions-Policy", "geolocation=(), microphone=(self), camera=()");
-  // CSP allows same-origin assets/media + Stripe Checkout redirects.
-  res.setHeader(
-    "Content-Security-Policy",
-    [
-      "default-src 'self'",
-      "img-src 'self' data: blob:",
-      "media-src 'self' blob: https:",
-      "style-src 'self' 'unsafe-inline'",
-      "script-src 'self'",
-      "connect-src 'self'",
-      "frame-ancestors 'self'",
-      "base-uri 'self'",
-      "form-action 'self' https://checkout.stripe.com",
-    ].join("; "),
-  );
-  next();
+/**
+ * Sensible security headers for an app that serves its own HTML + JSON API.
+ * When Clerk auth is enabled, pass its frontend-API origin so the CSP admits
+ * ClerkJS, its API calls, avatars, and the bot-protection challenge frame.
+ */
+export function createSecurityHeaders({ clerkOrigin } = {}) {
+  const csp = [
+    "default-src 'self'",
+    `img-src 'self' data: blob:${clerkOrigin ? " https://img.clerk.com" : ""}`,
+    "media-src 'self' blob: https:",
+    "style-src 'self' 'unsafe-inline'",
+    `script-src 'self'${clerkOrigin ? ` ${clerkOrigin} https://challenges.cloudflare.com` : ""}`,
+    `connect-src 'self'${clerkOrigin ? ` ${clerkOrigin}` : ""}`,
+    `worker-src 'self'${clerkOrigin ? " blob:" : ""}`,
+    `frame-src 'self'${clerkOrigin ? " https://challenges.cloudflare.com" : ""}`,
+    "frame-ancestors 'self'",
+    "base-uri 'self'",
+    "form-action 'self' https://checkout.stripe.com",
+  ].join("; ");
+
+  return function securityHeaders(req, res, next) {
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("X-Frame-Options", "SAMEORIGIN");
+    res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+    res.setHeader("X-DNS-Prefetch-Control", "off");
+    res.setHeader("Permissions-Policy", "geolocation=(), microphone=(self), camera=()");
+    res.setHeader("Content-Security-Policy", csp);
+    next();
+  };
 }
+
+/** Default headers middleware (no Clerk origins). */
+export const securityHeaders = createSecurityHeaders();

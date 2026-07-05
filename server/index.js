@@ -12,6 +12,7 @@ import { createApp } from "./app.js";
 import { createReminderService, webhookNotifier, consoleNotifier } from "./reminders.js";
 import { createBilling } from "./billing.js";
 import { createMailer } from "./email.js";
+import { createClerkAuth } from "./clerk.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, "..");
@@ -71,11 +72,19 @@ const ownerEmails = new Set(
 // Email: POST to EMAIL_WEBHOOK_URL when set (provider relay), else log (dev).
 const mailer = createMailer({ webhookUrl: process.env.EMAIL_WEBHOOK_URL });
 
-const app = createApp({ store, uploadsDir: UPLOADS_DIR, reminders, billing, mailer, ownerEmails });
+// Clerk hosted auth: enabled when both keys are set, otherwise the built-in
+// email/password auth is used.
+const clerk = createClerkAuth({
+  publishableKey: process.env.CLERK_PUBLISHABLE_KEY,
+  secretKey: process.env.CLERK_SECRET_KEY,
+});
+
+const app = createApp({ store, uploadsDir: UPLOADS_DIR, reminders, billing, mailer, clerk, ownerEmails });
 
 const server = app.listen(PORT, () => {
   console.log(`EchoDeck running on http://localhost:${PORT}`);
   console.log(billing.enabled ? "Stripe billing enabled." : "Billing in dev mode (no Stripe keys).");
+  console.log(clerk.enabled ? "Clerk auth enabled." : "Clerk auth disabled (no Clerk keys) — using built-in password auth.");
   // Background polling only runs when explicitly enabled.
   if (process.env.REMINDER_ENABLED === "1" || process.env.REMINDER_ENABLED === "true") {
     reminders.start();

@@ -108,6 +108,8 @@ from the workspace member key in `Authorization`).
 | `POST` | `/api/auth/logout` | Invalidate the current session (`X-Session`). |
 | `POST` | `/api/auth/request-reset` | Email a password-reset link (always 200; dev mode returns the link). |
 | `POST` | `/api/auth/reset` | Set a new password from a reset token; invalidates the user's sessions. |
+| `GET` | `/api/auth/clerk` | Whether Clerk auth is configured, plus the publishable key for the browser. |
+| `POST` | `/api/auth/clerk/session` | Exchange a verified Clerk session (cookie/Bearer) for an app session `token`; links or creates the account by verified email. |
 | `GET` | `/api/account` | The signed-in account's email + keychain (`X-Session`). |
 | `POST` | `/api/account/keys` | Save a member key to the account keychain. |
 | `GET` | `/api/plans` | Public plan catalog (Free / Pro / Team with limits + features). |
@@ -182,6 +184,24 @@ webhook at `POST /api/billing/webhook` (events: `checkout.session.completed`,
 | `OWNER_EMAILS` | Comma-separated emails auto-comped to the Team plan (e.g. the developer's own account). |
 | `EMAIL_WEBHOOK_URL` | Outbound webhook for transactional email (password resets). Point at a provider relay (Resend/Postmark/SendGrid) or Zapier/Make. Logs to console if unset. |
 
+## Auth (Clerk)
+
+Accounts work out of the box with the built-in email/password auth (scrypt,
+no dependencies). Set `CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY` (from
+[dashboard.clerk.com](https://dashboard.clerk.com/) → API Keys) to switch
+sign-in/sign-up to **Clerk**'s hosted components instead:
+
+- The app page shows **Sign in / Sign up** buttons in the top bar (and in the
+  account panel) that open Clerk's modal; a Clerk **user button** replaces them
+  when signed in.
+- After a Clerk sign-in, the client calls `POST /api/auth/clerk/session`; the
+  server verifies the Clerk session with `@clerk/express`, then links the Clerk
+  identity to the existing account with the same **verified email** — or
+  creates an account + personal workspace on first sign-in. Workspaces,
+  keychains, plans, and billing all keep working unchanged.
+- Without the keys nothing changes: the password form stays, and the Clerk
+  routes report `enabled: false`. Tests run without any Clerk credentials.
+
 ## Configuration
 
 Copy `.env.example` to `.env` and fill in your values, then just run `npm start`
@@ -197,6 +217,8 @@ npm start
 | Env var | Default | Meaning |
 |---------|---------|---------|
 | `PORT` | `3000` | HTTP port. |
+| `CLERK_PUBLISHABLE_KEY` | _(unset)_ | Clerk publishable key (`pk_…`). With both Clerk keys set, hosted Clerk sign-in/sign-up replaces the built-in password form. |
+| `CLERK_SECRET_KEY` | _(unset)_ | Clerk secret key (`sk_…`). Server-side only — never expose it to the browser. |
 | `STORE` | `sqlite` | Storage backend: `sqlite` (default) or `json`. |
 | `ECHODECK_DB` | `./data/echodeck.db` | SQLite database path (when `STORE=sqlite`). |
 | `ECHODECK_DATA` | `./data/db.json` | JSON data file (used by `STORE=json`, and as the import source on first SQLite boot). |
@@ -219,6 +241,7 @@ server/
   srs.js         SM-2 spaced repetition
   cloze.js       fill-in-the-blank term suggestion + masking
   auth.js        password hashing (scrypt) + session/reset tokens
+  clerk.js       Clerk hosted-auth adapter (enabled when Clerk keys are set)
   email.js       transactional email (webhook provider, dev-mode fallback)
   plans.js       plan tiers + entitlement/limit helpers
   billing.js     Stripe checkout + portal + webhook verification (dev-mode fallback)

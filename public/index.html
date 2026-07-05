@@ -21,15 +21,31 @@
         <button id="ws-btn" class="tab" title="Workspace">⌂ <span id="ws-name">Workspace</span></button>
       </nav>
 
+      <!-- Clerk auth controls (shown only when Clerk is configured) -->
+      <div id="auth-controls" class="auth-controls hidden">
+        <button id="auth-signin" class="ghost small hidden">Sign in</button>
+        <button id="auth-signup" class="primary small hidden">Sign up</button>
+        <div id="auth-user" class="hidden"></div>
+      </div>
+
       <div id="ws-panel" class="ws-panel hidden">
         <div id="acct-out">
           <h3>Account</h3>
-          <label>Email<input id="acct-email" type="email" placeholder="you@example.com" /></label>
-          <label>Password<input id="acct-pass" type="password" placeholder="at least 6 characters" /></label>
-          <div class="row" style="margin-top:8px">
-            <button id="acct-login" class="ghost small">Log in</button>
-            <button id="acct-signup" class="primary small">Sign up</button>
-            <button id="acct-forgot" class="ghost small" style="border:none;margin-left:auto">Forgot?</button>
+          <div id="acct-pass-form">
+            <label>Email<input id="acct-email" type="email" placeholder="you@example.com" /></label>
+            <label>Password<input id="acct-pass" type="password" placeholder="at least 6 characters" /></label>
+            <div class="row" style="margin-top:8px">
+              <button id="acct-login" class="ghost small">Log in</button>
+              <button id="acct-signup" class="primary small">Sign up</button>
+              <button id="acct-forgot" class="ghost small" style="border:none;margin-left:auto">Forgot?</button>
+            </div>
+          </div>
+          <div id="acct-clerk" class="hidden">
+            <p class="muted small">Sign in to sync your workspaces across devices.</p>
+            <div class="row" style="margin-top:8px">
+              <button id="acct-clerk-login" class="ghost small">Sign in</button>
+              <button id="acct-clerk-signup" class="primary small">Sign up</button>
+            </div>
           </div>
           <p id="acct-msg" class="error"></p>
           <hr />

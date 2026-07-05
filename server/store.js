@@ -167,6 +167,14 @@ export function createStore(filePath) {
       return { id: user.id, email: user.email };
     },
 
+    // Lookup without a password — used to link externally-verified identities
+    // (e.g. Clerk) to an existing account.
+    getUserByEmail(email) {
+      const e = (email ?? "").trim().toLowerCase();
+      const user = Object.values(state.users).find((u) => u.email === e);
+      return user ? { id: user.id, email: user.email } : null;
+    },
+
     createSession(userId) {
       const token = newToken();
       state.sessions[token] = { userId, createdAt: Date.now(), expiresAt: Date.now() + SESSION_TTL };

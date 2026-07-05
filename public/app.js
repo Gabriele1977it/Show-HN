@@ -797,6 +797,8 @@ $("#acct-logout").addEventListener("click", async () => {
   await acctJson("/api/auth/logout", { method: "POST" }).catch(() => {});
   sessionToken = "";
   localStorage.removeItem(SESSION);
+  // With Clerk active, end the Clerk session too (reloads the page).
+  if (clerkEnabled && window.Clerk?.user) return window.Clerk.signOut({ redirectUrl: "/app" });
   renderSignedOut();
 });
 
@@ -851,7 +853,87 @@ async function rememberKey(key) {
   await acctJson("/api/account/keys", { method: "POST", body: JSON.stringify({ memberKey: key }) }).catch(() => {});
 }
 
+// ---- Clerk (hosted auth) ----
+// When the server has Clerk configured, ClerkJS handles sign-in/sign-up and
+// the app exchanges the verified Clerk session for its own session token.
+// Without Clerk keys everything falls back to the built-in password form.
+let clerkEnabled = false;
+
+function loadClerkJs(publishableKey) {
+  return new Promise((resolve, reject) => {
+    // The frontend-API host is base64-encoded in the publishable key.
+    let host = "";
+    try { host = atob(publishableKey.split("_")[2] || "").replace(/\$$/, ""); } catch {}
+    if (!host) return reject(new Error("Invalid Clerk publishable key"));
+    const s = document.createElement("script");
+    s.async = true;
+    s.crossOrigin = "anonymous";
+    s.src = `https://${host}/npm/@clerk/clerk-js@5/dist/clerk.browser.js`;
+    s.setAttribute("data-clerk-publishable-key", publishableKey);
+    s.onload = resolve;
+    s.onerror = () => reject(new Error("Failed to load ClerkJS"));
+    document.head.appendChild(s);
+  });
+}
+
+// Trade the verified Clerk session for an EchoDeck session + workspace.
+async function clerkExchange() {
+  const jwt = await window.Clerk.session?.getToken();
+  if (!jwt) return;
+  const r = await fetch("/api/auth/clerk/session", { method: "POST", headers: { Authorization: `Bearer ${jwt}` } });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) { $("#acct-msg").textContent = data.error || "Sign-in failed."; return; }
+  sessionToken = data.token;
+  localStorage.setItem(SESSION, data.token);
+  const chain = (data.account?.keychain ?? []).map((k) => k.memberKey);
+  if (!wsKey) {
+    // No local workspace yet: land in the account's (new or first) workspace.
+    const key = data.key || chain[0];
+    if (key) { wsKey = key; localStorage.setItem(WS_KEY, key); }
+  } else if (!chain.includes(wsKey)) {
+    // Keep the workspace this browser was using and save it to the account.
+    await rememberKey(wsKey);
+  }
+}
+
+async function initClerk() {
+  const cfg = await (await fetch("/api/auth/clerk")).json().catch(() => null);
+  if (!cfg?.enabled || !cfg.publishableKey) return;
+  await loadClerkJs(cfg.publishableKey);
+  await window.Clerk.load();
+  clerkEnabled = true;
+
+  // Swap the password form for Clerk-hosted auth in the account panel.
+  $("#acct-pass-form").classList.add("hidden");
+  $("#acct-clerk").classList.remove("hidden");
+  $("#auth-controls").classList.remove("hidden");
+  const openSignIn = () => window.Clerk.openSignIn({ forceRedirectUrl: "/app" });
+  const openSignUp = () => window.Clerk.openSignUp({ forceRedirectUrl: "/app" });
+  $("#auth-signin").addEventListener("click", openSignIn);
+  $("#auth-signup").addEventListener("click", openSignUp);
+  $("#acct-clerk-login").addEventListener("click", openSignIn);
+  $("#acct-clerk-signup").addEventListener("click", openSignUp);
+
+  if (window.Clerk.user) {
+    $("#auth-user").classList.remove("hidden");
+    window.Clerk.mountUserButton($("#auth-user"), { afterSignOutUrl: "/app" });
+    // Exchange when there's no app session or the stored one has expired.
+    const valid = sessionToken && (await acctJson("/api/account").catch(() => null))?.ok;
+    if (!valid) {
+      sessionToken = "";
+      localStorage.removeItem(SESSION);
+      await clerkExchange();
+    }
+  } else {
+    $("#auth-signin").classList.remove("hidden");
+    $("#auth-signup").classList.remove("hidden");
+    // Clerk is the source of truth: signed out of Clerk means signed out here.
+    if (sessionToken) { sessionToken = ""; localStorage.removeItem(SESSION); }
+  }
+}
+
 (async function start() {
+  await initClerk().catch((err) => console.error("[clerk]", err));
   await ensureWorkspace();
   await loadAccount();
   loadDecks();

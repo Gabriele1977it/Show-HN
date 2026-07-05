@@ -191,6 +191,10 @@ mark { background: #fef3c7; color: #92400e; border-radius: 3px; padding: 0 2px; 
 .plan-card .cta button { width: 100%; padding: 11px; }
 .plan-badge { align-self: flex-start; font-size: 11px; background: var(--accent); color: #fff; border-radius: 999px; padding: 3px 10px; font-weight: 600; margin-bottom: 8px; }
 
+/* ---- auth controls (Clerk) ---- */
+.auth-controls { display: flex; align-items: center; gap: 8px; }
+.auth-controls .cl-userButtonTrigger, #auth-user { display: flex; align-items: center; }
+
 /* ---- workspace panel ---- */
 .ws-panel { position: absolute; top: 60px; right: 16px; width: 340px; background: #fff; border: 1px solid var(--line); border-radius: 16px; padding: 18px; box-shadow: var(--shadow-lg); z-index: 30; }
 .ws-panel h3 { margin: 0 0 10px; font-size: 14px; font-weight: 650; text-transform: uppercase; letter-spacing: .4px; color: var(--muted); }

@@ -187,6 +187,14 @@ export function createSqliteStore(dbPath, { migrateFrom } = {}) {
       return { id: u.id, email: u.email };
     },
 
+    // Lookup without a password — used to link externally-verified identities
+    // (e.g. Clerk) to an existing account.
+    getUserByEmail(email) {
+      const e = (email ?? "").trim().toLowerCase();
+      const u = db.prepare("SELECT id, email FROM users WHERE email=?").get(e);
+      return u ? { id: u.id, email: u.email } : null;
+    },
+
     createSession(userId) {
       const token = newToken();
       db.prepare("INSERT INTO sessions (token,user_id,created_at,expires_at) VALUES (?,?,?,?)")
