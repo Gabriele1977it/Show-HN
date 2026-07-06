@@ -1330,8 +1330,44 @@ async function ensureWorkspace() {
 const acctJson = (url, opts = {}) =>
   fetch(url, { ...opts, headers: { "Content-Type": "application/json", ...(sessionToken ? { "X-Session": sessionToken } : {}), ...(opts.headers || {}) } });
 
-$("#acct-signup").addEventListener("click", () => authSubmit("/api/auth/signup"));
-$("#acct-login").addEventListener("click", () => authSubmit("/api/auth/login"));
+// ---- auth modal ----
+// A proper, discoverable sign-in surface: opened from the topbar "Sign in"
+// button or the workspace panel; two modes (sign in / create account) on one
+// form; Enter submits; closes on ×, backdrop, or Escape.
+let authMode = "login";
+function setAuthMode(mode) {
+  authMode = mode;
+  const login = mode === "login";
+  $("#auth-tab-in").classList.toggle("is-active", login);
+  $("#auth-tab-up").classList.toggle("is-active", !login);
+  $("#auth-title").textContent = login ? "Welcome back" : "Create your account";
+  $("#auth-sub").textContent = login
+    ? "Sign in to keep your decks safe and use them on any device."
+    : "Free plan included — no credit card needed.";
+  $("#auth-submit").textContent = login ? "Sign in" : "Create account";
+  $("#acct-pass").setAttribute("autocomplete", login ? "current-password" : "new-password");
+  $("#acct-pass").placeholder = login ? "••••••••" : "at least 6 characters";
+  $("#acct-msg").textContent = "";
+}
+function openAuth(mode = "login") {
+  $("#ws-panel").classList.add("hidden");
+  setAuthMode(mode);
+  $("#auth-overlay").classList.remove("hidden");
+  $("#acct-email").focus();
+}
+function closeAuth() { $("#auth-overlay").classList.add("hidden"); }
+$("#signin-btn").addEventListener("click", () => openAuth("login"));
+$("#ws-signin").addEventListener("click", () => openAuth("login"));
+$("#auth-tab-in").addEventListener("click", () => setAuthMode("login"));
+$("#auth-tab-up").addEventListener("click", () => setAuthMode("signup"));
+$("#auth-close").addEventListener("click", closeAuth);
+$("#auth-overlay").addEventListener("click", (e) => { if (e.target === $("#auth-overlay")) closeAuth(); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("#auth-overlay").classList.contains("hidden")) closeAuth(); });
+$("#auth-submit").addEventListener("click", () => authSubmit(authMode === "login" ? "/api/auth/login" : "/api/auth/signup"));
+for (const id of ["#acct-email", "#acct-pass"]) {
+  $(id).addEventListener("keydown", (e) => { if (e.key === "Enter") $("#auth-submit").click(); });
+}
+
 $("#acct-forgot").addEventListener("click", async () => {
   const email = $("#acct-email").value.trim() || prompt("Enter your account email:");
   if (!email) return;
@@ -1379,10 +1415,12 @@ async function loadAccount() {
 function renderSignedOut() {
   $("#acct-out").classList.remove("hidden");
   $("#acct-in").classList.add("hidden");
+  $("#signin-btn").classList.remove("hidden");
 }
 function renderSignedIn(account) {
   $("#acct-out").classList.add("hidden");
   $("#acct-in").classList.remove("hidden");
+  $("#signin-btn").classList.add("hidden");
   $("#acct-who").textContent = account.email;
   const ul = $("#acct-keychain");
   ul.innerHTML = "";
