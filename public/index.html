@@ -16,27 +16,24 @@
         <span class="logo">◈</span> EchoDeck
       </a>
       <input id="search-box" class="search-box" type="search" placeholder="Search all cards…" autocomplete="off" />
-      <nav class="tabs">
-        <button class="tab is-active" data-view="build">Build</button>
-        <button class="tab" data-view="study">Study</button>
-        <button class="tab" data-view="alerts">Alerts <span id="alert-badge" class="badge hidden">0</span></button>
-        <button class="tab" data-view="stats">Stats</button>
-        <button class="tab" data-view="discover">Discover</button>
+      <nav class="tabs" id="main-tabs">
+        <button class="tab is-active" data-view="build" data-icon="✏️">Build</button>
+        <button class="tab" data-view="study" data-icon="🎧">Study</button>
+        <button class="tab" data-view="alerts" data-icon="🔔">Alerts <span id="alert-badge" class="badge hidden">0</span></button>
+        <button class="tab" data-view="stats" data-icon="📊">Stats</button>
+        <button class="tab" data-view="discover" data-icon="🛒">Discover</button>
+      </nav>
+      <div class="top-actions">
+        <button id="signin-btn" class="tab hidden">Sign in</button>
         <button class="tab" data-view="pricing" id="pricing-tab">✦ Upgrade</button>
         <button id="ws-btn" class="tab" title="Workspace">⌂ <span id="ws-name">Workspace</span></button>
-      </nav>
+      </div>
 
       <div id="ws-panel" class="ws-panel hidden">
         <div id="acct-out">
           <h3>Account</h3>
-          <label>Email<input id="acct-email" type="email" placeholder="you@example.com" /></label>
-          <label>Password<input id="acct-pass" type="password" placeholder="at least 6 characters" /></label>
-          <div class="row" style="margin-top:8px">
-            <button id="acct-login" class="ghost small">Log in</button>
-            <button id="acct-signup" class="primary small">Sign up</button>
-            <button id="acct-forgot" class="ghost small" style="border:none;margin-left:auto">Forgot?</button>
-          </div>
-          <p id="acct-msg" class="error"></p>
+          <p class="muted small" style="margin:0 0 10px">Create a free account to keep your decks safe and use them on any device.</p>
+          <button id="ws-signin" class="primary small" style="width:100%">Sign in / Create account</button>
           <hr />
         </div>
 
@@ -294,6 +291,31 @@ Subtitle text here"></textarea>
           <div class="chart" id="chart-forecast"></div>
         </div>
       </section>
+
+    <!-- Auth overlay -->
+    <div id="auth-overlay" class="overlay hidden">
+      <div class="auth-box">
+        <button id="auth-close" class="close" aria-label="Close">×</button>
+        <div class="brand" style="justify-content:center"><span class="logo">◈</span> EchoDeck</div>
+        <h2 id="auth-title">Welcome back</h2>
+        <p class="muted small" id="auth-sub">Sign in to keep your decks safe and use them on any device.</p>
+        <div class="auth-tabs" role="tablist">
+          <button id="auth-tab-in" class="is-active" type="button">Sign in</button>
+          <button id="auth-tab-up" type="button">Create account</button>
+        </div>
+        <label>Email
+          <input id="acct-email" type="email" autocomplete="email" inputmode="email" placeholder="you@example.com" />
+        </label>
+        <label>Password
+          <input id="acct-pass" type="password" autocomplete="current-password" placeholder="••••••••" />
+        </label>
+        <button id="auth-submit" class="primary wide" type="button">Sign in</button>
+        <p id="acct-msg" class="error" aria-live="polite"></p>
+        <div class="auth-foot">
+          <button id="acct-forgot" class="linkish" type="button">Forgot password?</button>
+        </div>
+      </div>
+    </div>
 
     <!-- Review overlay -->
     <div id="review-overlay" class="overlay hidden">

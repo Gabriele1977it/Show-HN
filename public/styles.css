@@ -324,3 +324,53 @@ body.readonly #ai-fill-btn, body.readonly .scard .ai { display: none !important;
 
 /* --- starter deck badge --- */
 .starter-badge { font-size: 11px; font-weight: 700; color: var(--accent); background: var(--accent-weak); border: 1px solid #e0e3ff; border-radius: 999px; padding: 2px 8px; margin-right: 4px; }
+
+/* --- auth modal --- */
+.top-actions { display: flex; gap: 4px; align-items: center; }
+.auth-box { position: relative; width: min(400px, 92vw); background: #fff; border: 1px solid var(--line); border-radius: 20px; padding: 30px 28px 24px; box-shadow: var(--shadow-lg); text-align: center; }
+.auth-box .brand { display: flex; margin-bottom: 8px; }
+.auth-box h2 { margin: 6px 0 4px; font-size: 22px; letter-spacing: -.4px; }
+.auth-box .muted.small { margin: 0 0 16px; }
+.auth-tabs { display: flex; background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; padding: 4px; gap: 4px; margin-bottom: 16px; }
+.auth-tabs button { flex: 1; border: none; background: none; border-radius: 7px; padding: 8px 0; font: inherit; font-size: 13.5px; font-weight: 600; color: var(--muted); cursor: pointer; }
+.auth-tabs button.is-active { background: #fff; color: var(--ink); box-shadow: var(--shadow-sm); }
+.auth-box label { display: block; text-align: left; font-size: 12.5px; font-weight: 600; color: var(--ink-2); margin-bottom: 12px; }
+.auth-box input { width: 100%; margin-top: 5px; font-size: 15px; padding: 11px 13px; }
+.auth-box .primary.wide { width: 100%; padding: 12px; font-size: 15px; margin-top: 2px; }
+.auth-box .error { min-height: 18px; margin: 10px 0 0; }
+.auth-foot { margin-top: 8px; }
+.linkish { border: none; background: none; color: var(--muted); font: inherit; font-size: 13px; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+.linkish:hover { color: var(--accent); }
+
+/* --- mobile layout: bottom navigation + breathing room --- */
+@media (max-width: 700px) {
+  /* backdrop-filter would make the topbar the containing block for the
+     fixed-position bottom nav (its child), pinning the nav to the topbar
+     instead of the viewport — use a solid background on phones instead. */
+  .topbar { padding: 10px 12px; gap: 10px; backdrop-filter: none; background: #fff; }
+  .search-box { flex: 1; width: auto; min-width: 0; margin-left: 0; }
+  .search-box:focus { width: auto; }
+  .top-actions { margin-left: auto; }
+  .top-actions .tab { padding: 7px 10px; font-size: 13px; }
+  #ws-btn #ws-name { display: none; } /* just the ⌂ icon on phones */
+
+  /* The five study views become a fixed bottom tab bar with icons. */
+  #main-tabs {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 25;
+    display: flex; justify-content: space-around; gap: 0;
+    background: rgba(255, 255, 255, .96); backdrop-filter: blur(10px);
+    border-top: 1px solid var(--line);
+    padding: 6px 4px calc(6px + env(safe-area-inset-bottom, 0px));
+  }
+  #main-tabs .tab { display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 10.5px; padding: 4px 10px; position: relative; flex: 1; }
+  #main-tabs .tab::before { content: attr(data-icon); font-size: 19px; line-height: 1; }
+  #main-tabs .tab .badge { position: absolute; top: 0; right: 50%; transform: translateX(18px); }
+  main { padding: 18px 14px calc(86px + env(safe-area-inset-bottom, 0px)); }
+
+  /* Panels and overlays fit the phone. */
+  .ws-panel { position: fixed; left: 10px; right: 10px; top: 58px; width: auto; max-height: calc(100vh - 150px); overflow-y: auto; }
+  .review-box { padding: 22px 16px; }
+  .study-head { flex-wrap: wrap; gap: 10px; }
+  .study-actions { flex-wrap: wrap; }
+  .mkt-toolbar { flex-wrap: wrap; }
+}
