@@ -1422,6 +1422,7 @@ function renderSignedIn(account) {
   $("#acct-in").classList.remove("hidden");
   $("#signin-btn").classList.add("hidden");
   $("#acct-who").textContent = account.email;
+  $("#admin-link").style.display = account.owner ? "inline-block" : "none";
   const ul = $("#acct-keychain");
   ul.innerHTML = "";
   for (const k of account.keychain) {

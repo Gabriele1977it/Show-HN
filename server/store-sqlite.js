@@ -180,6 +180,37 @@ export function createSqliteStore(dbPath, { migrateFrom } = {}) {
       return r?.id ?? null;
     },
 
+    // Aggregate stats for the owner's /admin panel.
+    adminOverview() {
+      const one = (sql, ...p) => db.prepare(sql).get(...p);
+      const plans = {};
+      for (const r of db.prepare("SELECT plan, COUNT(*) n FROM workspaces GROUP BY plan").all()) {
+        plans[r.plan || "free"] = r.n;
+      }
+      const recentWorkspaces = db.prepare(`
+        SELECT w.id, w.name, w.plan, w.created_at,
+          (SELECT COUNT(*) FROM members m WHERE m.workspace_id = w.id) AS members,
+          (SELECT COUNT(*) FROM decks d WHERE d.workspace_id = w.id) AS decks,
+          (SELECT COUNT(*) FROM cards c JOIN decks d2 ON c.deck_id = d2.id WHERE d2.workspace_id = w.id) AS cards
+        FROM workspaces w ORDER BY w.created_at DESC LIMIT 25
+      `).all().map((r) => ({ id: r.id, name: r.name, plan: r.plan || "free", createdAt: r.created_at, members: r.members, decks: r.decks, cards: r.cards }));
+      const recentAccounts = db.prepare("SELECT email, created_at, keychain FROM users ORDER BY created_at DESC LIMIT 25")
+        .all().map((r) => ({ email: r.email, createdAt: r.created_at, workspaces: JSON.parse(r.keychain || "[]").length }));
+      return {
+        totals: {
+          workspaces: one("SELECT COUNT(*) n FROM workspaces").n,
+          accounts: one("SELECT COUNT(*) n FROM users").n,
+          decks: one("SELECT COUNT(*) n FROM decks").n,
+          cards: one("SELECT COUNT(*) n FROM cards").n,
+          reviews: one("SELECT COUNT(*) n FROM review_log").n,
+          shared: one("SELECT COUNT(*) n FROM decks WHERE share_id IS NOT NULL").n,
+          listed: one("SELECT COUNT(*) n FROM decks WHERE listed=1").n,
+        },
+        reviews24h: one("SELECT COUNT(*) n FROM review_log WHERE at >= ?", Date.now() - 86400000).n,
+        plans, recentWorkspaces, recentAccounts,
+      };
+    },
+
     getBilling(ws) {
       const w = db.prepare("SELECT billing FROM workspaces WHERE id=?").get(ws);
       return w?.billing ? JSON.parse(w.billing) : null;

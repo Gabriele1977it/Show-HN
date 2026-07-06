@@ -17,7 +17,7 @@ import { scoreAttempt } from "./pronounce.js";
 import { deliverToWorkspace } from "./push.js";
 import { exportDeck } from "./exporters.js";
 import { normalizeEmail } from "./auth.js";
-import { canAdd, hasFeature, planPublic, listPlans } from "./plans.js";
+import { canAdd, hasFeature, planPublic, listPlans, getPlan, allPlanIds } from "./plans.js";
 import { createRateLimiter, rateLimit, securityHeaders } from "./security.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -68,20 +68,38 @@ export function createApp({ store, uploadsDir, reminders, billing, mailer, enric
   const demoLimiter = rateLimit(createRateLimiter(rateLimits.demo ?? { windowMs: 15 * 60 * 1000, max: 60 }));
   // URL/YouTube import makes an outbound fetch per call, so throttle it per IP.
   const importLimiter = rateLimit(createRateLimiter(rateLimits.import ?? { windowMs: 15 * 60 * 1000, max: 30 }));
-  // Per-workspace daily cap on AI card fills — the hard backstop behind the
-  // pricing page's "fair-use limits" line, so no single workspace can run up
-  // the operator's Anthropic bill. In-memory (single-process deployment).
-  const aiDailyLimit = aiLimits.perWorkspacePerDay ?? 300;
-  const aiUsage = new Map();
-  function takeAiQuota(ws, n = 1) {
-    const day = new Date().toISOString().slice(0, 10);
-    const key = `${ws}:${day}`;
-    if (aiUsage.size > 5000) { for (const k of aiUsage.keys()) if (!k.endsWith(day)) aiUsage.delete(k); }
-    const used = aiUsage.get(key) ?? 0;
-    if (used + n > aiDailyLimit) return { ok: false, remaining: Math.max(0, aiDailyLimit - used) };
-    aiUsage.set(key, used + n);
-    return { ok: true, remaining: aiDailyLimit - used - n };
+  // Per-workspace daily quotas (AI fills, imports) — the hard backstops behind
+  // the pricing page's "fair-use limits" line. Limits come from the workspace's
+  // plan (tester gets tight ones); aiLimits overrides apply globally (env/tests).
+  // In-memory day-keyed counters (single-process deployment).
+  const today = () => new Date().toISOString().slice(0, 10);
+  function dailyCounter() {
+    const usage = new Map();
+    return {
+      usage,
+      take(ws, limit, n = 1) {
+        const day = today();
+        const key = `${ws}:${day}`;
+        if (usage.size > 5000) { for (const k of usage.keys()) if (!k.endsWith(day)) usage.delete(k); }
+        const used = usage.get(key) ?? 0;
+        if (used + n > limit) return { ok: false, remaining: Math.max(0, limit - used) };
+        usage.set(key, used + n);
+        return { ok: true, remaining: limit - used - n };
+      },
+      usedToday() {
+        const day = today();
+        let total = 0;
+        for (const [k, v] of usage) if (k.endsWith(day)) total += v;
+        return total;
+      },
+    };
   }
+  const aiCounter = dailyCounter();
+  const importCounter = dailyCounter();
+  const takeAiQuota = (req, n = 1) =>
+    aiCounter.take(req.ws, aiLimits.perWorkspacePerDay ?? getPlan(planOf(req)).aiPerDay ?? 0, n);
+  const takeImportQuota = (req) =>
+    importCounter.take(req.ws, aiLimits.importsPerDay ?? getPlan(planOf(req)).importsPerDay ?? 0, 1);
   // Owner allowlist: these accounts get the top (Team) plan automatically.
   const isOwner = (email) => Boolean(email) && ownerEmails.has(String(email).toLowerCase());
   const compOwnerWorkspaces = (userId) => {
@@ -121,6 +139,8 @@ export function createApp({ store, uploadsDir, reminders, billing, mailer, enric
     // The bundled starter catalog is public too (shown on the marketing pages).
     if (req.method === "GET" && req.path.startsWith("/starters")) return next();
     if (req.path.startsWith("/auth/") || req.path.startsWith("/account")) return next();
+    // Admin routes authenticate with an owner session, not a workspace key.
+    if (req.path.startsWith("/admin")) return next();
     if (req.path === "/billing/webhook" || req.path === "/plans") return next();
     const key = (req.get("authorization") || "").replace(/^Bearer\s+/i, "").trim();
     const member = store.getMemberByKey(key);
@@ -203,7 +223,34 @@ export function createApp({ store, uploadsDir, reminders, billing, mailer, enric
   app.get("/api/account", (req, res) => {
     const user = sessionUser(req);
     if (!user) return res.status(401).json({ error: "Not signed in." });
-    res.json(store.getAccount(user.id));
+    // `owner` lets the client show the Admin link to operator accounts only.
+    res.json({ ...store.getAccount(user.id), owner: isOwner(user.email) });
+  });
+
+  // --- admin -------------------------------------------------------------
+  // Owner-only monitoring + plan grants (e.g. the tester tier). Authenticated
+  // by a signed-in session whose email is in OWNER_EMAILS — no workspace key.
+  const requireOwner = (req, res, next) => {
+    const u = sessionUser(req);
+    if (!u || !isOwner(u.email)) return res.status(403).json({ error: "Owner account required." });
+    next();
+  };
+
+  app.get("/api/admin/overview", requireOwner, (_req, res) => {
+    res.json({
+      ...store.adminOverview(),
+      usageToday: { aiFills: aiCounter.usedToday(), imports: importCounter.usedToday() },
+      planIds: allPlanIds(),
+    });
+  });
+
+  // Change a workspace's plan — how the operator grants the tester tier.
+  app.post("/api/admin/workspaces/:id/plan", requireOwner, (req, res) => {
+    const plan = req.body?.plan;
+    if (!allPlanIds().includes(plan)) return res.status(400).json({ error: "Unknown plan." });
+    if (!store.getWorkspace(req.params.id)) return res.status(404).json({ error: "Workspace not found." });
+    store.setWorkspacePlan(req.params.id, plan);
+    res.json({ ok: true, id: req.params.id, plan });
   });
 
   // Save the member key the client is currently using to the account keychain.
@@ -418,6 +465,11 @@ export function createApp({ store, uploadsDir, reminders, billing, mailer, enric
     if (!importer?.enabled) return res.status(503).json({ error: IMPORT_ERRORS["not-configured"] });
     const url = req.body?.url;
     if (!String(url || "").trim()) return res.status(400).json({ error: IMPORT_ERRORS["no-url"] });
+    // Imports consume the transcript-API allowance, so they're quota'd per
+    // workspace per day (limit set by the plan; tight on the tester tier).
+    if (!takeImportQuota(req).ok) {
+      return res.status(429).json({ error: "This workspace has reached today's import limit — it resets tomorrow. You can still paste a transcript or import an .srt/.vtt file." });
+    }
     let result;
     try {
       result = await importer.run(url, { lang: req.body?.lang });
@@ -747,7 +799,7 @@ export function createApp({ store, uploadsDir, reminders, billing, mailer, enric
     if (!enrich?.enabled) return res.status(503).json({ error: "AI fill isn't configured on this server." });
     const card = store.getCard(req.params.id, req.ws);
     if (!card) return res.status(404).json({ error: "Card not found" });
-    if (!takeAiQuota(req.ws).ok) {
+    if (!takeAiQuota(req).ok) {
       return res.status(429).json({ error: "This workspace has reached today's AI-fill limit — it resets tomorrow." });
     }
     const overwrite = req.body?.overwrite === true;
@@ -773,7 +825,7 @@ export function createApp({ store, uploadsDir, reminders, billing, mailer, enric
     const deck = store.getDeck(req.params.id, req.ws);
     if (!deck) return res.status(404).json({ error: "Deck not found" });
     const targets = deck.cards.filter((c) => !c.back).slice(0, 40);
-    const quota = takeAiQuota(req.ws, targets.length);
+    const quota = takeAiQuota(req, targets.length);
     if (!quota.ok) {
       return res.status(429).json({ error: `This would exceed today's AI-fill limit (${quota.remaining} fill${quota.remaining === 1 ? "" : "s"} left) — try again tomorrow.` });
     }
@@ -797,6 +849,7 @@ export function createApp({ store, uploadsDir, reminders, billing, mailer, enric
   app.get("/", (_req, res) => res.sendFile(join(PUBLIC_DIR, "landing.html")));
   app.get("/app", (_req, res) => res.sendFile(join(PUBLIC_DIR, "index.html")));
   app.get("/demo", (_req, res) => res.sendFile(join(PUBLIC_DIR, "demo.html")));
+  app.get("/admin", (_req, res) => res.sendFile(join(PUBLIC_DIR, "admin.html")));
   // SEO language landing pages (server-rendered so crawlers get real content).
   app.get("/learn", (req, res) => {
     res.type("html").send(renderLearnIndex(`${req.protocol}://${req.get("host")}`));
