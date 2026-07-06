@@ -97,24 +97,42 @@ async function loadInvites() {
   const body = $("#invite-table tbody");
   body.innerHTML = "";
   if (!invites.length) {
-    body.innerHTML = `<tr><td colspan="5" class="muted">No invites yet — create one and send the link to your testers.</td></tr>`;
+    body.innerHTML = `<tr><td colspan="6" class="muted">No invites yet — create one and send the link to your testers.</td></tr>`;
     return;
   }
   for (const i of invites) {
     const tr = document.createElement("tr");
     tr.innerHTML = `
+      <td>${i.note ? esc(i.note) : '<span class="muted">—</span>'}</td>
       <td style="font-family:monospace;font-size:12px">${esc(i.link)}</td>
       <td>${planPill(i.plan)}</td>
       <td>${i.uses} / ${i.maxUses}</td>
       <td class="muted">${fmtDate(i.createdAt)}</td>
-      <td></td>`;
+      <td style="white-space:nowrap"></td>`;
+    const actions = tr.lastElementChild;
     const copy = document.createElement("button");
     copy.className = "tab";
     copy.textContent = "Copy";
     copy.addEventListener("click", async () => {
       try { await navigator.clipboard.writeText(i.link); copy.textContent = "Copied ✓"; setTimeout(() => (copy.textContent = "Copy"), 1500); } catch {}
     });
-    tr.lastElementChild.appendChild(copy);
+    const revoke = document.createElement("button");
+    revoke.className = "tab";
+    revoke.style.color = "var(--danger)";
+    revoke.textContent = "Revoke";
+    revoke.addEventListener("click", async () => {
+      if (!confirm(`Revoke the invite${i.note ? ` for "${i.note}"` : ""}? The link stops working immediately. Anyone who already redeemed it keeps their plan.`)) return;
+      revoke.disabled = true;
+      try {
+        const r = await fetch(`/api/admin/invites/${encodeURIComponent(i.code)}`, { method: "DELETE", headers: { "X-Session": session } });
+        if (!r.ok && r.status !== 204) throw new Error("Couldn't revoke the invite.");
+        tr.remove();
+      } catch (err) {
+        alert(err.message);
+        revoke.disabled = false;
+      }
+    });
+    actions.append(copy, revoke);
     body.appendChild(tr);
   }
 }
@@ -123,8 +141,10 @@ $("#new-invite").addEventListener("click", async () => {
   const btn = $("#new-invite");
   btn.disabled = true;
   try {
-    const inv = await api("/api/admin/invites", { method: "POST", body: JSON.stringify({ plan: "tester", maxUses: 25 }) });
-    $("#invite-msg").textContent = `Created — send: ${inv.link}`;
+    const note = $("#invite-name").value.trim();
+    const inv = await api("/api/admin/invites", { method: "POST", body: JSON.stringify({ plan: "tester", maxUses: 25, note }) });
+    $("#invite-msg").textContent = `Created${note ? ` for ${note}` : ""} — send: ${inv.link}`;
+    $("#invite-name").value = "";
     await loadInvites();
   } catch (err) {
     $("#invite-msg").textContent = err.message;

@@ -207,6 +207,16 @@ export function createStore(filePath) {
       return { plan: inv.plan };
     },
 
+    // Revoke an invite: the link stops working immediately. Workspaces that
+    // already redeemed it keep their plan (downgrade them from the admin panel
+    // if needed).
+    revokeInvite(code) {
+      if (!state.invites[code]) return { error: "invalid" };
+      delete state.invites[code];
+      persist();
+      return { ok: true };
+    },
+
     // --- accounts ------------------------------------------------------
     // Named user accounts sit on top of member keys: an account stores a
     // "keychain" of the member keys it has access to, so a user can log in and

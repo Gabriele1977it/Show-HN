@@ -251,6 +251,14 @@ export function createSqliteStore(dbPath, { migrateFrom } = {}) {
       return { plan: inv.plan };
     },
 
+    // Revoke an invite: the link stops working immediately. Workspaces that
+    // already redeemed it keep their plan (downgrade them from the admin panel
+    // if needed).
+    revokeInvite(code) {
+      const r = db.prepare("DELETE FROM invites WHERE code = ?").run(code);
+      return r.changes ? { ok: true } : { error: "invalid" };
+    },
+
     // --- accounts ----------------------------------------------------
     createUser({ email, password }) {
       const e = (email ?? "").trim().toLowerCase();
