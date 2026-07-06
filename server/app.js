@@ -413,8 +413,9 @@ export function createApp({ store, uploadsDir, reminders, billing, mailer, owner
   });
 
   // --- pages -----------------------------------------------------------
-  // Marketing landing page at the root; the app itself lives at /app.
-  app.get("/", (_req, res) => res.sendFile(join(PUBLIC_DIR, "landing.html")));
+  // MadLabs hub at the root; each app has its own marketing page below it.
+  app.get("/", (_req, res) => res.sendFile(join(PUBLIC_DIR, "hub.html")));
+  app.get("/echodeck", (_req, res) => res.sendFile(join(PUBLIC_DIR, "landing.html")));
   app.get("/app", (_req, res) => res.sendFile(join(PUBLIC_DIR, "index.html")));
   app.get("/terms", (_req, res) => res.sendFile(join(PUBLIC_DIR, "terms.html")));
   app.get("/privacy", (_req, res) => res.sendFile(join(PUBLIC_DIR, "privacy.html")));

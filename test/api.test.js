@@ -254,8 +254,15 @@ test("legal pages are served", async () => {
   }
 });
 
-test("landing page is served at / and the app at /app", async () => {
-  const landing = await realFetch(`${base}/`);
+test("hub at /, landing at /echodeck, app at /app, arena at /arena", async () => {
+  const hub = await realFetch(`${base}/`);
+  assert.equal(hub.status, 200);
+  const hhtml = await hub.text();
+  assert.match(hhtml, /MadLabs/);
+  assert.match(hhtml, /EchoDeck/);
+  assert.match(hhtml, /Agent Arena/);
+
+  const landing = await realFetch(`${base}/echodeck`);
   assert.equal(landing.status, 200);
   const lhtml = await landing.text();
   assert.match(lhtml, /Start free/);
@@ -264,6 +271,10 @@ test("landing page is served at / and the app at /app", async () => {
   const app = await realFetch(`${base}/app`);
   assert.equal(app.status, 200);
   assert.match(await app.text(), /id="build-form"/);
+
+  const arena = await realFetch(`${base}/arena`);
+  assert.equal(arena.status, 200);
+  assert.match(await arena.text(), /Agent Arena/);
 });
 
 test("plans catalog is public", async () => {

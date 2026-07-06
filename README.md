@@ -67,7 +67,8 @@ npm install
 npm start          # http://localhost:3000
 ```
 
-`/` is the marketing **landing page**; the app itself is at **`/app`**. Click
+`/` is the **MadLabs hub** linking every app in this repo. EchoDeck's
+marketing page is at **`/echodeck`**; the app itself is at **`/app`**. Click
 **Start free**, paste a transcript on the **Build** tab, optionally attach an
 audio file (or paste a URL), and click **Build deck**. Switch to **Study** to
 review due cards and run shadowing loops.
@@ -227,17 +228,30 @@ server/
   exporters.js   Anki / CSV / JSON exporters
   reminders.js   due-review reminders + webhook delivery
   stats.js       study dashboard aggregation (history, streak, forecast)
-public/          landing.html, index.html (app), share.html, terms.html, privacy.html
-                 arena.html (Agent Arena — second app, self-contained demo)
+public/          hub.html (MadLabs hub at /), landing.html (/echodeck),
+                 index.html (app), share.html, terms.html, privacy.html,
+                 arena.html + arena.js (Agent Arena — second app, at /arena)
 test/            node:test suites
 ```
 
+## MadLabs hub (`/`)
+
+This repo hosts two apps under the **MadLabs** umbrella (madlabs.uk). The root
+serves a hub page linking both; each app keeps its own branding and pages:
+
+- **EchoDeck** — marketing at `/echodeck`, app at `/app` (this README's focus)
+- **Agent Arena** — `/arena` (below)
+
 ## Second app: Agent Arena (`/arena`)
 
-A self-contained interactive concept demo that lives alongside EchoDeck: pick a
-real SMB workflow (sales email, lead qualification, support triage, content
-brief), select 2–12 AI models across providers, and "run" them side by side
-with streamed outputs, per-dimension score bars, and a leaderboard scorecard.
+A benchmarking layer for AI agents on vertical workflows, shipped today as a
+self-contained interactive demo: pick a real SMB workflow (sales email, lead
+qualification, support triage, content brief), select 2–12 AI models across
+providers, and "run" them side by side with streamed outputs, per-dimension
+score bars, and a leaderboard scorecard. The long-term concept is a
+community layer where founders and operators run reproducible workflow tasks
+against agents and publish trusted scorecards (planned: freemium arena,
+Pro packs, team workspaces, sponsored challenge pools).
 
 **Demo mode** — everything is simulated in the browser: no API keys, no network
 calls, and scores are deterministic per model+task pair. It's a single static

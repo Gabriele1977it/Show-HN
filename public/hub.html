@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>MadLabs — small, sharp software experiments</title>
+    <meta name="description" content="MadLabs builds focused tools for creators, founders, and operators. Home of EchoDeck (audio → flashcards & shadowing) and Agent Arena (AI agent benchmarking for vertical workflows)." />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%A7%AA%3C/text%3E%3C/svg%3E" />
+    <style>
+      :root {
+        --bg: #f6f8fc;
+        --card: #ffffff;
+        --ink: #0b0d10;
+        --muted: #4a5568;
+        --faint: #94a3b8;
+        --line: #e2e8f0;
+        --accent: #7c3aed;
+        --accent2: #4f46e5;
+        --teal: #0e9f8f;
+        --grad: linear-gradient(135deg, #7c3aed, #4f46e5);
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #0b0d10;
+          --card: #14171c;
+          --ink: #f1f5f9;
+          --muted: #94a3b8;
+          --faint: #64748b;
+          --line: #2d333b;
+        }
+      }
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        background: var(--bg);
+        color: var(--ink);
+        line-height: 1.6;
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+      }
+      .wrap { max-width: 980px; margin: 0 auto; padding: 0 24px; width: 100%; }
+      header { padding: 20px 0; }
+      .brand {
+        display: flex; align-items: center; gap: 10px;
+        font-size: 1.35rem; font-weight: 800; letter-spacing: -0.5px;
+      }
+      .brand .word { background: var(--grad); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+      .hero { text-align: center; padding: 56px 0 40px; }
+      .hero h1 { font-size: 2.6rem; font-weight: 800; letter-spacing: -1.2px; line-height: 1.15; }
+      .hero h1 span { background: var(--grad); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+      .hero p { color: var(--muted); font-size: 1.1rem; max-width: 620px; margin: 14px auto 0; }
+      .apps {
+        display: grid; grid-template-columns: 1fr 1fr; gap: 24px;
+        padding: 24px 0 56px; flex: 1; align-content: start;
+      }
+      @media (max-width: 760px) { .apps { grid-template-columns: 1fr; } .hero h1 { font-size: 2rem; } }
+      .app-card {
+        background: var(--card); border: 1px solid var(--line); border-radius: 18px;
+        padding: 28px; display: flex; flex-direction: column; gap: 12px;
+        transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+      }
+      .app-card:hover { transform: translateY(-3px); box-shadow: 0 16px 40px rgba(0,0,0,0.10); border-color: var(--faint); }
+      .app-head { display: flex; align-items: center; gap: 12px; }
+      .app-logo { font-size: 1.9rem; line-height: 1; }
+      .app-head h2 { font-size: 1.3rem; font-weight: 800; letter-spacing: -0.4px; }
+      .status {
+        margin-left: auto; font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
+        padding: 3px 12px; border-radius: 40px;
+      }
+      .status.live { background: rgba(14, 159, 143, 0.14); color: var(--teal); }
+      .status.beta { background: rgba(124, 58, 237, 0.12); color: var(--accent); }
+      .app-card .tag { color: var(--faint); font-size: 0.78rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+      .app-card p.desc { color: var(--muted); font-size: 0.95rem; flex: 1; }
+      .app-ctas { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 6px; }
+      .cta {
+        display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+        padding: 10px 20px; border-radius: 10px; font-weight: 600; font-size: 0.9rem;
+        text-decoration: none; transition: opacity 0.2s ease, background 0.2s ease;
+      }
+      .cta.primary { background: var(--grad); color: #fff; }
+      .cta.primary:hover { opacity: 0.9; }
+      .cta.ghost { border: 1px solid var(--line); color: var(--muted); }
+      .cta.ghost:hover { color: var(--ink); border-color: var(--faint); }
+      .cta:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+      footer { border-top: 1px solid var(--line); padding: 24px 0; }
+      footer .wrap { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; color: var(--faint); font-size: 0.85rem; }
+      footer a { color: var(--muted); text-decoration: none; }
+      footer a:hover { color: var(--ink); }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="wrap">
+        <div class="brand">🧪 <span class="word">MadLabs</span></div>
+      </div>
+    </header>
+
+    <section class="hero">
+      <div class="wrap">
+        <h1>Small, sharp <span>software experiments</span></h1>
+        <p>Focused tools for creators, founders, and operators — each one built around a single workflow that people actually do.</p>
+      </div>
+    </section>
+
+    <div class="wrap apps">
+      <div class="app-card">
+        <div class="app-head">
+          <span class="app-logo">◈</span>
+          <h2>EchoDeck</h2>
+          <span class="status live">Live</span>
+        </div>
+        <span class="tag">For language-learning creators</span>
+        <p class="desc">Turn native-language audio into flashcards and shadowing practice. Paste a transcript or subtitles and get study-ready decks with spaced repetition, a study dashboard, cloze cards, and one-click sharing.</p>
+        <div class="app-ctas">
+          <a class="cta primary" href="/app">Open the app →</a>
+          <a class="cta ghost" href="/echodeck">Learn more</a>
+        </div>
+      </div>
+
+      <div class="app-card">
+        <div class="app-head">
+          <span class="app-logo">⚡</span>
+          <h2>Agent Arena</h2>
+          <span class="status beta">Demo</span>
+        </div>
+        <span class="tag">For founders &amp; operators</span>
+        <p class="desc">A benchmarking layer for AI agents on vertical workflows. Run real SMB tasks — sales emails, lead qualification, support triage — against multiple agents, compare outputs side by side, and build scorecards buyers can trust.</p>
+        <div class="app-ctas">
+          <a class="cta primary" href="/arena">Enter the arena →</a>
+        </div>
+      </div>
+    </div>
+
+    <footer>
+      <div class="wrap">
+        <div>© MadLabs · madlabs.uk</div>
+        <div><a href="/echodeck">EchoDeck</a> · <a href="/arena">Agent Arena</a> · <a href="/terms">Terms</a> · <a href="/privacy">Privacy</a></div>
+      </div>
+    </footer>
+  </body>
+</html>

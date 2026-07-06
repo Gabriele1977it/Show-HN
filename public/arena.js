@@ -97,7 +97,7 @@
             'Community': {
                 color: '#7c3aed',
                 models: [
-                    { id: 'hermes-4', name: 'Hermes 4', costPer1k: 0.001, latency: 0.8, trend: '🔥 Trending' },
+                    { id: 'hermes-4', name: 'Hermes 4', costPer1k: 0.001, latency: 0.8, trend: '🔥 +2650%' },
                     { id: 'openhermes', name: 'OpenHermes', costPer1k: 0.0006, latency: 0.9 },
                     { id: 'dolphin-3', name: 'Dolphin 3.0', costPer1k: 0.0005, latency: 1.0 }
                 ]
