@@ -61,6 +61,11 @@ CREATE TABLE IF NOT EXISTS push_subs (
   endpoint TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, sub TEXT NOT NULL, created_at INTEGER
 );
 CREATE INDEX IF NOT EXISTS idx_push_ws ON push_subs(workspace_id);
+CREATE TABLE IF NOT EXISTS invites (
+  code TEXT PRIMARY KEY, plan TEXT NOT NULL, max_uses INTEGER NOT NULL,
+  note TEXT, uses INTEGER NOT NULL DEFAULT 0, redeemed_by TEXT NOT NULL DEFAULT '[]',
+  created_at INTEGER
+);
 `;
 
 const newMember = (name, role) => ({ id: nanoid(8), name: name?.trim() || "Member", role, key: nanoid(24), createdAt: Date.now() });
@@ -214,6 +219,36 @@ export function createSqliteStore(dbPath, { migrateFrom } = {}) {
     getBilling(ws) {
       const w = db.prepare("SELECT billing FROM workspaces WHERE id=?").get(ws);
       return w?.billing ? JSON.parse(w.billing) : null;
+    },
+
+    // --- beta invites ----------------------------------------------------
+    // Owner-minted codes that grant a plan (typically "tester") to whichever
+    // workspaces redeem them, up to maxUses. Redeeming twice from the same
+    // workspace is a no-op that doesn't consume a use.
+    createInvite({ plan = "tester", maxUses = 25, note = "" } = {}) {
+      const code = nanoid(10);
+      const createdAt = Date.now();
+      db.prepare("INSERT INTO invites (code, plan, max_uses, note, uses, redeemed_by, created_at) VALUES (?,?,?,?,0,'[]',?)")
+        .run(code, plan, maxUses, String(note || "").slice(0, 80), createdAt);
+      return { code, plan, maxUses, note: String(note || "").slice(0, 80), uses: 0, createdAt };
+    },
+
+    listInvites() {
+      return db.prepare("SELECT code, plan, max_uses, note, uses, created_at FROM invites ORDER BY created_at DESC").all()
+        .map((r) => ({ code: r.code, plan: r.plan, maxUses: r.max_uses, note: r.note, uses: r.uses, createdAt: r.created_at }));
+    },
+
+    redeemInvite(code, ws) {
+      const inv = db.prepare("SELECT * FROM invites WHERE code=?").get(code);
+      const wsRow = db.prepare("SELECT id FROM workspaces WHERE id=?").get(ws);
+      if (!inv || !wsRow) return { error: "invalid" };
+      const redeemedBy = JSON.parse(inv.redeemed_by || "[]");
+      if (redeemedBy.includes(ws)) return { plan: inv.plan, already: true };
+      if (inv.uses >= inv.max_uses) return { error: "exhausted" };
+      redeemedBy.push(ws);
+      db.prepare("UPDATE invites SET uses = uses + 1, redeemed_by = ? WHERE code = ?").run(JSON.stringify(redeemedBy), code);
+      db.prepare("UPDATE workspaces SET plan = ? WHERE id = ?").run(inv.plan, ws);
+      return { plan: inv.plan };
     },
 
     // --- accounts ----------------------------------------------------

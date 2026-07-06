@@ -50,6 +50,16 @@
       <h2 class="sec">Today's protected usage</h2>
       <div class="metric-row" id="usage-tiles" style="grid-template-columns:repeat(2,1fr)"></div>
 
+      <h2 class="sec">Tester invite links <span class="muted small">(send one link — whoever opens it lands on the tester plan)</span></h2>
+      <div class="panel" style="margin-bottom:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <button id="new-invite" class="primary small">＋ Create tester invite (25 uses)</button>
+        <span id="invite-msg" class="muted small"></span>
+      </div>
+      <div class="table-wrap"><table class="admin-table" id="invite-table">
+        <thead><tr><th>Link</th><th>Plan</th><th>Used</th><th>Created</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table></div>
+
       <h2 class="sec">Latest workspaces <span class="muted small">(change a plan to grant the tester tier)</span></h2>
       <div class="table-wrap"><table class="admin-table" id="ws-table">
         <thead><tr><th>Workspace</th><th>Plan</th><th>Decks</th><th>Cards</th><th>Members</th><th>Created</th><th>Set plan</th></tr></thead>

@@ -90,5 +90,55 @@ async function load() {
   }
 }
 
-$("#refresh").addEventListener("click", load);
+// --- tester invites ---
+async function loadInvites() {
+  let invites;
+  try { invites = await api("/api/admin/invites"); } catch { return; }
+  const body = $("#invite-table tbody");
+  body.innerHTML = "";
+  if (!invites.length) {
+    body.innerHTML = `<tr><td colspan="5" class="muted">No invites yet — create one and send the link to your testers.</td></tr>`;
+    return;
+  }
+  for (const i of invites) {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td style="font-family:monospace;font-size:12px">${esc(i.link)}</td>
+      <td>${planPill(i.plan)}</td>
+      <td>${i.uses} / ${i.maxUses}</td>
+      <td class="muted">${fmtDate(i.createdAt)}</td>
+      <td></td>`;
+    const copy = document.createElement("button");
+    copy.className = "tab";
+    copy.textContent = "Copy";
+    copy.addEventListener("click", async () => {
+      try { await navigator.clipboard.writeText(i.link); copy.textContent = "Copied ✓"; setTimeout(() => (copy.textContent = "Copy"), 1500); } catch {}
+    });
+    tr.lastElementChild.appendChild(copy);
+    body.appendChild(tr);
+  }
+}
+
+$("#new-invite").addEventListener("click", async () => {
+  const btn = $("#new-invite");
+  btn.disabled = true;
+  try {
+    const inv = await api("/api/admin/invites", { method: "POST", body: JSON.stringify({ plan: "tester", maxUses: 25 }) });
+    $("#invite-msg").textContent = `Created — send: ${inv.link}`;
+    await loadInvites();
+  } catch (err) {
+    $("#invite-msg").textContent = err.message;
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+// Embedded in the app's Admin tab: hide the standalone chrome.
+if (new URLSearchParams(location.search).get("embed")) {
+  document.querySelector(".topbar").style.display = "none";
+  document.body.style.background = "transparent";
+}
+
+$("#refresh").addEventListener("click", () => { load(); loadInvites(); });
 load();
+loadInvites();
