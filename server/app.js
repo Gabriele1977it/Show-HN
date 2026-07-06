@@ -419,6 +419,8 @@ export function createApp({ store, uploadsDir, reminders, billing, mailer, owner
   app.get("/terms", (_req, res) => res.sendFile(join(PUBLIC_DIR, "terms.html")));
   app.get("/privacy", (_req, res) => res.sendFile(join(PUBLIC_DIR, "privacy.html")));
   app.get("/reset", (_req, res) => res.sendFile(join(PUBLIC_DIR, "reset.html")));
+  // Second app: Agent Arena, a self-contained interactive demo.
+  app.get("/arena", (_req, res) => res.sendFile(join(PUBLIC_DIR, "arena.html")));
 
   // --- static ----------------------------------------------------------
   app.use("/uploads", express.static(uploadsDir));

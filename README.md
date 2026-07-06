@@ -228,8 +228,23 @@ server/
   reminders.js   due-review reminders + webhook delivery
   stats.js       study dashboard aggregation (history, streak, forecast)
 public/          landing.html, index.html (app), share.html, terms.html, privacy.html
+                 arena.html (Agent Arena — second app, self-contained demo)
 test/            node:test suites
 ```
+
+## Second app: Agent Arena (`/arena`)
+
+A self-contained interactive concept demo that lives alongside EchoDeck: pick a
+real SMB workflow (sales email, lead qualification, support triage, content
+brief), select 2–12 AI models across providers, and "run" them side by side
+with streamed outputs, per-dimension score bars, and a leaderboard scorecard.
+
+**Demo mode** — everything is simulated in the browser: no API keys, no network
+calls, and scores are deterministic per model+task pair. It's a single static
+file (`public/arena.html`) served at `/arena`, with light/dark theme, JSON
+export of results, and a simulated "model sync" that adds fictional preview
+models. Swapping `getMockResponse()` for real provider calls is the obvious
+path if the concept graduates from demo to product.
 
 ## Deploying to production
 
