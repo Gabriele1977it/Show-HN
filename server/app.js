@@ -872,6 +872,9 @@ export function createApp({ store, uploadsDir, reminders, billing, mailer, enric
   // Marketing landing page at the root; the app itself lives at /app.
   app.get("/", (_req, res) => res.sendFile(join(PUBLIC_DIR, "landing.html")));
   app.get("/app", (_req, res) => res.sendFile(join(PUBLIC_DIR, "index.html")));
+  // Agent Arena — MadLabs' second app, a self-contained interactive demo
+  // (linked from the company hub's products grid).
+  app.get("/arena", (_req, res) => res.sendFile(join(PUBLIC_DIR, "arena.html")));
   app.get("/demo", (_req, res) => res.sendFile(join(PUBLIC_DIR, "demo.html")));
   app.get("/admin", (_req, res) => res.sendFile(join(PUBLIC_DIR, "admin.html")));
   // SEO language landing pages (server-rendered so crawlers get real content).

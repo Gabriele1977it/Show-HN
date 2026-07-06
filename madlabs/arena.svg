@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="440" viewBox="0 0 800 440" role="img" aria-label="Agent Arena preview">
+  <defs>
+    <linearGradient id="abg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f5f3ff"/>
+      <stop offset="1" stop-color="#ffffff"/>
+    </linearGradient>
+    <linearGradient id="abar" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#7c3aed"/>
+      <stop offset="1" stop-color="#4f46e5"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="440" fill="url(#abg)"/>
+  <g font-family="Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif">
+    <text x="48" y="70" font-size="26" font-weight="700" fill="#7c3aed">⚡ Agent Arena</text>
+    <text x="752" y="70" font-size="15" fill="#6b7280" text-anchor="end">Task: Draft Sales Email</text>
+    <!-- agent card 1 -->
+    <rect x="48" y="104" width="344" height="272" rx="16" fill="#ffffff" stroke="#e5e7eb"/>
+    <circle cx="84" cy="140" r="14" fill="#10a37f"/>
+    <text x="108" y="146" font-size="17" font-weight="600" fill="#111827">GPT-5.1</text>
+    <rect x="300" y="126" width="72" height="28" rx="14" fill="#f5f3ff" stroke="#ddd6fe"/>
+    <text x="336" y="145" font-size="14" font-weight="700" fill="#7c3aed" text-anchor="middle">85 pts</text>
+    <rect x="72" y="170" width="296" height="10" rx="5" fill="#e5e7eb"/>
+    <rect x="72" y="170" width="252" height="10" rx="5" fill="url(#abar)"/>
+    <rect x="72" y="196" width="296" height="10" rx="5" fill="#e5e7eb"/>
+    <rect x="72" y="196" width="222" height="10" rx="5" fill="url(#abar)"/>
+    <text x="72" y="238" font-size="14" fill="#6b7280">Subject: Quick question about</text>
+    <text x="72" y="260" font-size="14" fill="#6b7280">your logistics strategy…</text>
+    <text x="72" y="300" font-size="13" fill="#9ca3af">⏱ 1.6s · 🧾 108 tok · 💰 $0.0011</text>
+    <text x="72" y="348" font-size="22" fill="#f59e0b">🥇 Winner</text>
+    <!-- agent card 2 -->
+    <rect x="408" y="104" width="344" height="272" rx="16" fill="#ffffff" stroke="#e5e7eb"/>
+    <circle cx="444" cy="140" r="14" fill="#d97757"/>
+    <text x="468" y="146" font-size="17" font-weight="600" fill="#111827">Claude Opus 4.5</text>
+    <rect x="660" y="126" width="72" height="28" rx="14" fill="#f5f3ff" stroke="#ddd6fe"/>
+    <text x="696" y="145" font-size="14" font-weight="700" fill="#7c3aed" text-anchor="middle">80 pts</text>
+    <rect x="432" y="170" width="296" height="10" rx="5" fill="#e5e7eb"/>
+    <rect x="432" y="170" width="237" height="10" rx="5" fill="url(#abar)"/>
+    <rect x="432" y="196" width="296" height="10" rx="5" fill="#e5e7eb"/>
+    <rect x="432" y="196" width="248" height="10" rx="5" fill="url(#abar)"/>
+    <text x="432" y="238" font-size="14" fill="#6b7280">Subject: Your logistics savings</text>
+    <text x="432" y="260" font-size="14" fill="#6b7280">opportunity…</text>
+    <text x="432" y="300" font-size="13" fill="#9ca3af">⏱ 2.1s · 🧾 99 tok · 💰 $0.0025</text>
+    <text x="432" y="348" font-size="22" fill="#94a3b8">🥈 Runner-up</text>
+  </g>
+</svg>

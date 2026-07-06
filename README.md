@@ -282,9 +282,30 @@ server/
   reminders.js   due-review reminders + webhook delivery
   push.js        web push (VAPID) + per-workspace fan-out
   stats.js       study dashboard aggregation (history, streak, forecast)
-public/          landing.html, index.html (app), share.html, terms.html, privacy.html
+public/          landing.html, index.html (app), share.html, terms.html, privacy.html,
+                 arena.html + arena.js + arena-theme.js (Agent Arena, at /arena)
+madlabs/         the MadLabs company hub (static site → madlabs.uk)
 test/            node:test suites
 ```
+
+## Second app: Agent Arena (`/arena`)
+
+A benchmarking layer for AI agents on vertical workflows, shipped today as a
+self-contained interactive demo and linked from the MadLabs hub's products
+grid: pick a real SMB workflow (sales email, lead qualification, support
+triage, content brief), select 2–12 AI models across providers, and "run"
+them side by side with streamed outputs, per-dimension score bars, and a
+leaderboard scorecard.
+
+**Demo mode** — everything is simulated in the browser: no API keys, no
+network calls, and scores are deterministic per model+task pair. It's a
+static page served by this app at `/arena`, with light/dark theme, JSON
+export of results, and a simulated "model sync". The long-term concept is a
+community layer where founders and operators run reproducible workflow tasks
+against agents and publish trusted scorecards (planned: freemium arena, Pro
+packs, team workspaces, sponsored challenge pools). Swapping
+`getMockResponse()` for real provider calls is the obvious path if the
+concept graduates from demo to product.
 
 ## Deploying to production
 
