@@ -1289,3 +1289,59 @@ test("admin can grant the tester plan; the workspace gets its entitlements", asy
     method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ plan: "team" }),
   })).status, 403);
 });
+
+// --- beta invite links -------------------------------------------------------
+
+test("beta invites: owner mints a link; redeeming grants the tester plan once per workspace", async () => {
+  const owner = await realFetch(`${base}/api/auth/login`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email: "owner@echodeck.app", password: "passw0rd" }),
+  }).then(j);
+  const oHdr = { "X-Session": owner.token, "Content-Type": "application/json" };
+
+  // Only owners can mint or list invites.
+  assert.equal((await realFetch(`${base}/api/admin/invites`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" })).status, 403);
+
+  const inv = await realFetch(`${base}/api/admin/invites`, {
+    method: "POST", headers: oHdr, body: JSON.stringify({ plan: "tester", maxUses: 2, note: "cohort 1" }),
+  }).then(j);
+  assert.ok(inv.code);
+  assert.match(inv.link, /\/app\?beta=/);
+  assert.equal(inv.plan, "tester");
+  assert.equal(inv.maxUses, 2);
+
+  // A fresh workspace redeems the code → tester plan + entitlements.
+  const ws = await realFetch(`${base}/api/workspaces`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: "Tester Via Link" }),
+  }).then(j);
+  const hdr = { Authorization: `Bearer ${ws.key}`, "Content-Type": "application/json" };
+  const red = await realFetch(`${base}/api/beta/redeem`, { method: "POST", headers: hdr, body: JSON.stringify({ code: inv.code }) }).then(j);
+  assert.equal(red.plan, "tester");
+  assert.equal(red.planInfo.name, "Beta tester");
+  assert.equal((await realFetch(`${base}/api/workspace`, { headers: hdr }).then(j)).plan, "tester");
+
+  // Redeeming again from the same workspace doesn't burn a second use.
+  const again = await realFetch(`${base}/api/beta/redeem`, { method: "POST", headers: hdr, body: JSON.stringify({ code: inv.code }) }).then(j);
+  assert.equal(again.already, true);
+  const listed = (await realFetch(`${base}/api/admin/invites`, { headers: oHdr }).then(j)).find((i) => i.code === inv.code);
+  assert.equal(listed.uses, 1);
+
+  // A second workspace uses the last slot; a third gets 410 (exhausted).
+  const ws2 = await realFetch(`${base}/api/workspaces`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: "Tester 2" }),
+  }).then(j);
+  assert.equal((await realFetch(`${base}/api/beta/redeem`, {
+    method: "POST", headers: { Authorization: `Bearer ${ws2.key}`, "Content-Type": "application/json" }, body: JSON.stringify({ code: inv.code }),
+  })).status, 200);
+  const ws3 = await realFetch(`${base}/api/workspaces`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: "Tester 3" }),
+  }).then(j);
+  assert.equal((await realFetch(`${base}/api/beta/redeem`, {
+    method: "POST", headers: { Authorization: `Bearer ${ws3.key}`, "Content-Type": "application/json" }, body: JSON.stringify({ code: inv.code }),
+  })).status, 410);
+
+  // Junk codes are rejected.
+  assert.equal((await realFetch(`${base}/api/beta/redeem`, {
+    method: "POST", headers: { Authorization: `Bearer ${ws3.key}`, "Content-Type": "application/json" }, body: JSON.stringify({ code: "nope" }),
+  })).status, 404);
+});

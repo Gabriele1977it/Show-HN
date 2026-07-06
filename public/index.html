@@ -25,6 +25,7 @@
       </nav>
       <div class="top-actions">
         <button id="signin-btn" class="tab hidden">Sign in</button>
+        <button class="tab hidden" data-view="admin" id="admin-tab" title="Owner dashboard">📈 Admin</button>
         <button class="tab" data-view="pricing" id="pricing-tab">✦ Upgrade</button>
         <button id="ws-btn" class="tab" title="Workspace">⌂ <span id="ws-name">Workspace</span></button>
       </div>
@@ -274,6 +275,11 @@ Subtitle text here"></textarea>
         </div>
         <div id="pricing-cards" class="pricing-grid"></div>
         <p id="pricing-msg" class="muted small"></p>
+      </section>
+
+      <!-- ADMIN VIEW (owner only): the /admin dashboard embedded as a tab -->
+      <section id="view-admin" class="view">
+        <iframe id="admin-frame" title="Admin dashboard" style="width:100%;height:calc(100vh - 150px);border:0;border-radius:14px;background:#fff"></iframe>
       </section>
 
       <!-- STATS VIEW -->

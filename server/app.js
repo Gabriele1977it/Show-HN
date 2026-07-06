@@ -253,6 +253,30 @@ export function createApp({ store, uploadsDir, reminders, billing, mailer, enric
     res.json({ ok: true, id: req.params.id, plan });
   });
 
+  // Beta invite links: minting/listing is owner-only; a code redeems via
+  // /app?beta=<code>, which upgrades the visitor's workspace to the invite's
+  // plan (typically tester) — no manual plan-flipping per person.
+  app.post("/api/admin/invites", requireOwner, (req, res) => {
+    const plan = req.body?.plan ?? "tester";
+    if (!allPlanIds().includes(plan)) return res.status(400).json({ error: "Unknown plan." });
+    const maxUses = Math.min(Math.max(1, Number(req.body?.maxUses) || 25), 500);
+    const invite = store.createInvite({ plan, maxUses, note: req.body?.note });
+    res.status(201).json({ ...invite, link: `${req.protocol}://${req.get("host")}/app?beta=${invite.code}` });
+  });
+
+  app.get("/api/admin/invites", requireOwner, (req, res) => {
+    const origin = `${req.protocol}://${req.get("host")}`;
+    res.json(store.listInvites().map((i) => ({ ...i, link: `${origin}/app?beta=${i.code}` })));
+  });
+
+  // Redeem (workspace-scoped: the new tester's own key authenticates).
+  app.post("/api/beta/redeem", (req, res) => {
+    const result = store.redeemInvite(String(req.body?.code || "").trim(), req.ws);
+    if (result.error === "invalid") return res.status(404).json({ error: "That invite link isn't valid." });
+    if (result.error === "exhausted") return res.status(410).json({ error: "This invite has been fully used — ask for a new link." });
+    res.json({ ok: true, plan: result.plan, planInfo: planPublic(result.plan), already: Boolean(result.already) });
+  });
+
   // Save the member key the client is currently using to the account keychain.
   app.post("/api/account/keys", (req, res) => {
     const user = sessionUser(req);

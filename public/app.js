@@ -96,6 +96,8 @@ $$(".tab").forEach((t) =>
     if (t.dataset.view === "stats") loadStats();
     if (t.dataset.view === "discover") loadMarketplace();
     if (t.dataset.view === "pricing") loadPricing();
+    // Lazy-load the embedded owner dashboard the first time the tab opens.
+    if (t.dataset.view === "admin" && !$("#admin-frame").src) $("#admin-frame").src = "/admin?embed=1";
   }),
 );
 function goStudy() {
@@ -1423,6 +1425,7 @@ function renderSignedIn(account) {
   $("#signin-btn").classList.add("hidden");
   $("#acct-who").textContent = account.email;
   $("#admin-link").style.display = account.owner ? "inline-block" : "none";
+  $("#admin-tab").classList.toggle("hidden", !account.owner);
   const ul = $("#acct-keychain");
   ul.innerHTML = "";
   for (const k of account.keychain) {
@@ -1516,9 +1519,21 @@ $("#push-test").addEventListener("click", async () => {
   await loadDecks();
   initPush();
   // Deep links from the marketing site:
+  //  ?beta=<code>       — redeem a tester invite (upgrades this workspace).
   //  ?install=<shareId> — install a marketplace deck into this workspace.
   //  ?starter=<id>      — install a bundled starter deck.
   //  ?sample=1          — build a ready-made sample deck (no signup needed).
+  if (params.get("beta")) {
+    const code = params.get("beta");
+    history.replaceState(null, "", location.pathname);
+    try {
+      const r = await api.post("/api/beta/redeem", { code });
+      await loadWorkspaceInfo();
+      alert(`Welcome to the EchoDeck beta! 🎉\n\nThis workspace is now on the "${r.planInfo?.name || r.plan}" plan — all features unlocked, with fair daily limits on AI fill and imports.\n\nTip: create an account (Sign in → Create account) so your decks are safe on any device.`);
+    } catch (err) {
+      alert(err.message);
+    }
+  }
   if (params.get("install")) {
     history.replaceState(null, "", location.pathname);
     await installListing(params.get("install"), null);

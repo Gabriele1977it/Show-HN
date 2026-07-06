@@ -14,7 +14,7 @@ import { computeStats } from "./stats.js";
 import { suggestCloze } from "./cloze.js";
 import { hashPassword, verifyPassword, newToken, hashToken } from "./auth.js";
 
-const EMPTY = { users: {}, sessions: {}, resets: {}, workspaces: {}, decks: {}, cards: {}, reviewLog: [], pushSubs: {} };
+const EMPTY = { users: {}, sessions: {}, resets: {}, workspaces: {}, decks: {}, cards: {}, reviewLog: [], pushSubs: {}, invites: {} };
 
 const SESSION_TTL = 30 * 24 * 60 * 60 * 1000; // 30 days
 const RESET_TTL = 60 * 60 * 1000; // 1 hour
@@ -176,6 +176,35 @@ export function createStore(filePath) {
 
     getBilling(ws) {
       return state.workspaces[ws]?.billing ?? null;
+    },
+
+    // --- beta invites ----------------------------------------------------
+    // Owner-minted codes that grant a plan (typically "tester") to whichever
+    // workspaces redeem them, up to maxUses. Redeeming twice from the same
+    // workspace is a no-op that doesn't consume a use.
+    createInvite({ plan = "tester", maxUses = 25, note = "" } = {}) {
+      const code = nanoid(10);
+      state.invites[code] = { code, plan, maxUses, note: String(note || "").slice(0, 80), uses: 0, redeemedBy: [], createdAt: Date.now() };
+      persist();
+      return { ...state.invites[code] };
+    },
+
+    listInvites() {
+      return Object.values(state.invites)
+        .sort((a, b) => b.createdAt - a.createdAt)
+        .map(({ redeemedBy, ...pub }) => pub);
+    },
+
+    redeemInvite(code, ws) {
+      const inv = state.invites[code];
+      if (!inv || !state.workspaces[ws]) return { error: "invalid" };
+      if (inv.redeemedBy.includes(ws)) return { plan: inv.plan, already: true };
+      if (inv.uses >= inv.maxUses) return { error: "exhausted" };
+      inv.uses += 1;
+      inv.redeemedBy.push(ws);
+      state.workspaces[ws].plan = inv.plan;
+      persist();
+      return { plan: inv.plan };
     },
 
     // --- accounts ------------------------------------------------------
@@ -655,6 +684,7 @@ function load(filePath) {
         cards: parsed.cards ?? {},
         reviewLog: parsed.reviewLog ?? [],
         pushSubs: parsed.pushSubs ?? {},
+        invites: parsed.invites ?? {},
       };
     }
   } catch {
