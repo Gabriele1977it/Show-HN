@@ -80,3 +80,41 @@ test("bulk enrich consumes quota per card, not per request", async (t) => {
   const blocked = await fetch(`${base}/api/cards/${deck.cards[2].id}/enrich`, { method: "POST", headers: hdr, body: JSON.stringify({ overwrite: true }) });
   assert.equal(blocked.status, 429);
 });
+
+test("imports stop with 429 at the plan's daily limit (override for test)", async (t) => {
+  const tmp = mkdtempSync(join(tmpdir(), "echodeck-iq-"));
+  const store = createStore(join(tmp, "db.json"));
+  const importer = { enabled: true, run: async () => ({ source: "youtube", videoId: "dQw4w9WgXcQ", title: "T", language: "en", availableLangs: [], transcript: "[00:00] uno." }) };
+  const app = createApp({ store, uploadsDir: join(tmp, "up"), importer, aiLimits: { importsPerDay: 2 } });
+  const server = app.listen(0);
+  const base = `http://127.0.0.1:${server.address().port}`;
+  t.after(() => { server.close(); rmSync(tmp, { recursive: true, force: true }); });
+
+  const ws = store.createWorkspace({ name: "Import Quota WS" });
+  const hdr = { Authorization: `Bearer ${ws.key}`, "Content-Type": "application/json" };
+  const url = JSON.stringify({ url: "https://youtu.be/dQw4w9WgXcQ" });
+  assert.equal((await fetch(`${base}/api/import`, { method: "POST", headers: hdr, body: url })).status, 200);
+  assert.equal((await fetch(`${base}/api/import`, { method: "POST", headers: hdr, body: url })).status, 200);
+  const blocked = await fetch(`${base}/api/import`, { method: "POST", headers: hdr, body: url });
+  assert.equal(blocked.status, 429);
+  assert.match((await blocked.json()).error, /import limit/i);
+});
+
+test("without overrides, quotas come from the workspace's plan (tester caps imports at 10)", async (t) => {
+  const tmp = mkdtempSync(join(tmpdir(), "echodeck-iq2-"));
+  const store = createStore(join(tmp, "db.json"));
+  const importer = { enabled: true, run: async () => ({ source: "url", title: "t", language: null, transcript: "uno." }) };
+  const app = createApp({ store, uploadsDir: join(tmp, "up"), importer });
+  const server = app.listen(0);
+  const base = `http://127.0.0.1:${server.address().port}`;
+  t.after(() => { server.close(); rmSync(tmp, { recursive: true, force: true }); });
+
+  const ws = store.createWorkspace({ name: "Tester WS" });
+  store.setWorkspacePlan(ws.id, "tester");
+  const hdr = { Authorization: `Bearer ${ws.key}`, "Content-Type": "application/json" };
+  const body = JSON.stringify({ url: "https://example.com/subs/l.vtt" });
+  for (let i = 0; i < 10; i++) {
+    assert.equal((await fetch(`${base}/api/import`, { method: "POST", headers: hdr, body })).status, 200, `import ${i + 1} within tester limit`);
+  }
+  assert.equal((await fetch(`${base}/api/import`, { method: "POST", headers: hdr, body })).status, 429);
+});

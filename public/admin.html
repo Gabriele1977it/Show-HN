@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>EchoDeck — Admin</title>
+    <meta name="robots" content="noindex,nofollow" />
+    <link rel="icon" href="/icon.svg" />
+    <link rel="stylesheet" href="/styles.css" />
+    <style>
+      main.admin { max-width: 1080px; margin: 0 auto; padding: 24px; }
+      .admin-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px; flex-wrap: wrap; }
+      .admin-head h1 { margin: 0; font-size: 24px; letter-spacing: -.5px; }
+      .admin-table { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; font-size: 13.5px; }
+      .admin-table th, .admin-table td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line-2); }
+      .admin-table th { background: var(--panel-2); font-size: 12px; text-transform: uppercase; letter-spacing: .4px; color: var(--muted); }
+      .admin-table tr:last-child td { border-bottom: none; }
+      .admin-table select { font-size: 12.5px; padding: 4px 6px; }
+      .table-wrap { overflow-x: auto; border-radius: 14px; box-shadow: var(--shadow-sm); margin-bottom: 24px; }
+      .plan-pill { font-size: 11.5px; font-weight: 700; border-radius: 999px; padding: 3px 10px; background: var(--panel-2); color: var(--ink-2); }
+      .plan-pill.pro, .plan-pill.team { background: var(--accent-weak); color: var(--accent); }
+      .plan-pill.tester { background: #fef3c7; color: #b45309; }
+      h2.sec { font-size: 16px; margin: 26px 0 10px; }
+      #gate { max-width: 520px; margin: 80px auto; text-align: center; }
+    </style>
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="/" style="text-decoration:none;color:inherit"><span class="logo">◈</span> EchoDeck <span class="tagline">admin</span></a>
+      <div class="top-actions" style="margin-left:auto">
+        <a class="tab" href="/app" style="text-decoration:none">← Back to the app</a>
+        <button id="refresh" class="tab">↻ Refresh</button>
+      </div>
+    </header>
+
+    <div id="gate" class="panel hidden">
+      <h2>Owner sign-in required</h2>
+      <p class="muted">This dashboard is only available to owner accounts (emails listed in <code>OWNER_EMAILS</code>).
+      Sign in to the <a href="/app">app</a> with your owner account first, then come back here.</p>
+    </div>
+
+    <main class="admin hidden" id="dash">
+      <div class="admin-head">
+        <h1>Operations dashboard</h1>
+        <span class="muted small" id="stamp"></span>
+      </div>
+
+      <div class="metric-row" id="tiles"></div>
+
+      <h2 class="sec">Today's protected usage</h2>
+      <div class="metric-row" id="usage-tiles" style="grid-template-columns:repeat(2,1fr)"></div>
+
+      <h2 class="sec">Latest workspaces <span class="muted small">(change a plan to grant the tester tier)</span></h2>
+      <div class="table-wrap"><table class="admin-table" id="ws-table">
+        <thead><tr><th>Workspace</th><th>Plan</th><th>Decks</th><th>Cards</th><th>Members</th><th>Created</th><th>Set plan</th></tr></thead>
+        <tbody></tbody>
+      </table></div>
+
+      <h2 class="sec">Latest accounts</h2>
+      <div class="table-wrap"><table class="admin-table" id="acct-table">
+        <thead><tr><th>Email</th><th>Workspaces</th><th>Created</th></tr></thead>
+        <tbody></tbody>
+      </table></div>
+    </main>
+
+    <script src="/admin.js" type="module"></script>
+  </body>
+</html>

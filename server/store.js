@@ -142,6 +142,38 @@ export function createStore(filePath) {
       return w?.id ?? null;
     },
 
+    // Aggregate stats for the owner's /admin panel.
+    adminOverview() {
+      const wss = Object.values(state.workspaces);
+      const decks = Object.values(state.decks);
+      const users = Object.values(state.users);
+      const dayAgo = Date.now() - 86400000;
+      const plans = {};
+      for (const w of wss) plans[w.plan || "free"] = (plans[w.plan || "free"] || 0) + 1;
+      const deckAgg = {};
+      for (const d of decks) {
+        const a = (deckAgg[d.workspaceId] ??= { decks: 0, cards: 0 });
+        a.decks += 1;
+        a.cards += d.cardOrder.length;
+      }
+      const recentWorkspaces = [...wss].sort((a, b) => b.createdAt - a.createdAt).slice(0, 25).map((w) => ({
+        id: w.id, name: w.name, plan: w.plan || "free", createdAt: w.createdAt,
+        members: (w.members ?? []).length,
+        decks: deckAgg[w.id]?.decks ?? 0, cards: deckAgg[w.id]?.cards ?? 0,
+      }));
+      const recentAccounts = [...users].sort((a, b) => b.createdAt - a.createdAt).slice(0, 25)
+        .map((u) => ({ email: u.email, createdAt: u.createdAt, workspaces: (u.keychain ?? []).length }));
+      return {
+        totals: {
+          workspaces: wss.length, accounts: users.length, decks: decks.length,
+          cards: Object.keys(state.cards).length, reviews: state.reviewLog.length,
+          shared: decks.filter((d) => d.shareId).length, listed: decks.filter((d) => d.listed).length,
+        },
+        reviews24h: state.reviewLog.filter((e) => e.at >= dayAgo).length,
+        plans, recentWorkspaces, recentAccounts,
+      };
+    },
+
     getBilling(ws) {
       return state.workspaces[ws]?.billing ?? null;
     },

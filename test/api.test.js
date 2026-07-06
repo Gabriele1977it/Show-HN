@@ -1218,3 +1218,74 @@ test("starter install respects plan limits and 404s unknown ids", async () => {
   // Anonymous callers can't install.
   assert.equal((await realFetch(`${base}/api/starters/${starters[0].id}/install`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" })).status, 401);
 });
+
+// --- admin panel -------------------------------------------------------------
+
+test("admin overview is owner-only and reports totals, plans and usage", async () => {
+  // Anonymous and non-owner sessions are rejected.
+  assert.equal((await realFetch(`${base}/api/admin/overview`)).status, 403);
+  const normie = await realFetch(`${base}/api/auth/signup`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email: "not-admin@example.com", password: "password1" }),
+  }).then(j);
+  assert.equal((await realFetch(`${base}/api/admin/overview`, { headers: { "X-Session": normie.token } })).status, 403);
+
+  // The owner (OWNER_EMAILS, created in the auto-comp test) gets the payload.
+  const owner = await realFetch(`${base}/api/auth/login`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email: "owner@echodeck.app", password: "passw0rd" }),
+  }).then(j);
+  const o = await realFetch(`${base}/api/admin/overview`, { headers: { "X-Session": owner.token } }).then(j);
+  assert.ok(o.totals.workspaces >= 1);
+  assert.ok(o.totals.accounts >= 2);
+  assert.ok(o.totals.decks >= 1);
+  assert.ok(typeof o.plans === "object");
+  assert.ok(Array.isArray(o.recentWorkspaces) && o.recentWorkspaces.length >= 1);
+  assert.ok(o.recentWorkspaces[0].name && o.recentWorkspaces[0].plan);
+  assert.ok(Array.isArray(o.recentAccounts));
+  assert.ok(typeof o.usageToday.aiFills === "number");
+  assert.ok(typeof o.usageToday.imports === "number");
+  assert.ok(o.planIds.includes("tester")); // hidden tiers ARE grantable from admin
+
+  // The pricing endpoint still hides the tester tier from the public.
+  const publicPlans = await realFetch(`${base}/api/plans`).then(j);
+  assert.ok(!publicPlans.some((p) => p.id === "tester"));
+});
+
+test("admin can grant the tester plan; the workspace gets its entitlements", async () => {
+  const owner = await realFetch(`${base}/api/auth/login`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email: "owner@echodeck.app", password: "passw0rd" }),
+  }).then(j);
+  const ws = await realFetch(`${base}/api/workspaces`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: "Beta Cohort 1" }),
+  }).then(j);
+
+  // Bad plan / bad workspace are rejected.
+  assert.equal((await realFetch(`${base}/api/admin/workspaces/${ws.id}/plan`, {
+    method: "POST", headers: { "X-Session": owner.token, "Content-Type": "application/json" }, body: JSON.stringify({ plan: "gold" }),
+  })).status, 400);
+  assert.equal((await realFetch(`${base}/api/admin/workspaces/nope/plan`, {
+    method: "POST", headers: { "X-Session": owner.token, "Content-Type": "application/json" }, body: JSON.stringify({ plan: "tester" }),
+  })).status, 404);
+
+  // Grant tester → features unlock (enrich works), plan reflects everywhere.
+  const r = await realFetch(`${base}/api/admin/workspaces/${ws.id}/plan`, {
+    method: "POST", headers: { "X-Session": owner.token, "Content-Type": "application/json" }, body: JSON.stringify({ plan: "tester" }),
+  }).then(j);
+  assert.equal(r.plan, "tester");
+  const hdr = { Authorization: `Bearer ${ws.key}`, "Content-Type": "application/json" };
+  const info = await realFetch(`${base}/api/workspace`, { headers: hdr }).then(j);
+  assert.equal(info.plan, "tester");
+  assert.equal(info.planInfo.maxDecks, 20);
+  const deck = await realFetch(`${base}/api/decks`, {
+    method: "POST", headers: hdr, body: JSON.stringify({ title: "T", transcript: "hola mundo." }),
+  }).then(j);
+  const fill = await realFetch(`${base}/api/cards/${deck.cards[0].id}/enrich`, { method: "POST", headers: hdr, body: "{}" });
+  assert.equal(fill.status, 200); // enrich is unlocked on the tester tier
+
+  // Non-owners cannot change plans.
+  assert.equal((await realFetch(`${base}/api/admin/workspaces/${ws.id}/plan`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ plan: "team" }),
+  })).status, 403);
+});

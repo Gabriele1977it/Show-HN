@@ -45,6 +45,28 @@ test("listPlans returns all three tiers", () => {
   assert.deepEqual(ids, ["free", "pro", "team"]);
 });
 
+test("tester tier: hidden from pricing, full features, tight daily quotas", () => {
+  // Not purchasable — the public pricing endpoints must not show it…
+  assert.ok(!listPlans().some((p) => p.id === "tester"));
+  // …but it's a real plan with every feature on and beta-sized limits.
+  const t = getPlan("tester");
+  assert.equal(t.hidden, true);
+  assert.deepEqual(t.features, { sharing: true, reminders: true, stats: true, enrich: true });
+  assert.equal(t.maxDecks, 20);
+  assert.equal(t.maxCards, 1000);
+  assert.equal(t.aiPerDay, 25);
+  assert.equal(t.importsPerDay, 10);
+  assert.equal(canAdd("tester", "decks", 20), false);
+});
+
+test("plans carry per-day AI/import quotas (the operator's cost backstops)", () => {
+  assert.equal(getPlan("free").aiPerDay, 0);
+  assert.equal(getPlan("pro").aiPerDay, 300);
+  assert.equal(getPlan("pro").importsPerDay, 50);
+  assert.equal(getPlan("team").aiPerDay, 600);
+  assert.equal(planPublic("pro").aiPerDay, 300); // exposed for the UI
+});
+
 test("planPublic exposes annual pricing + saving; free has none", () => {
   const pro = planPublic("pro");
   assert.equal(pro.priceYear, 79);
