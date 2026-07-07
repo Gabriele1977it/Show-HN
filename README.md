@@ -341,8 +341,11 @@ providers it has an adapter for (Anthropic ships wired to `ANTHROPIC_API_KEY`,
 reusing the SDK the app already depends on; other providers are pluggable).
 Models whose provider has no adapter come back `live:false` and the client
 simulates them — so a single run cleanly mixes real + simulated cards, each
-labeled (● Live). Live runs are rate-limited hard, capped in model count and
-output tokens, and the prompt is truncated server-side. Adapters are injected
+labeled (● Live). Live runs are rate-limited hard (per IP), capped in model count and output
+tokens, prompt-truncated server-side, and bounded by a **global daily cap**
+(`ARENA_LIVE_DAILY_MAX`, default 200 real calls/day) so a public anonymous
+endpoint can't run up an unbounded bill — once hit, live runs turn off for the
+day and the client silently simulates. Adapters are injected
 (`server/arena-run.js`), so the whole path is testable without a live key.
 Scores remain a simulated heuristic for now (real evaluation / an LLM judge is
 the next step); the outputs, latency, and token counts on live cards are real.

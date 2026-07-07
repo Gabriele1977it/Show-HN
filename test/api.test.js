@@ -418,6 +418,8 @@ test("POST /api/arena/run: disabled by default; live when a runner is injected",
   // live; other providers come back live:false for the client to simulate.
   const liveApp = createApp({
     uploadsDir: tmp,
+    // Tiny daily cap so we can prove the money backstop trips.
+    rateLimits: { arenaRunDaily: 3 },
     arenaRun: createArenaRunner({
       adapters: {
         Anthropic: async ({ prompt }) => ({ output: `R:${prompt.slice(0, 12)}`, promptTokens: 5, completionTokens: 7 }),
@@ -447,6 +449,20 @@ test("POST /api/arena/run: disabled by default; live when a runner is injected",
       body: JSON.stringify({ prompt: "", models: [] }),
     });
     assert.equal(bad.status, 400);
+
+    // Money backstop: the first run used 1 live model; the cap is 3. A run with
+    // 3 more live models exceeds it → endpoint reports disabled (client falls
+    // back to simulation) rather than spending past the cap.
+    const capped = await realFetch(`${lbase}/api/arena/run`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt: "again", models: [
+        { id: "claude-opus-4.5", provider: "Anthropic" },
+        { id: "claude-sonnet-4.5", provider: "Anthropic" },
+        { id: "claude-haiku-4.5", provider: "Anthropic" },
+      ] }),
+    }).then(j);
+    assert.equal(capped.enabled, false);
+    assert.equal(capped.reason, "daily-cap");
   } finally {
     liveServer.close();
   }

@@ -109,6 +109,12 @@ export function createApp({ store, uploadsDir, reminders, billing, mailer, enric
   }
   const aiCounter = dailyCounter();
   const importCounter = dailyCounter();
+  // Global hard cap on real arena runs per day — a money backstop so the public
+  // (anonymous) live endpoint can never run up an unbounded bill. Tunable via
+  // ARENA_LIVE_DAILY_MAX (default 200); once hit, the endpoint reports disabled
+  // for the rest of the day and the client silently falls back to simulation.
+  const arenaRunDailyMax = Number(process.env.ARENA_LIVE_DAILY_MAX) || rateLimits.arenaRunDaily || 200;
+  const arenaRunCounter = dailyCounter();
   const takeAiQuota = (req, n = 1) =>
     aiCounter.take(req.ws, aiLimits.perWorkspacePerDay ?? getPlan(planOf(req)).aiPerDay ?? 0, n);
   const takeImportQuota = (req) =>
@@ -768,6 +774,13 @@ export function createApp({ store, uploadsDir, reminders, billing, mailer, enric
           .map((m) => ({ id: m.id.slice(0, 80), provider: m.provider.slice(0, 60) }))
       : [];
     if (!prompt.trim() || !models.length) return res.status(400).json({ error: "prompt and models are required" });
+    // Only real (adapter-backed) models count against the daily cap.
+    const liveProviders = new Set(arenaRun.providers());
+    const liveModelCount = models.filter((m) => liveProviders.has(m.provider)).length;
+    if (liveModelCount > 0) {
+      const quota = arenaRunCounter.take("global", arenaRunDailyMax, liveModelCount);
+      if (!quota.ok) return res.json({ enabled: false, reason: "daily-cap" });
+    }
     const results = await arenaRun.runMany({ prompt, models });
     res.json({ enabled: true, providers: arenaRun.providers(), results });
   });
