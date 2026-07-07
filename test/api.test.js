@@ -1349,3 +1349,37 @@ test("beta invites: owner mints a link; redeeming grants the tester plan once pe
     method: "POST", headers: { Authorization: `Bearer ${ws3.key}`, "Content-Type": "application/json" }, body: JSON.stringify({ code: "nope" }),
   })).status, 404);
 });
+
+test("beta invites carry a tester name and can be revoked", async () => {
+  const owner = await realFetch(`${base}/api/auth/login`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email: "owner@echodeck.app", password: "passw0rd" }),
+  }).then(j);
+  const oHdr = { "X-Session": owner.token, "Content-Type": "application/json" };
+
+  // The tester name (note) round-trips through create + list.
+  const inv = await realFetch(`${base}/api/admin/invites`, {
+    method: "POST", headers: oHdr, body: JSON.stringify({ plan: "tester", maxUses: 5, note: "Anna — Reddit" }),
+  }).then(j);
+  assert.equal(inv.note, "Anna — Reddit");
+  const listed = (await realFetch(`${base}/api/admin/invites`, { headers: oHdr }).then(j)).find((i) => i.code === inv.code);
+  assert.equal(listed.note, "Anna — Reddit");
+
+  // Only owners can revoke; unknown codes 404.
+  assert.equal((await realFetch(`${base}/api/admin/invites/${inv.code}`, { method: "DELETE" })).status, 403);
+  assert.equal((await realFetch(`${base}/api/admin/invites/nope`, { method: "DELETE", headers: oHdr })).status, 404);
+
+  // Revoke → gone from the list and the link stops redeeming.
+  assert.equal((await realFetch(`${base}/api/admin/invites/${inv.code}`, { method: "DELETE", headers: oHdr })).status, 204);
+  const after = await realFetch(`${base}/api/admin/invites`, { headers: oHdr }).then(j);
+  assert.ok(!after.some((i) => i.code === inv.code));
+  const ws = await realFetch(`${base}/api/workspaces`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: "Late tester" }),
+  }).then(j);
+  const dead = await realFetch(`${base}/api/beta/redeem`, {
+    method: "POST", headers: { Authorization: `Bearer ${ws.key}`, "Content-Type": "application/json" }, body: JSON.stringify({ code: inv.code }),
+  });
+  assert.equal(dead.status, 404);
+  // The late workspace stays on Free.
+  assert.equal((await realFetch(`${base}/api/workspace`, { headers: { Authorization: `Bearer ${ws.key}` } }).then(j)).plan, "free");
+});

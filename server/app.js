@@ -269,6 +269,14 @@ export function createApp({ store, uploadsDir, reminders, billing, mailer, enric
     res.json(store.listInvites().map((i) => ({ ...i, link: `${origin}/app?beta=${i.code}` })));
   });
 
+  // Revoke: the link stops working at once; already-redeemed workspaces keep
+  // their plan (downgrade those individually from the workspace table).
+  app.delete("/api/admin/invites/:code", requireOwner, (req, res) => {
+    const result = store.revokeInvite(req.params.code);
+    if (result.error) return res.status(404).json({ error: "Invite not found." });
+    res.status(204).end();
+  });
+
   // Redeem (workspace-scoped: the new tester's own key authenticates).
   app.post("/api/beta/redeem", (req, res) => {
     const result = store.redeemInvite(String(req.body?.code || "").trim(), req.ws);
