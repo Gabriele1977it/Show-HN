@@ -14,7 +14,11 @@ import { computeStats } from "./stats.js";
 import { suggestCloze } from "./cloze.js";
 import { hashPassword, verifyPassword, newToken, hashToken } from "./auth.js";
 
-const EMPTY = { users: {}, sessions: {}, resets: {}, workspaces: {}, decks: {}, cards: {}, reviewLog: [], pushSubs: {}, invites: {} };
+const EMPTY = { users: {}, sessions: {}, resets: {}, workspaces: {}, decks: {}, cards: {}, reviewLog: [], pushSubs: {}, invites: {}, arenaScorecards: {} };
+
+// A published Agent Arena scorecard set can't grow without bound: cap it
+// (newest kept) so the JSON document stays small.
+const MAX_SCORECARDS = 500;
 
 const SESSION_TTL = 30 * 24 * 60 * 60 * 1000; // 30 days
 const RESET_TTL = 60 * 60 * 1000; // 1 hour
@@ -624,6 +628,35 @@ export function createStore(filePath) {
       return { deckId: id, title: src.title, cardCount: deck.cardOrder.length };
     },
 
+    // --- Agent Arena scorecards ----------------------------------------
+    // Published anonymously from the /arena demo, resolved globally by an
+    // unguessable id (like share links). Simulated results — no auth.
+    publishScorecard(card, now = Date.now()) {
+      const id = nanoid(12);
+      state.arenaScorecards[id] = { ...card, id, createdAt: now };
+      const ids = Object.keys(state.arenaScorecards);
+      if (ids.length > MAX_SCORECARDS) {
+        ids.map((k) => state.arenaScorecards[k])
+          .sort((a, b) => b.createdAt - a.createdAt)
+          .slice(MAX_SCORECARDS)
+          .forEach((c) => delete state.arenaScorecards[c.id]);
+      }
+      persist();
+      return { id, createdAt: now };
+    },
+    getScorecard(id) {
+      return state.arenaScorecards[id] || null;
+    },
+    listScorecards({ limit = 12 } = {}) {
+      return Object.values(state.arenaScorecards)
+        .sort((a, b) => b.createdAt - a.createdAt)
+        .slice(0, limit)
+        .map((c) => ({
+          id: c.id, task: c.task, taskEmoji: c.taskEmoji, agentCount: c.agentCount,
+          winner: c.winner, winnerScore: c.winnerScore, createdAt: c.createdAt,
+        }));
+    },
+
     // Aggregated study statistics for the dashboard (workspace-scoped).
     stats(ws, now = Date.now()) {
       const cards = decksOf(ws).flatMap((d) => d.cardOrder.map((cid) => state.cards[cid]).filter(Boolean));
@@ -695,6 +728,7 @@ function load(filePath) {
         reviewLog: parsed.reviewLog ?? [],
         pushSubs: parsed.pushSubs ?? {},
         invites: parsed.invites ?? {},
+        arenaScorecards: parsed.arenaScorecards ?? {},
       };
     }
   } catch {

@@ -297,15 +297,26 @@ triage, content brief), select 2–12 AI models across providers, and "run"
 them side by side with streamed outputs, per-dimension score bars, and a
 leaderboard scorecard.
 
-**Demo mode** — everything is simulated in the browser: no API keys, no
-network calls, and scores are deterministic per model+task pair. It's a
-static page served by this app at `/arena`, with light/dark theme, JSON
-export of results, and a simulated "model sync". The long-term concept is a
-community layer where founders and operators run reproducible workflow tasks
-against agents and publish trusted scorecards (planned: freemium arena, Pro
-packs, team workspaces, sponsored challenge pools). Swapping
-`getMockResponse()` for real provider calls is the obvious path if the
-concept graduates from demo to product.
+**Demo mode** — the agent outputs are simulated in the browser: no API keys,
+no per-run network calls, and scores are deterministic per model+task pair.
+It's a static page served by this app at `/arena`, with light/dark theme,
+JSON export of results, and a simulated "model sync".
+
+**Publish & share scorecards** — the first slice of the community layer is
+live. Finishing a run and hitting **Publish** POSTs the result to
+`/api/arena/scorecards` and mints an unguessable public link
+(`/arena/s/:id`) — a read-only viewer with the leaderboard, per-agent
+outputs, and server-injected social/SEO meta so the link unfurls. The most
+recent published scorecards show in a "community" strip on the arena page
+(`GET /api/arena/scorecards`). Publishing is anonymous and rate-limited;
+scorecards persist in the same store as EchoDeck (SQLite by default, capped
+at the newest 500). The endpoints are validated and public.
+
+The long-term concept is a full community layer where founders and operators
+run reproducible workflow tasks against agents and publish trusted scorecards
+(planned: freemium arena, Pro packs, team workspaces, sponsored challenge
+pools). Swapping `getMockResponse()` for real provider calls is the obvious
+path if the concept graduates from demo to product.
 
 ## Deploying to production
 

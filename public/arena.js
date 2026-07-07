@@ -299,9 +299,24 @@
         const toastMessage = $('toastMessage');
         const taskCountSpan = $('taskCount');
         const runCountSpan = $('runCount');
+        const publishBar = $('publishBar');
+        const publishLink = $('publishLink');
+        const communityPanel = $('communityPanel');
+        const communityGrid = $('communityGrid');
 
         let toastTimeout = null;
         let runCount = 0;
+
+        // Relative-time formatter for community scorecard timestamps.
+        function timeAgo(ts) {
+            const s = Math.max(1, Math.floor((Date.now() - ts) / 1000));
+            if (s < 60) return `${s}s ago`;
+            const m = Math.floor(s / 60);
+            if (m < 60) return `${m}m ago`;
+            const h = Math.floor(m / 60);
+            if (h < 24) return `${h}h ago`;
+            return `${Math.floor(h / 24)}d ago`;
+        }
 
         function escapeHtml(str) {
             return String(str).replace(/[&<>"']/g, c => ({
@@ -808,8 +823,14 @@
                 URL.revokeObjectURL(url);
             });
 
-            $('publishBtn').addEventListener('click', () => {
-                showToast('Demo only — there is no community leaderboard (yet). Use Export instead.', '📢');
+            $('publishBtn').addEventListener('click', publishScorecard);
+            $('copyLinkBtn').addEventListener('click', () => {
+                const url = publishLink.href;
+                if (!url || url.endsWith('#')) return;
+                navigator.clipboard?.writeText(url).then(
+                    () => showToast('Link copied to clipboard.', '📋'),
+                    () => showToast('Copy failed — select the link manually.', '⚠️')
+                );
             });
 
             $('resetBtn').addEventListener('click', () => {
@@ -817,6 +838,7 @@
                 resultsDiv.style.display = 'none';
                 comparisonGrid.innerHTML = '';
                 scorecardGrid.innerHTML = '';
+                publishBar.style.display = 'none';
                 runBtn.textContent = '🚀 Run Arena';
                 updateStep(1);
             });
@@ -827,5 +849,62 @@
             syncBtn.addEventListener('click', syncModels);
 
             updateRunSummary();
+            loadCommunity();
         });
+
+        // ----------------------------------------------------------------
+        //  PUBLISH + COMMUNITY SCORECARDS
+        // ----------------------------------------------------------------
+        async function publishScorecard() {
+            if (!state.results.length) { showToast('Run a benchmark first.', '⚠️'); return; }
+            const btn = $('publishBtn');
+            btn.disabled = true;
+            btn.textContent = '⏳ Publishing...';
+            try {
+                const payload = {
+                    task: state.selectedTask?.title || 'Untitled task',
+                    taskEmoji: state.selectedTask?.emoji || '⚡',
+                    results: state.results.map(r => ({
+                        name: r.name, provider: r.provider, color: r.color,
+                        totalScore: r.totalScore, dimensions: r.dimensions,
+                        latency: r.latency, cost: r.cost, output: r.output,
+                    })),
+                };
+                const res = await fetch('/api/arena/scorecards', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                });
+                if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `HTTP ${res.status}`);
+                const { id } = await res.json();
+                const url = `${location.origin}/arena/s/${id}`;
+                publishLink.href = url;
+                publishLink.textContent = url;
+                publishBar.style.display = 'flex';
+                showToast('Scorecard published! Share the link.', '📢');
+                loadCommunity();
+            } catch (err) {
+                showToast(`Publish failed: ${err.message}`, '❌');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '📢 Publish';
+            }
+        }
+
+        async function loadCommunity() {
+            try {
+                const res = await fetch('/api/arena/scorecards?limit=8');
+                if (!res.ok) return;
+                const cards = await res.json();
+                if (!cards.length) { communityPanel.style.display = 'none'; return; }
+                communityGrid.innerHTML = cards.map(c => `
+                    <a class="community-card" href="/arena/s/${encodeURIComponent(c.id)}">
+                        <div class="cc-task">${escapeHtml(c.taskEmoji || '⚡')} ${escapeHtml(c.task || 'Task')}</div>
+                        <div class="cc-meta"><span class="cc-winner">🥇 ${escapeHtml(c.winner || '—')}</span> · ${c.winnerScore || 0} pts · ${c.agentCount || 0} agents</div>
+                        <div class="cc-date">${timeAgo(c.createdAt)}</div>
+                    </a>
+                `).join('');
+                communityPanel.style.display = 'block';
+            } catch (e) { /* offline / no backend — silently skip */ }
+        }
 

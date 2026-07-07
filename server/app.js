@@ -68,6 +68,9 @@ export function createApp({ store, uploadsDir, reminders, billing, mailer, enric
   const demoLimiter = rateLimit(createRateLimiter(rateLimits.demo ?? { windowMs: 15 * 60 * 1000, max: 60 }));
   // URL/YouTube import makes an outbound fetch per call, so throttle it per IP.
   const importLimiter = rateLimit(createRateLimiter(rateLimits.import ?? { windowMs: 15 * 60 * 1000, max: 30 }));
+  // Publishing an Agent Arena scorecard is anonymous and writes to storage, so
+  // throttle it per IP to keep it from being spammed into a growth vector.
+  const arenaLimiter = rateLimit(createRateLimiter(rateLimits.arena ?? { windowMs: 15 * 60 * 1000, max: 30 }));
   // Per-workspace daily quotas (AI fills, imports) — the hard backstops behind
   // the pricing page's "fair-use limits" line. Limits come from the workspace's
   // plan (tester gets tight ones); aiLimits overrides apply globally (env/tests).
@@ -133,6 +136,8 @@ export function createApp({ store, uploadsDir, reminders, billing, mailer, enric
     if (req.path.startsWith("/shared/")) return next();
     // The no-signup demo (build cards / score a shadow attempt) is public.
     if (req.path.startsWith("/demo/")) return next();
+    // Agent Arena scorecards are published anonymously and read publicly.
+    if (req.path.startsWith("/arena/")) return next();
     // The marketplace catalog is public (browse without a key); installing a
     // listed deck is a POST and still requires a workspace key.
     if (req.method === "GET" && req.path.startsWith("/marketplace")) return next();
@@ -688,6 +693,54 @@ export function createApp({ store, uploadsDir, reminders, billing, mailer, enric
     sendExport(res, deck, deck.cards, req.query.format);
   });
 
+  // --- Agent Arena scorecards (public, anonymous) ----------------------
+  // The /arena demo posts a completed run here to mint a shareable link.
+  // Everything is client-simulated, so the server just validates shape,
+  // trims to sane bounds, and stores a normalized copy.
+  const clampStr = (v, n) => (typeof v === "string" ? v.slice(0, n) : "");
+  const clampNum = (v) => (Number.isFinite(v) ? Math.round(v) : 0);
+  app.post("/api/arena/scorecards", arenaLimiter, (req, res) => {
+    const b = req.body || {};
+    if (!b.task || typeof b.task !== "string") return res.status(400).json({ error: "task is required" });
+    if (!Array.isArray(b.results) || b.results.length < 2) {
+      return res.status(400).json({ error: "at least 2 results are required" });
+    }
+    const results = b.results.slice(0, 12).map((r) => ({
+      name: clampStr(r.name, 60),
+      provider: clampStr(r.provider, 60),
+      color: /^#[0-9a-fA-F]{3,8}$/.test(r.color) ? r.color : "#7c3aed",
+      totalScore: clampNum(r.totalScore),
+      dimensions: {
+        accuracy: clampNum(r.dimensions?.accuracy),
+        relevance: clampNum(r.dimensions?.relevance),
+        speedScore: clampNum(r.dimensions?.speedScore),
+        costScore: clampNum(r.dimensions?.costScore),
+      },
+      latency: Number.isFinite(r.latency) ? Number(r.latency.toFixed(2)) : 0,
+      cost: Number.isFinite(r.cost) ? Number(r.cost.toFixed(6)) : 0,
+      output: clampStr(r.output, 2000),
+    })).sort((a, b2) => b2.totalScore - a.totalScore);
+    const winner = results[0];
+    const saved = store.publishScorecard({
+      task: clampStr(b.task, 120),
+      taskEmoji: clampStr(b.taskEmoji, 8),
+      agentCount: results.length,
+      winner: winner.name,
+      winnerScore: winner.totalScore,
+      results,
+    });
+    res.status(201).json(saved);
+  });
+  app.get("/api/arena/scorecards", (req, res) => {
+    const limit = Math.min(Math.max(parseInt(req.query.limit) || 12, 1), 50);
+    res.json(store.listScorecards({ limit }));
+  });
+  app.get("/api/arena/scorecards/:id", (req, res) => {
+    const card = store.getScorecard(req.params.id);
+    if (!card) return res.status(404).json({ error: "Scorecard not found" });
+    res.json(card);
+  });
+
   // Public viewer page. Inject per-deck SEO/social meta server-side (crawlers
   // don't run the client JS), so shared links unfurl nicely and are indexable.
   const shareTemplate = readFileSync(join(PUBLIC_DIR, "share.html"), "utf8");
@@ -883,6 +936,25 @@ export function createApp({ store, uploadsDir, reminders, billing, mailer, enric
   // Agent Arena — MadLabs' second app, a self-contained interactive demo
   // (linked from the company hub's products grid).
   app.get("/arena", (_req, res) => res.sendFile(join(PUBLIC_DIR, "arena.html")));
+  // Public scorecard viewer. Inject per-scorecard SEO/social meta server-side
+  // so shared links unfurl nicely (crawlers don't run the client JS).
+  const arenaShareTemplate = readFileSync(join(PUBLIC_DIR, "arena-share.html"), "utf8");
+  app.get("/arena/s/:id", (req, res) => {
+    const card = store.getScorecard(req.params.id);
+    const origin = `${req.protocol}://${req.get("host")}`;
+    let head;
+    if (card) {
+      head = seoTags({
+        title: `${card.winner} wins "${card.task}" — Agent Arena scorecard`,
+        description: `${card.agentCount} AI agents benchmarked on "${card.task}". ${card.winner} scored ${card.winnerScore} pts. See the full scorecard on MadLabs Agent Arena.`,
+        url: `${origin}/arena/s/${req.params.id}`,
+        image: `${origin}/og.svg`,
+      });
+    } else {
+      head = `<title>Scorecard — Agent Arena</title>`;
+    }
+    res.type("html").send(arenaShareTemplate.replace("<!--SEO-->", head));
+  });
   app.get("/demo", (_req, res) => res.sendFile(join(PUBLIC_DIR, "demo.html")));
   app.get("/admin", (_req, res) => res.sendFile(join(PUBLIC_DIR, "admin.html")));
   // SEO language landing pages (server-rendered so crawlers get real content).

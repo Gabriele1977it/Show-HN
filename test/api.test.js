@@ -291,6 +291,60 @@ test("landing page is served at /, the app at /app, Agent Arena at /arena", asyn
   assert.match(await arena.text(), /Agent Arena/);
 });
 
+test("Agent Arena scorecards publish, list, read, and share publicly (no auth)", async () => {
+  const payload = {
+    task: "Draft Sales Email",
+    taskEmoji: "✉️",
+    results: [
+      { name: "GPT-5.1", provider: "OpenAI", color: "#10a37f", totalScore: 85,
+        dimensions: { accuracy: 90, relevance: 88, speedScore: 80, costScore: 75 },
+        latency: 1.6, cost: 0.0011, output: "Subject: Quick question…" },
+      { name: "Claude Opus 4.5", provider: "Anthropic", color: "#d97757", totalScore: 80,
+        dimensions: { accuracy: 84, relevance: 82, speedScore: 78, costScore: 60 },
+        latency: 2.1, cost: 0.0025, output: "Subject: Your logistics savings…" },
+    ],
+  };
+  // Publish is public — realFetch bypasses the auto-auth wrapper (no key).
+  const pub = await realFetch(`${base}/api/arena/scorecards`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload),
+  });
+  assert.equal(pub.status, 201);
+  const { id } = await pub.json();
+  assert.ok(id);
+
+  // Read back the full scorecard, sorted, with the winner first.
+  const got = await realFetch(`${base}/api/arena/scorecards/${id}`).then(j);
+  assert.equal(got.task, "Draft Sales Email");
+  assert.equal(got.winner, "GPT-5.1");
+  assert.equal(got.winnerScore, 85);
+  assert.equal(got.results.length, 2);
+  assert.equal(got.results[0].name, "GPT-5.1");
+
+  // Appears in the public recent list with its emoji + winner.
+  const list = await realFetch(`${base}/api/arena/scorecards?limit=8`).then(j);
+  const entry = list.find((c) => c.id === id);
+  assert.ok(entry);
+  assert.equal(entry.taskEmoji, "✉️");
+  assert.equal(entry.winner, "GPT-5.1");
+  assert.equal(entry.agentCount, 2);
+
+  // Public share page renders with server-injected SEO for the winner.
+  const page = await realFetch(`${base}/arena/s/${id}`);
+  assert.equal(page.status, 200);
+  const html = await page.text();
+  assert.match(html, /GPT-5\.1 wins/);
+
+  // Validation: needs a task and at least two results.
+  const bad = await realFetch(`${base}/api/arena/scorecards`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ task: "x", results: [{ name: "solo" }] }),
+  });
+  assert.equal(bad.status, 400);
+
+  // Unknown id → 404 JSON.
+  assert.equal((await realFetch(`${base}/api/arena/scorecards/nope`)).status, 404);
+});
+
 test("plans catalog is public", async () => {
   const plans = await realFetch(`${base}/api/plans`).then(j);
   assert.deepEqual(plans.map((p) => p.id), ["free", "pro", "team"]);

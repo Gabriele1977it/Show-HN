@@ -66,6 +66,11 @@ CREATE TABLE IF NOT EXISTS invites (
   note TEXT, uses INTEGER NOT NULL DEFAULT 0, redeemed_by TEXT NOT NULL DEFAULT '[]',
   created_at INTEGER
 );
+CREATE TABLE IF NOT EXISTS arena_scorecards (
+  id TEXT PRIMARY KEY, task TEXT, agent_count INTEGER,
+  winner TEXT, winner_score INTEGER, data TEXT NOT NULL, created_at INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_arena_created ON arena_scorecards(created_at);
 `;
 
 const newMember = (name, role) => ({ id: nanoid(8), name: name?.trim() || "Member", role, key: nanoid(24), createdAt: Date.now() });
@@ -667,6 +672,35 @@ export function createSqliteStore(dbPath, { migrateFrom } = {}) {
     },
     removePushSubscription(ws, endpoint) {
       db.prepare("DELETE FROM push_subs WHERE workspace_id=? AND endpoint=?").run(ws, endpoint);
+    },
+
+    // --- Agent Arena scorecards --------------------------------------
+    // Published anonymously from the /arena demo, resolved globally by an
+    // unguessable id (like share links). Simulated results — no auth.
+    publishScorecard(card, now = Date.now()) {
+      const id = nanoid(12);
+      db.prepare("INSERT INTO arena_scorecards (id,task,agent_count,winner,winner_score,data,created_at) VALUES (?,?,?,?,?,?,?)")
+        .run(id, card.task ?? null, card.agentCount ?? null, card.winner ?? null, card.winnerScore ?? null, JSON.stringify(card), now);
+      // Trim to the newest 500 so the table can't grow without bound.
+      db.prepare("DELETE FROM arena_scorecards WHERE id NOT IN (SELECT id FROM arena_scorecards ORDER BY created_at DESC LIMIT 500)").run();
+      return { id, createdAt: now };
+    },
+    getScorecard(id) {
+      const r = db.prepare("SELECT data, created_at FROM arena_scorecards WHERE id=?").get(id);
+      if (!r) return null;
+      return { ...JSON.parse(r.data), id, createdAt: r.created_at };
+    },
+    listScorecards({ limit = 12 } = {}) {
+      return db.prepare("SELECT id,task,agent_count,winner,winner_score,data,created_at FROM arena_scorecards ORDER BY created_at DESC LIMIT ?")
+        .all(limit)
+        .map((r) => {
+          let taskEmoji;
+          try { taskEmoji = JSON.parse(r.data).taskEmoji; } catch { /* ignore */ }
+          return {
+            id: r.id, task: r.task, taskEmoji, agentCount: r.agent_count,
+            winner: r.winner, winnerScore: r.winner_score, createdAt: r.created_at,
+          };
+        });
     },
 
     _db: () => db,
