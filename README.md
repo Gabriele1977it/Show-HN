@@ -292,8 +292,9 @@ test/            node:test suites
 
 A benchmarking layer for AI agents on vertical workflows, shipped today as a
 self-contained interactive demo and linked from the MadLabs hub's products
-grid: pick a real SMB workflow (sales email, lead qualification, support
-triage, content brief), select 2–12 AI models across providers, and "run"
+grid: pick from 8 real SMB workflows (sales email, lead qualification, support
+triage, content brief, meeting summary, invoice-data extraction, product
+description, review reply), select 2–12 AI models across providers, and "run"
 them side by side with streamed outputs, per-dimension score bars, and a
 leaderboard scorecard.
 
@@ -308,9 +309,16 @@ live. Finishing a run and hitting **Publish** POSTs the result to
 (`/arena/s/:id`) — a read-only viewer with the leaderboard, per-agent
 outputs, and server-injected social/SEO meta so the link unfurls. The most
 recent published scorecards show in a "community" strip on the arena page
-(`GET /api/arena/scorecards`). Publishing is anonymous and rate-limited;
-scorecards persist in the same store as EchoDeck (SQLite by default, capped
-at the newest 500). The endpoints are validated and public.
+(`GET /api/arena/scorecards`, which also accepts `q` search and `task`
+filters). Publishing is anonymous and rate-limited; scorecards persist in the
+same store as EchoDeck (SQLite by default, capped at the newest 500). The
+endpoints are validated and public.
+
+**Public leaderboard** (`/arena/leaderboard`) — a browsable ranking that
+aggregates every published scorecard (`GET /api/arena/leaderboard`): models
+ranked by average score, win rate, and appearances, with a per-task filter and
+a searchable list of published scorecards. Linked from the arena nav, the
+community strip, and each shared scorecard.
 
 The long-term concept is a full community layer where founders and operators
 run reproducible workflow tasks against agents and publish trusted scorecards

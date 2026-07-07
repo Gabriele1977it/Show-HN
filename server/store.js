@@ -647,14 +647,48 @@ export function createStore(filePath) {
     getScorecard(id) {
       return state.arenaScorecards[id] || null;
     },
-    listScorecards({ limit = 12 } = {}) {
+    listScorecards({ limit = 12, q = "", task = "" } = {}) {
+      const needle = q.trim().toLowerCase();
       return Object.values(state.arenaScorecards)
+        .filter((c) => !task || c.task === task)
+        .filter((c) => !needle || `${c.task} ${c.winner}`.toLowerCase().includes(needle))
         .sort((a, b) => b.createdAt - a.createdAt)
         .slice(0, limit)
         .map((c) => ({
           id: c.id, task: c.task, taskEmoji: c.taskEmoji, agentCount: c.agentCount,
           winner: c.winner, winnerScore: c.winnerScore, createdAt: c.createdAt,
         }));
+    },
+    // Aggregate model ranking across every published scorecard (optionally one
+    // task): appearances, wins, and average score per model. Powers the public
+    // Agent Arena leaderboard.
+    arenaLeaderboard({ task = "" } = {}) {
+      const cards = Object.values(state.arenaScorecards).filter((c) => !task || c.task === task);
+      const models = new Map();
+      const tasks = new Map();
+      for (const c of cards) {
+        tasks.set(c.task, (tasks.get(c.task) || 0) + 1);
+        for (const r of c.results || []) {
+          const m = models.get(r.name) || { name: r.name, provider: r.provider, color: r.color, appearances: 0, wins: 0, sumScore: 0 };
+          m.appearances += 1;
+          m.sumScore += r.totalScore || 0;
+          if (r.name === c.winner) m.wins += 1;
+          models.set(r.name, m);
+        }
+      }
+      const ranked = [...models.values()]
+        .map((m) => ({
+          name: m.name, provider: m.provider, color: m.color,
+          appearances: m.appearances, wins: m.wins,
+          winRate: m.appearances ? Math.round((m.wins / m.appearances) * 100) : 0,
+          avgScore: m.appearances ? Math.round(m.sumScore / m.appearances) : 0,
+        }))
+        .sort((a, b) => b.avgScore - a.avgScore || b.appearances - a.appearances);
+      return {
+        totalScorecards: cards.length,
+        models: ranked,
+        tasks: [...tasks.entries()].map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count),
+      };
     },
 
     // Aggregated study statistics for the dashboard (workspace-scoped).

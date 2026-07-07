@@ -690,17 +690,54 @@ export function createSqliteStore(dbPath, { migrateFrom } = {}) {
       if (!r) return null;
       return { ...JSON.parse(r.data), id, createdAt: r.created_at };
     },
-    listScorecards({ limit = 12 } = {}) {
-      return db.prepare("SELECT id,task,agent_count,winner,winner_score,data,created_at FROM arena_scorecards ORDER BY created_at DESC LIMIT ?")
-        .all(limit)
-        .map((r) => {
-          let taskEmoji;
-          try { taskEmoji = JSON.parse(r.data).taskEmoji; } catch { /* ignore */ }
-          return {
-            id: r.id, task: r.task, taskEmoji, agentCount: r.agent_count,
-            winner: r.winner, winnerScore: r.winner_score, createdAt: r.created_at,
-          };
-        });
+    listScorecards({ limit = 12, q = "", task = "" } = {}) {
+      const where = [];
+      const params = [];
+      if (task) { where.push("task = ?"); params.push(task); }
+      if (q.trim()) { where.push("(task LIKE ? OR winner LIKE ?)"); params.push(`%${q.trim()}%`, `%${q.trim()}%`); }
+      const sql = `SELECT id,task,agent_count,winner,winner_score,data,created_at FROM arena_scorecards${
+        where.length ? " WHERE " + where.join(" AND ") : ""} ORDER BY created_at DESC LIMIT ?`;
+      return db.prepare(sql).all(...params, limit).map((r) => {
+        let taskEmoji;
+        try { taskEmoji = JSON.parse(r.data).taskEmoji; } catch { /* ignore */ }
+        return {
+          id: r.id, task: r.task, taskEmoji, agentCount: r.agent_count,
+          winner: r.winner, winnerScore: r.winner_score, createdAt: r.created_at,
+        };
+      });
+    },
+    // Aggregate model ranking across every published scorecard (optionally one
+    // task): appearances, wins, and average score per model.
+    arenaLeaderboard({ task = "" } = {}) {
+      const rows = db.prepare(`SELECT task, winner, data FROM arena_scorecards${task ? " WHERE task = ?" : ""}`)
+        .all(...(task ? [task] : []));
+      const models = new Map();
+      const tasks = new Map();
+      for (const row of rows) {
+        tasks.set(row.task, (tasks.get(row.task) || 0) + 1);
+        let results = [];
+        try { results = JSON.parse(row.data).results || []; } catch { /* ignore */ }
+        for (const r of results) {
+          const m = models.get(r.name) || { name: r.name, provider: r.provider, color: r.color, appearances: 0, wins: 0, sumScore: 0 };
+          m.appearances += 1;
+          m.sumScore += r.totalScore || 0;
+          if (r.name === row.winner) m.wins += 1;
+          models.set(r.name, m);
+        }
+      }
+      const ranked = [...models.values()]
+        .map((m) => ({
+          name: m.name, provider: m.provider, color: m.color,
+          appearances: m.appearances, wins: m.wins,
+          winRate: m.appearances ? Math.round((m.wins / m.appearances) * 100) : 0,
+          avgScore: m.appearances ? Math.round(m.sumScore / m.appearances) : 0,
+        }))
+        .sort((a, b) => b.avgScore - a.avgScore || b.appearances - a.appearances);
+      return {
+        totalScorecards: rows.length,
+        models: ranked,
+        tasks: [...tasks.entries()].map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count),
+      };
     },
 
     _db: () => db,

@@ -733,7 +733,13 @@ export function createApp({ store, uploadsDir, reminders, billing, mailer, enric
   });
   app.get("/api/arena/scorecards", (req, res) => {
     const limit = Math.min(Math.max(parseInt(req.query.limit) || 12, 1), 50);
-    res.json(store.listScorecards({ limit }));
+    const q = typeof req.query.q === "string" ? req.query.q.slice(0, 80) : "";
+    const task = typeof req.query.task === "string" ? req.query.task.slice(0, 120) : "";
+    res.json(store.listScorecards({ limit, q, task }));
+  });
+  app.get("/api/arena/leaderboard", (req, res) => {
+    const task = typeof req.query.task === "string" ? req.query.task.slice(0, 120) : "";
+    res.json(store.arenaLeaderboard({ task }));
   });
   app.get("/api/arena/scorecards/:id", (req, res) => {
     const card = store.getScorecard(req.params.id);
@@ -936,6 +942,7 @@ export function createApp({ store, uploadsDir, reminders, billing, mailer, enric
   // Agent Arena — MadLabs' second app, a self-contained interactive demo
   // (linked from the company hub's products grid).
   app.get("/arena", (_req, res) => res.sendFile(join(PUBLIC_DIR, "arena.html")));
+  app.get("/arena/leaderboard", (_req, res) => res.sendFile(join(PUBLIC_DIR, "arena-leaderboard.html")));
   // Public scorecard viewer. Inject per-scorecard SEO/social meta server-side
   // so shared links unfurl nicely (crawlers don't run the client JS).
   const arenaShareTemplate = readFileSync(join(PUBLIC_DIR, "arena-share.html"), "utf8");

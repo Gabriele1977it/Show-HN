@@ -345,6 +345,57 @@ test("Agent Arena scorecards publish, list, read, and share publicly (no auth)",
   assert.equal((await realFetch(`${base}/api/arena/scorecards/nope`)).status, 404);
 });
 
+test("Agent Arena leaderboard aggregates models and supports search/task filters", async () => {
+  const mk = (task, emoji, a, b) => realFetch(`${base}/api/arena/scorecards`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      task, taskEmoji: emoji,
+      results: [
+        { name: a.name, provider: a.prov, color: "#10a37f", totalScore: a.score,
+          dimensions: { accuracy: 90, relevance: 88, speedScore: 80, costScore: 75 }, latency: 1.5, cost: 0.001, output: "x" },
+        { name: b.name, provider: b.prov, color: "#d97757", totalScore: b.score,
+          dimensions: { accuracy: 80, relevance: 78, speedScore: 76, costScore: 60 }, latency: 2.0, cost: 0.002, output: "y" },
+      ],
+    }),
+  });
+  // Unique model + task names so this test's aggregate is isolated from
+  // scorecards other tests publish into the shared store.
+  const A = "Aggregatron-1", B = "Aggregatron-2", TASK = "Aggregation Test Task";
+  // Two runs on TASK: A wins both; one run on a second task where B wins.
+  await mk(TASK, "📅", { name: A, prov: "OpenAI", score: 88 }, { name: B, prov: "xAI", score: 70 });
+  await mk(TASK, "📅", { name: A, prov: "OpenAI", score: 84 }, { name: B, prov: "xAI", score: 79 });
+  await mk("Aggregation Test Invoice", "🧾", { name: B, prov: "xAI", score: 91 }, { name: A, prov: "OpenAI", score: 60 });
+
+  const board = await realFetch(`${base}/api/arena/leaderboard`).then(j);
+  assert.ok(board.totalScorecards >= 3);
+  const modelA = board.models.find((m) => m.name === A);
+  assert.ok(modelA);
+  assert.equal(modelA.appearances, 3);
+  assert.equal(modelA.wins, 2); // won both TASK runs, lost the invoice one
+  assert.equal(modelA.winRate, 67);
+  assert.ok(board.tasks.some((t) => t.name === TASK && t.count === 2));
+
+  // Task-filtered leaderboard: within TASK, A wins 100%.
+  const filtered = await realFetch(`${base}/api/arena/leaderboard?task=${encodeURIComponent(TASK)}`).then(j);
+  assert.equal(filtered.totalScorecards, 2);
+  assert.equal(filtered.models.find((m) => m.name === A).winRate, 100);
+
+  // Scorecard search by winning model name.
+  const search = await realFetch(`${base}/api/arena/scorecards?q=${encodeURIComponent(B)}`).then(j);
+  assert.ok(search.length >= 1);
+  assert.ok(search.every((c) => new RegExp(B, "i").test(`${c.task} ${c.winner}`)));
+
+  // Scorecard filter by task.
+  const byTask = await realFetch(`${base}/api/arena/scorecards?task=${encodeURIComponent(TASK)}`).then(j);
+  assert.equal(byTask.length, 2);
+  assert.ok(byTask.every((c) => c.task === TASK));
+
+  // Public leaderboard page renders.
+  const page = await realFetch(`${base}/arena/leaderboard`);
+  assert.equal(page.status, 200);
+  assert.match(await page.text(), /Community leaderboard/);
+});
+
 test("plans catalog is public", async () => {
   const plans = await realFetch(`${base}/api/plans`).then(j);
   assert.deepEqual(plans.map((p) => p.id), ["free", "pro", "team"]);

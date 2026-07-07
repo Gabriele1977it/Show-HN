@@ -1103,7 +1103,7 @@
             </div>
             <nav>
                 <a href="#stepper" class="active">Arena</a>
-                <a href="#results">Results</a>
+                <a href="/arena/leaderboard">Leaderboard</a>
                 <a href="https://www.madlabs.uk">MadLabs</a>
                 <a href="/">EchoDeck</a>
             </nav>
@@ -1240,7 +1240,10 @@
             <!-- COMMUNITY SCORECARDS                                        -->
             <!-- ========================================================== -->
             <div class="scorecard-panel" id="communityPanel" style="margin-top:32px;display:none;">
-                <h5>🌐 Recent community scorecards <span style="font-weight:400;color:var(--text-muted);font-size:0.8rem;">— published from this demo</span></h5>
+                <h5 style="justify-content:space-between;">
+                    <span style="display:flex;align-items:center;gap:8px;">🌐 Recent community scorecards <span style="font-weight:400;color:var(--text-muted);font-size:0.8rem;">— published from this demo</span></span>
+                    <a href="/arena/leaderboard" class="btn btn-outline btn-sm" style="border-color:var(--accent);color:var(--accent);">🏆 Full leaderboard →</a>
+                </h5>
                 <div class="community-grid" id="communityGrid"></div>
             </div>
 
