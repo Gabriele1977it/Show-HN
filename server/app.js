@@ -19,6 +19,7 @@ import { exportDeck } from "./exporters.js";
 import { normalizeEmail } from "./auth.js";
 import { canAdd, hasFeature, planPublic, listPlans, getPlan, allPlanIds } from "./plans.js";
 import { createRateLimiter, rateLimit, securityHeaders } from "./security.js";
+import { createArenaModels } from "./arena-models.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = join(__dirname, "..", "public");
@@ -57,7 +58,10 @@ function sendExport(res, deck, cards, format) {
   res.send(body);
 }
 
-export function createApp({ store, uploadsDir, reminders, billing, mailer, enrich, transcribe, importer, push, ownerEmails = new Set(), rateLimits = {}, aiLimits = {} }) {
+export function createApp({ store, uploadsDir, reminders, billing, mailer, enrich, transcribe, importer, push, arenaModels, ownerEmails = new Set(), rateLimits = {}, aiLimits = {} }) {
+  // Default to a self-contained registry (no upstream feed, no release timer)
+  // when the caller doesn't inject one — keeps tests and embedders simple.
+  arenaModels = arenaModels || createArenaModels({ releaseIntervalMs: 0 });
   const app = express();
   app.set("trust proxy", 1); // behind a host's load balancer; lets req.ip work
   app.use(securityHeaders);
@@ -741,6 +745,9 @@ export function createApp({ store, uploadsDir, reminders, billing, mailer, enric
     const task = typeof req.query.task === "string" ? req.query.task.slice(0, 120) : "";
     res.json(store.arenaLeaderboard({ task }));
   });
+  // The live model registry. The arena page loads this on open and polls it to
+  // auto-add newly released models to the agent list.
+  app.get("/api/arena/models", (_req, res) => res.json(arenaModels.get()));
   app.get("/api/arena/scorecards/:id", (req, res) => {
     const card = store.getScorecard(req.params.id);
     if (!card) return res.status(404).json({ error: "Scorecard not found" });

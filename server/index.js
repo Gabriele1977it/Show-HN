@@ -16,6 +16,7 @@ import { createEnricher } from "./enrich.js";
 import { createTranscriber } from "./transcribe.js";
 import { createImporter } from "./importer.js";
 import { createPushService, deliverToWorkspace } from "./push.js";
+import { createArenaModels } from "./arena-models.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, "..");
@@ -110,8 +111,16 @@ const importer = process.env.ECHODECK_IMPORT_DISABLED === "1"
   ? { enabled: false }
   : createImporter({ apiKey: process.env.SUPADATA_API_KEY });
 
+// Agent Arena model registry. Point ARENA_MODELS_URL at a live feed to auto-add
+// real future models; otherwise a demo release simulation adds them over time
+// (cadence tunable via ARENA_RELEASE_INTERVAL_MS).
+const arenaModels = createArenaModels({
+  upstreamUrl: process.env.ARENA_MODELS_URL || "",
+  ...(process.env.ARENA_RELEASE_INTERVAL_MS ? { releaseIntervalMs: Number(process.env.ARENA_RELEASE_INTERVAL_MS) } : {}),
+});
+
 const app = createApp({
-  store, uploadsDir: UPLOADS_DIR, reminders, billing, mailer, enrich, transcribe, importer, push, ownerEmails,
+  store, uploadsDir: UPLOADS_DIR, reminders, billing, mailer, enrich, transcribe, importer, push, arenaModels, ownerEmails,
   // Cost backstop: max AI card fills per workspace per day (default 300).
   aiLimits: { perWorkspacePerDay: Number(process.env.ECHODECK_AI_DAILY_LIMIT) || undefined },
 });
@@ -125,6 +134,7 @@ const server = app.listen(PORT, () => {
   console.log(transcribe.enabled ? "Auto-transcription enabled." : "Auto-transcription disabled (no TRANSCRIBE_WEBHOOK_URL).");
   console.log(importer.enabled ? `URL / YouTube import enabled${process.env.SUPADATA_API_KEY ? " (Supadata transcript API)" : " (free best-effort)"}.` : "URL / YouTube import disabled (ECHODECK_IMPORT_DISABLED).");
   console.log(push.enabled ? "Web Push enabled." : "Web Push disabled (no VAPID keys).");
+  console.log(arenaModels.enabled ? "Agent Arena model feed enabled (ARENA_MODELS_URL)." : "Agent Arena models: built-in catalog + demo release simulation.");
   console.log(mailer.enabled ? `Email enabled (${mailer.mode}).` : "Email in dev mode (logs only — set RESEND_API_KEY + EMAIL_FROM to send).");
   // Background polling only runs when explicitly enabled.
   if (process.env.REMINDER_ENABLED === "1" || process.env.REMINDER_ENABLED === "true") {

@@ -282,6 +282,7 @@ server/
   reminders.js   due-review reminders + webhook delivery
   push.js        web push (VAPID) + per-workspace fan-out
   stats.js       study dashboard aggregation (history, streak, forecast)
+  arena-models.js Agent Arena model registry + auto-update (feed / demo release)
 public/          landing.html, index.html (app), share.html, terms.html, privacy.html,
                  arena.html + arena.js + arena-theme.js (Agent Arena, at /arena)
 madlabs/         the MadLabs company hub (static site → madlabs.uk)
@@ -292,11 +293,22 @@ test/            node:test suites
 
 A benchmarking layer for AI agents on vertical workflows, shipped today as a
 self-contained interactive demo and linked from the MadLabs hub's products
-grid: pick from 8 real SMB workflows (sales email, lead qualification, support
+grid: pick from 10 real SMB workflows (sales email, lead qualification, support
 triage, content brief, meeting summary, invoice-data extraction, product
-description, review reply), select 2–12 AI models across providers, and "run"
-them side by side with streamed outputs, per-dimension score bars, and a
-leaderboard scorecard.
+description, review reply, social post, spreadsheet formula), select 2–12 AI
+models across providers, and "run" them side by side with streamed outputs,
+per-dimension score bars, and a leaderboard scorecard.
+
+**Live model registry** — the provider/model catalog is served by
+`GET /api/arena/models` (`server/arena-models.js`), so the arena always loads
+the current list and future models can be added without shipping new client
+code. The page fetches it on open and polls every 45s, auto-adding any newly
+released model to the agent list (badged 🆕, with a toast). New models come
+from an upstream feed if `ARENA_MODELS_URL` is configured — the hook for a
+real, live source — or from a built-in demo release simulation otherwise
+(cadence tunable via `ARENA_RELEASE_INTERVAL_MS`). If the endpoint is
+unreachable, the client falls back to an embedded catalog so the page still
+works standalone.
 
 **Demo mode** — the agent outputs are simulated in the browser: no API keys,
 no per-run network calls, and scores are deterministic per model+task pair.

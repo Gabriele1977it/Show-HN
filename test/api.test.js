@@ -396,6 +396,15 @@ test("Agent Arena leaderboard aggregates models and supports search/task filters
   assert.match(await page.text(), /Community leaderboard/);
 });
 
+test("Agent Arena model registry is served and versioned", async () => {
+  const models = await realFetch(`${base}/api/arena/models`).then(j);
+  assert.equal(typeof models.version, "number");
+  assert.equal(typeof models.updatedAt, "number");
+  assert.ok(models.providers && models.providers.OpenAI);
+  assert.ok(Array.isArray(models.providers.OpenAI.models));
+  assert.ok(models.providers.OpenAI.models.some((m) => m.id === "gpt-5.1"));
+});
+
 test("plans catalog is public", async () => {
   const plans = await realFetch(`${base}/api/plans`).then(j);
   assert.deepEqual(plans.map((p) => p.id), ["free", "pro", "team"]);
