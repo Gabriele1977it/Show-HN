@@ -17,6 +17,7 @@ import { createTranscriber } from "./transcribe.js";
 import { createImporter } from "./importer.js";
 import { createPushService, deliverToWorkspace } from "./push.js";
 import { createArenaModels } from "./arena-models.js";
+import { createArenaRunner, createAnthropicAdapter } from "./arena-run.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, "..");
@@ -119,8 +120,28 @@ const arenaModels = createArenaModels({
   ...(process.env.ARENA_RELEASE_INTERVAL_MS ? { releaseIntervalMs: Number(process.env.ARENA_RELEASE_INTERVAL_MS) } : {}),
 });
 
+// Agent Arena live runs (opt-in): only when ARENA_LIVE is on AND a provider key
+// is set. Otherwise the arena stays fully simulated (no spend). Anthropic is
+// wired here (reusing ANTHROPIC_API_KEY); other providers are pluggable.
+const arenaLive = process.env.ARENA_LIVE === "1" || process.env.ARENA_LIVE === "true";
+const arenaAdapters = {};
+if (arenaLive && process.env.ANTHROPIC_API_KEY) {
+  const anthropicAdapter = await createAnthropicAdapter({
+    apiKey: process.env.ANTHROPIC_API_KEY,
+    defaultModel: process.env.ARENA_ANTHROPIC_MODEL || process.env.ECHODECK_LLM_MODEL || "claude-haiku-4-5-20251001",
+    // Map arena model ids → real Anthropic API model strings (override via env).
+    resolveModel: (id) => ({
+      "claude-opus-4.5": process.env.ARENA_ANTHROPIC_OPUS,
+      "claude-sonnet-4.5": process.env.ARENA_ANTHROPIC_SONNET,
+      "claude-haiku-4.5": process.env.ARENA_ANTHROPIC_HAIKU,
+    })[id] || process.env.ARENA_ANTHROPIC_MODEL || undefined,
+  });
+  if (anthropicAdapter) arenaAdapters["Anthropic"] = anthropicAdapter;
+}
+const arenaRun = createArenaRunner({ adapters: arenaAdapters, enabled: arenaLive });
+
 const app = createApp({
-  store, uploadsDir: UPLOADS_DIR, reminders, billing, mailer, enrich, transcribe, importer, push, arenaModels, ownerEmails,
+  store, uploadsDir: UPLOADS_DIR, reminders, billing, mailer, enrich, transcribe, importer, push, arenaModels, arenaRun, ownerEmails,
   // Cost backstop: max AI card fills per workspace per day (default 300).
   aiLimits: { perWorkspacePerDay: Number(process.env.ECHODECK_AI_DAILY_LIMIT) || undefined },
 });
@@ -135,6 +156,7 @@ const server = app.listen(PORT, () => {
   console.log(importer.enabled ? `URL / YouTube import enabled${process.env.SUPADATA_API_KEY ? " (Supadata transcript API)" : " (free best-effort)"}.` : "URL / YouTube import disabled (ECHODECK_IMPORT_DISABLED).");
   console.log(push.enabled ? "Web Push enabled." : "Web Push disabled (no VAPID keys).");
   console.log(arenaModels.enabled ? "Agent Arena model feed enabled (ARENA_MODELS_URL)." : "Agent Arena models: built-in catalog + demo release simulation.");
+  console.log(arenaRun.enabled ? `Agent Arena live runs ENABLED (providers: ${arenaRun.providers().join(", ")}).` : "Agent Arena live runs disabled (simulated). Set ARENA_LIVE=1 + a provider key to enable.");
   console.log(mailer.enabled ? `Email enabled (${mailer.mode}).` : "Email in dev mode (logs only — set RESEND_API_KEY + EMAIL_FROM to send).");
   // Background polling only runs when explicitly enabled.
   if (process.env.REMINDER_ENABLED === "1" || process.env.REMINDER_ENABLED === "true") {

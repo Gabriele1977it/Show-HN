@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { createStore } from "../server/store.js";
 import { createSqliteStore } from "../server/store-sqlite.js";
 import { createApp } from "../server/app.js";
+import { createArenaRunner } from "../server/arena-run.js";
 import { createReminderService } from "../server/reminders.js";
 import { createBilling } from "../server/billing.js";
 import { createMailer } from "../server/email.js";
@@ -403,6 +404,52 @@ test("Agent Arena model registry is served and versioned", async () => {
   assert.ok(models.providers && models.providers.OpenAI);
   assert.ok(Array.isArray(models.providers.OpenAI.models));
   assert.ok(models.providers.OpenAI.models.some((m) => m.id === "gpt-5.1"));
+});
+
+test("POST /api/arena/run: disabled by default; live when a runner is injected", async () => {
+  // The suite's app injects no runner → live runs are off, page stays simulated.
+  const off = await realFetch(`${base}/api/arena/run`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ prompt: "hi", models: [{ id: "gpt-5.1", provider: "OpenAI" }] }),
+  }).then(j);
+  assert.equal(off.enabled, false);
+
+  // A separate app with an injected fake Anthropic adapter: only Anthropic runs
+  // live; other providers come back live:false for the client to simulate.
+  const liveApp = createApp({
+    uploadsDir: tmp,
+    arenaRun: createArenaRunner({
+      adapters: {
+        Anthropic: async ({ prompt }) => ({ output: `R:${prompt.slice(0, 12)}`, promptTokens: 5, completionTokens: 7 }),
+      },
+    }),
+  });
+  const liveServer = liveApp.listen(0);
+  const lbase = `http://127.0.0.1:${liveServer.address().port}`;
+  try {
+    const on = await realFetch(`${lbase}/api/arena/run`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt: "Write a follow-up email", models: [
+        { id: "gpt-5.1", provider: "OpenAI" },
+        { id: "claude-opus-4.5", provider: "Anthropic" },
+      ] }),
+    }).then(j);
+    assert.equal(on.enabled, true);
+    const byId = Object.fromEntries(on.results.map((r) => [r.id, r]));
+    assert.equal(byId["claude-opus-4.5"].live, true);
+    assert.match(byId["claude-opus-4.5"].output, /^R:Write a foll/);
+    assert.equal(byId["claude-opus-4.5"].promptTokens, 5);
+    assert.equal(byId["gpt-5.1"].live, false);
+
+    // Validation: prompt + at least one model required.
+    const bad = await realFetch(`${lbase}/api/arena/run`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt: "", models: [] }),
+    });
+    assert.equal(bad.status, 400);
+  } finally {
+    liveServer.close();
+  }
 });
 
 test("plans catalog is public", async () => {

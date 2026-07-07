@@ -56,7 +56,7 @@
                 <div class="card-head">
                     <div class="agent-info">
                         <div class="avatar" style="background:${/^#[0-9a-fA-F]{3,8}$/.test(r.color) ? r.color : '#7c3aed'}">${escapeHtml((r.name || '?')[0])}</div>
-                        <div><strong>${escapeHtml(r.name)}</strong> <span style="font-size:0.75rem;color:var(--text-secondary);">${escapeHtml(r.provider || '')}</span></div>
+                        <div><strong>${escapeHtml(r.name)}</strong> <span style="font-size:0.75rem;color:var(--text-secondary);">${escapeHtml(r.provider || '')}</span>${r.live ? ' <span style="font-size:0.6rem;font-weight:700;text-transform:uppercase;color:#16a34a;background:rgba(22,163,74,0.12);padding:1px 8px;border-radius:40px;">● Live</span>' : ''}</div>
                     </div>
                     <div class="score-badge">${r.totalScore} pts</div>
                 </div>

@@ -20,6 +20,7 @@ import { normalizeEmail } from "./auth.js";
 import { canAdd, hasFeature, planPublic, listPlans, getPlan, allPlanIds } from "./plans.js";
 import { createRateLimiter, rateLimit, securityHeaders } from "./security.js";
 import { createArenaModels } from "./arena-models.js";
+import { createArenaRunner } from "./arena-run.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = join(__dirname, "..", "public");
@@ -58,10 +59,13 @@ function sendExport(res, deck, cards, format) {
   res.send(body);
 }
 
-export function createApp({ store, uploadsDir, reminders, billing, mailer, enrich, transcribe, importer, push, arenaModels, ownerEmails = new Set(), rateLimits = {}, aiLimits = {} }) {
+export function createApp({ store, uploadsDir, reminders, billing, mailer, enrich, transcribe, importer, push, arenaModels, arenaRun, ownerEmails = new Set(), rateLimits = {}, aiLimits = {} }) {
   // Default to a self-contained registry (no upstream feed, no release timer)
   // when the caller doesn't inject one — keeps tests and embedders simple.
   arenaModels = arenaModels || createArenaModels({ releaseIntervalMs: 0 });
+  // Default to a disabled runner (no adapters) — the arena stays fully simulated
+  // unless the operator wires provider keys + ARENA_LIVE in index.js.
+  arenaRun = arenaRun || createArenaRunner({ adapters: {} });
   const app = express();
   app.set("trust proxy", 1); // behind a host's load balancer; lets req.ip work
   app.use(securityHeaders);
@@ -75,6 +79,8 @@ export function createApp({ store, uploadsDir, reminders, billing, mailer, enric
   // Publishing an Agent Arena scorecard is anonymous and writes to storage, so
   // throttle it per IP to keep it from being spammed into a growth vector.
   const arenaLimiter = rateLimit(createRateLimiter(rateLimits.arena ?? { windowMs: 15 * 60 * 1000, max: 30 }));
+  // A live arena run spends real provider tokens, so throttle it hard per IP.
+  const arenaRunLimiter = rateLimit(createRateLimiter(rateLimits.arenaRun ?? { windowMs: 15 * 60 * 1000, max: 20 }));
   // Per-workspace daily quotas (AI fills, imports) — the hard backstops behind
   // the pricing page's "fair-use limits" line. Limits come from the workspace's
   // plan (tester gets tight ones); aiLimits overrides apply globally (env/tests).
@@ -723,6 +729,7 @@ export function createApp({ store, uploadsDir, reminders, billing, mailer, enric
       latency: Number.isFinite(r.latency) ? Number(r.latency.toFixed(2)) : 0,
       cost: Number.isFinite(r.cost) ? Number(r.cost.toFixed(6)) : 0,
       output: clampStr(r.output, 2000),
+      live: Boolean(r.live),
     })).sort((a, b2) => b2.totalScore - a.totalScore);
     const winner = results[0];
     const saved = store.publishScorecard({
@@ -748,6 +755,22 @@ export function createApp({ store, uploadsDir, reminders, billing, mailer, enric
   // The live model registry. The arena page loads this on open and polls it to
   // auto-add newly released models to the agent list.
   app.get("/api/arena/models", (_req, res) => res.json(arenaModels.get()));
+  // Real model runs (opt-in). Disabled by default → { enabled: false } and the
+  // client runs fully simulated. When enabled, calls real models for providers
+  // with an adapter; models without one come back live:false (client simulates).
+  app.post("/api/arena/run", arenaRunLimiter, async (req, res) => {
+    if (!arenaRun.enabled) return res.json({ enabled: false });
+    const b = req.body || {};
+    const prompt = typeof b.prompt === "string" ? b.prompt : "";
+    const models = Array.isArray(b.models)
+      ? b.models.slice(0, 12)
+          .filter((m) => m && typeof m.id === "string" && typeof m.provider === "string")
+          .map((m) => ({ id: m.id.slice(0, 80), provider: m.provider.slice(0, 60) }))
+      : [];
+    if (!prompt.trim() || !models.length) return res.status(400).json({ error: "prompt and models are required" });
+    const results = await arenaRun.runMany({ prompt, models });
+    res.json({ enabled: true, providers: arenaRun.providers(), results });
+  });
   app.get("/api/arena/scorecards/:id", (req, res) => {
     const card = store.getScorecard(req.params.id);
     if (!card) return res.status(404).json({ error: "Scorecard not found" });

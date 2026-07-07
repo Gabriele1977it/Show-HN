@@ -283,6 +283,7 @@ server/
   push.js        web push (VAPID) + per-workspace fan-out
   stats.js       study dashboard aggregation (history, streak, forecast)
   arena-models.js Agent Arena model registry + auto-update (feed / demo release)
+  arena-run.js   Agent Arena real model runs (opt-in adapters; simulated fallback)
 public/          landing.html, index.html (app), share.html, terms.html, privacy.html,
                  arena.html + arena.js + arena-theme.js (Agent Arena, at /arena)
 madlabs/         the MadLabs company hub (static site → madlabs.uk)
@@ -332,11 +333,24 @@ ranked by average score, win rate, and appearances, with a per-task filter and
 a searchable list of published scorecards. Linked from the arena nav, the
 community strip, and each shared scorecard.
 
+**Real runs (opt-in)** — the arena can call *real* models instead of
+simulating. It's **off by default** (no keys, no spend): the page stays fully
+simulated and `POST /api/arena/run` returns `{ enabled: false }`. Set
+`ARENA_LIVE=1` plus a provider key and the server calls real models for the
+providers it has an adapter for (Anthropic ships wired to `ANTHROPIC_API_KEY`,
+reusing the SDK the app already depends on; other providers are pluggable).
+Models whose provider has no adapter come back `live:false` and the client
+simulates them — so a single run cleanly mixes real + simulated cards, each
+labeled (● Live). Live runs are rate-limited hard, capped in model count and
+output tokens, and the prompt is truncated server-side. Adapters are injected
+(`server/arena-run.js`), so the whole path is testable without a live key.
+Scores remain a simulated heuristic for now (real evaluation / an LLM judge is
+the next step); the outputs, latency, and token counts on live cards are real.
+
 The long-term concept is a full community layer where founders and operators
 run reproducible workflow tasks against agents and publish trusted scorecards
 (planned: freemium arena, Pro packs, team workspaces, sponsored challenge
-pools). Swapping `getMockResponse()` for real provider calls is the obvious
-path if the concept graduates from demo to product.
+pools).
 
 ## Deploying to production
 

@@ -729,6 +729,25 @@
                 const setText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
                 const setWidth = (id, val) => { const el = document.getElementById(id); if (el) el.style.width = `${val}%`; };
 
+                // Try a real run first. Disabled by default → the server replies
+                // { enabled:false } and every card falls back to simulation. When
+                // enabled, only providers with a server adapter come back live.
+                const liveById = {};
+                try {
+                    const res = await fetch('/api/arena/run', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ taskId: task.id, prompt: task.prompt, models: selected.map(a => ({ id: a.id, provider: a.provider })) }),
+                    });
+                    if (res.ok) {
+                        const data = await res.json();
+                        if (data.enabled && Array.isArray(data.results)) {
+                            for (const r of data.results) if (r.live) liveById[r.id] = r;
+                        }
+                    }
+                } catch (e) { /* offline / disabled → simulate everything */ }
+                const liveCount = Object.keys(liveById).length;
+
                 // All agents "stream" concurrently (slightly staggered starts)
                 // so a full 12-agent run finishes in seconds, not minutes.
                 const results = [];
@@ -738,14 +757,25 @@
 
                     await new Promise(r => setTimeout(r, i * 150));
 
-                    const mockText = getMockResponse(agent.id, task.id);
-                    await typeWriter(outputDiv, mockText, 4);
+                    const lv = liveById[agent.id];
+                    const mockText = lv ? lv.output : getMockResponse(agent.id, task.id);
+                    await typeWriter(outputDiv, mockText, lv ? 2 : 4);
 
                     // Deterministic per agent+task: reruns give the same scores.
                     const rand = seededRandom(`${agent.id}::${task.id}`);
-                    const latency = agent.latency * (0.85 + rand() * 0.3);
-                    const tokens = Math.round(mockText.length / 4.5 + rand() * 20);
+                    // Real runs carry measured latency + token counts; simulated
+                    // runs derive them from the model profile. Scores stay a
+                    // simulated heuristic either way (see the demo notice).
+                    const latency = lv ? Math.max(0.1, lv.latencyMs / 1000) : agent.latency * (0.85 + rand() * 0.3);
+                    const tokens = lv ? ((lv.promptTokens || 0) + (lv.completionTokens || 0)) : Math.round(mockText.length / 4.5 + rand() * 20);
                     const cost = (agent.costPer1k * tokens) / 1000;
+
+                    if (lv) {
+                        const head = cards[agent.id]?.querySelector('.card-head .agent-info div:last-child');
+                        if (head && !head.querySelector('.live-badge')) {
+                            head.insertAdjacentHTML('beforeend', ' <span class="live-badge">● Live</span>');
+                        }
+                    }
 
                     const accuracy = Math.min(95, 65 + rand() * 30);
                     const relevance = Math.min(92, 60 + rand() * 32);
@@ -772,6 +802,7 @@
                         provider: agent.provider,
                         color: agent.color,
                         output: mockText,
+                        live: !!lv,
                         latency,
                         tokens,
                         cost,
@@ -782,6 +813,9 @@
 
                 state.results = results;
                 renderScorecard(results);
+                if (liveCount) {
+                    showToast(`⚡ ${liveCount} card${liveCount > 1 ? 's' : ''} ran on real models · the rest are simulated`, '⚡');
+                }
                 state.isRunning = false;
                 runBtn.disabled = false;
                 runBtn.textContent = '🔄 Rerun';
@@ -951,7 +985,7 @@
                     results: state.results.map(r => ({
                         name: r.name, provider: r.provider, color: r.color,
                         totalScore: r.totalScore, dimensions: r.dimensions,
-                        latency: r.latency, cost: r.cost, output: r.output,
+                        latency: r.latency, cost: r.cost, output: r.output, live: r.live,
                     })),
                 };
                 const res = await fetch('/api/arena/scorecards', {
