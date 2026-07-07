@@ -14,7 +14,7 @@ import { computeStats } from "./stats.js";
 import { suggestCloze } from "./cloze.js";
 import { hashPassword, verifyPassword, newToken, hashToken } from "./auth.js";
 
-const EMPTY = { users: {}, sessions: {}, resets: {}, workspaces: {}, decks: {}, cards: {}, reviewLog: [], pushSubs: {}, invites: {}, arenaScorecards: {} };
+const EMPTY = { users: {}, sessions: {}, resets: {}, workspaces: {}, decks: {}, cards: {}, reviewLog: [], pushSubs: {}, invites: {}, arenaScorecards: {}, arenaWallets: {}, arenaLedger: [] };
 
 // A published Agent Arena scorecard set can't grow without bound: cap it
 // (newest kept) so the JSON document stays small.
@@ -659,6 +659,69 @@ export function createStore(filePath) {
           winner: c.winner, winnerScore: c.winnerScore, createdAt: c.createdAt,
         }));
     },
+
+    // --- Agent Arena credits (prepaid wallet) --------------------------
+    // Balances are whole cents of USD. The wallet is created lazily on first
+    // read, optionally with a signup bonus, so new accounts can try a real run.
+    getArenaWallet(userId, { bonusCents = 0 } = {}) {
+      if (!userId) return null;
+      let w = state.arenaWallets[userId];
+      if (!w) {
+        w = { userId, credits: Math.max(0, Math.round(bonusCents)), createdAt: Date.now() };
+        state.arenaWallets[userId] = w;
+        if (w.credits > 0) state.arenaLedger.push({ id: nanoid(12), userId, kind: "bonus", amountCents: w.credits, meta: {}, at: Date.now() });
+        persist();
+      }
+      const entries = state.arenaLedger.filter((e) => e.userId === userId);
+      return {
+        credits: w.credits,
+        topupCents: entries.filter((e) => e.kind === "topup" || e.kind === "bonus").reduce((n, e) => n + e.amountCents, 0),
+        spentCents: entries.filter((e) => e.kind === "run").reduce((n, e) => n + e.amountCents, 0),
+        runs: entries.filter((e) => e.kind === "run").length,
+      };
+    },
+    addArenaCredits(userId, cents, meta = {}) {
+      const amt = Math.max(0, Math.round(cents));
+      const w = state.arenaWallets[userId] || (state.arenaWallets[userId] = { userId, credits: 0, createdAt: Date.now() });
+      w.credits += amt;
+      state.arenaLedger.push({ id: nanoid(12), userId, kind: "topup", amountCents: amt, meta, at: Date.now() });
+      persist();
+      return { credits: w.credits };
+    },
+    chargeArenaRun(userId, cents, meta = {}) {
+      const amt = Math.max(0, Math.round(cents));
+      const w = state.arenaWallets[userId] || (state.arenaWallets[userId] = { userId, credits: 0, createdAt: Date.now() });
+      const charged = Math.min(w.credits, amt);
+      w.credits -= charged;
+      state.arenaLedger.push({ id: nanoid(12), userId, kind: "run", amountCents: charged, meta, at: Date.now() });
+      persist();
+      return { credits: w.credits, charged };
+    },
+    // Owner dashboard: wallet + spend totals, top spenders, recent activity.
+    arenaCreditsStats({ limit = 25 } = {}) {
+      const emailOf = (id) => state.users[id]?.email || "(unknown)";
+      const byUser = {};
+      for (const e of state.arenaLedger) {
+        const u = byUser[e.userId] || (byUser[e.userId] = { userId: e.userId, email: emailOf(e.userId), topupCents: 0, spentCents: 0, runs: 0 });
+        if (e.kind === "run") { u.spentCents += e.amountCents; u.runs += 1; }
+        else { u.topupCents += e.amountCents; }
+      }
+      const accounts = Object.keys(state.arenaWallets).map((id) => ({
+        userId: id, email: emailOf(id), credits: state.arenaWallets[id].credits,
+        topupCents: byUser[id]?.topupCents || 0, spentCents: byUser[id]?.spentCents || 0, runs: byUser[id]?.runs || 0,
+      }));
+      const recent = [...state.arenaLedger].sort((a, b) => b.at - a.at).slice(0, limit)
+        .map((e) => ({ email: emailOf(e.userId), kind: e.kind, amountCents: e.amountCents, meta: e.meta, at: e.at }));
+      return {
+        totalAccounts: accounts.length,
+        totalTopupCents: Object.values(byUser).reduce((n, u) => n + u.topupCents, 0),
+        totalSpentCents: Object.values(byUser).reduce((n, u) => n + u.spentCents, 0),
+        totalRuns: Object.values(byUser).reduce((n, u) => n + u.runs, 0),
+        outstandingCents: accounts.reduce((n, a) => n + a.credits, 0),
+        accounts: accounts.sort((a, b) => b.spentCents - a.spentCents),
+        recent,
+      };
+    },
     // Aggregate model ranking across every published scorecard (optionally one
     // task): appearances, wins, and average score per model. Powers the public
     // Agent Arena leaderboard.
@@ -763,6 +826,8 @@ function load(filePath) {
         pushSubs: parsed.pushSubs ?? {},
         invites: parsed.invites ?? {},
         arenaScorecards: parsed.arenaScorecards ?? {},
+        arenaWallets: parsed.arenaWallets ?? {},
+        arenaLedger: parsed.arenaLedger ?? [],
       };
     }
   } catch {

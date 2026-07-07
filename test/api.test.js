@@ -414,57 +414,86 @@ test("POST /api/arena/run: disabled by default; live when a runner is injected",
   }).then(j);
   assert.equal(off.enabled, false);
 
-  // A separate app with an injected fake Anthropic adapter: only Anthropic runs
-  // live; other providers come back live:false for the client to simulate.
+  // A separate app with an injected fake Anthropic adapter + its own store, so
+  // we can exercise the SaaS gate (sign-in + credits) and metering end to end.
+  const liveTmp = mkdtempSync(join(tmpdir(), "arena-live-"));
+  const liveStore = createStore(join(liveTmp, "s.json"));
   const liveApp = createApp({
-    uploadsDir: tmp,
-    // Tiny daily cap so we can prove the money backstop trips.
-    rateLimits: { arenaRunDaily: 3 },
+    store: liveStore,
+    uploadsDir: liveTmp,
+    ownerEmails: new Set(["boss@arena.test"]),
+    billing: { enabled: false, createCreditsCheckout: async ({ userId, cents }) => ({ url: "/arena", dev: true, credits: liveStore.addArenaCredits(userId, cents).credits }) },
+    arenaCreditsConfig: { markup: 1.5, signupBonusCents: 25 },
     arenaRun: createArenaRunner({
       adapters: {
-        Anthropic: async ({ prompt }) => ({ output: `R:${prompt.slice(0, 12)}`, promptTokens: 5, completionTokens: 7 }),
+        Anthropic: async ({ prompt }) => ({ output: `R:${prompt.slice(0, 12)}`, promptTokens: 500, completionTokens: 500 }),
       },
     }),
   });
   const liveServer = liveApp.listen(0);
   const lbase = `http://127.0.0.1:${liveServer.address().port}`;
+  const sess = (email) => { const u = liveStore.createUser({ email, password: "secret1" }); return liveStore.createSession(u.id); };
   try {
-    const on = await realFetch(`${lbase}/api/arena/run`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ prompt: "Write a follow-up email", models: [
-        { id: "gpt-5.1", provider: "OpenAI" },
-        { id: "claude-opus-4.5", provider: "Anthropic" },
-      ] }),
+    const runReq = (headers, body) => realFetch(`${lbase}/api/arena/run`, {
+      method: "POST", headers: { "Content-Type": "application/json", ...headers }, body: JSON.stringify(body),
     }).then(j);
+
+    // A run with only simulated providers needs no sign-in and no charge.
+    const simOnly = await runReq({}, { prompt: "p", models: [{ id: "gpt-5.1", provider: "OpenAI" }] });
+    assert.equal(simOnly.enabled, true);
+    assert.equal(simOnly.results[0].live, false);
+    assert.equal(simOnly.charged, undefined);
+
+    // A live model without a session → gated: enabled:false, reason:'signin'.
+    const gated = await runReq({}, { prompt: "p", models: [{ id: "claude-opus-4.5", provider: "Anthropic" }] });
+    assert.equal(gated.enabled, false);
+    assert.equal(gated.reason, "signin");
+
+    // Signed in (fresh account gets the 25c signup bonus) → live run + charge.
+    const token = sess("buyer@arena.test");
+    const on = await runReq({ "X-Session": token }, { prompt: "Write a follow-up email", taskId: "sales-email", models: [
+      { id: "gpt-5.1", provider: "OpenAI" },
+      { id: "claude-opus-4.5", provider: "Anthropic" },
+    ] });
     assert.equal(on.enabled, true);
     const byId = Object.fromEntries(on.results.map((r) => [r.id, r]));
     assert.equal(byId["claude-opus-4.5"].live, true);
-    assert.match(byId["claude-opus-4.5"].output, /^R:Write a foll/);
-    assert.equal(byId["claude-opus-4.5"].promptTokens, 5);
     assert.equal(byId["gpt-5.1"].live, false);
+    // 1000 tokens @ $0.025/1k = 2.5c ×1.5 = 3.75c → 4c charged; 25 − 4 = 21 left.
+    assert.equal(on.charged, 4);
+    assert.equal(on.balance, 21);
 
-    // Validation: prompt + at least one model required.
-    const bad = await realFetch(`${lbase}/api/arena/run`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ prompt: "", models: [] }),
-    });
-    assert.equal(bad.status, 400);
+    // Wallet endpoint reflects the balance for the signed-in account.
+    const wallet = await realFetch(`${lbase}/api/arena/credits`, { headers: { "X-Session": token } }).then(j);
+    assert.equal(wallet.credits, 21);
+    assert.equal(wallet.runs, 1);
+    assert.ok(Array.isArray(wallet.packs));
 
-    // Money backstop: the first run used 1 live model; the cap is 3. A run with
-    // 3 more live models exceeds it → endpoint reports disabled (client falls
-    // back to simulation) rather than spending past the cap.
-    const capped = await realFetch(`${lbase}/api/arena/run`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ prompt: "again", models: [
-        { id: "claude-opus-4.5", provider: "Anthropic" },
-        { id: "claude-sonnet-4.5", provider: "Anthropic" },
-        { id: "claude-haiku-4.5", provider: "Anthropic" },
-      ] }),
+    // Top-up (dev mode) adds credits instantly.
+    const top = await realFetch(`${lbase}/api/arena/credits/topup`, {
+      method: "POST", headers: { "Content-Type": "application/json", "X-Session": token },
+      body: JSON.stringify({ pack: "p5" }),
     }).then(j);
-    assert.equal(capped.enabled, false);
-    assert.equal(capped.reason, "daily-cap");
+    assert.equal(top.dev, true);
+    assert.equal((await realFetch(`${lbase}/api/arena/credits`, { headers: { "X-Session": token } }).then(j)).credits, 521);
+
+    // Admin stats: owner only.
+    assert.equal((await realFetch(`${lbase}/api/arena/admin/stats`, { headers: { "X-Session": token } })).status, 403);
+    const ownerToken = sess("boss@arena.test");
+    const stats = await realFetch(`${lbase}/api/arena/admin/stats`, { headers: { "X-Session": ownerToken } }).then(j);
+    assert.ok(stats.totalAccounts >= 1);
+    assert.equal(stats.totalSpentCents, 4);
+    assert.equal(stats.totalTopupCents, 25 + 500); // bonus + $5 top-up
+    assert.ok(stats.accounts.some((a) => a.email === "buyer@arena.test"));
+
+    // Validation still applies.
+    assert.equal((await realFetch(`${lbase}/api/arena/run`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt: "", models: [] }),
+    })).status, 400);
   } finally {
     liveServer.close();
+    liveStore.close?.();
+    rmSync(liveTmp, { recursive: true, force: true });
   }
 });
 

@@ -165,6 +165,54 @@
             white-space: nowrap;
         }
 
+        /* Account / credits modal */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.5);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            padding: 20px;
+        }
+        .modal-overlay.show { display: flex; }
+        .modal {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius);
+            padding: 28px;
+            width: 100%;
+            max-width: 400px;
+            box-shadow: var(--shadow-lg);
+            position: relative;
+        }
+        .modal h3 { font-size: 1.25rem; font-weight: 800; letter-spacing: -0.4px; }
+        .modal-sub { color: var(--text-secondary); font-size: 0.9rem; margin: 6px 0 18px; }
+        .modal-close {
+            position: absolute; top: 14px; right: 14px; background: none; border: none;
+            color: var(--text-muted); font-size: 1rem; cursor: pointer; line-height: 1;
+        }
+        .modal-close:hover { color: var(--text-primary); }
+        #authForm { display: flex; flex-direction: column; gap: 12px; }
+        #authForm input {
+            padding: 11px 14px; border-radius: var(--radius-sm); border: 1px solid var(--border-color);
+            background: var(--bg-input); color: var(--text-primary); font-size: 0.95rem; font-family: inherit;
+        }
+        #authForm input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+        .modal-err { color: #dc2626; font-size: 0.82rem; min-height: 1em; }
+        .modal-toggle { text-align: center; margin-top: 16px; font-size: 0.85rem; color: var(--text-secondary); }
+        .modal-toggle a { color: var(--accent); text-decoration: none; font-weight: 600; margin-left: 4px; }
+        .modal-note { font-size: 0.78rem; color: var(--text-muted); margin-top: 14px; text-align: center; }
+        .pack-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+        .pack-btn {
+            padding: 16px 8px; border-radius: var(--radius-sm); border: 2px solid var(--border-color);
+            background: var(--bg-secondary); color: var(--text-primary); font-weight: 800; font-size: 1.1rem;
+            cursor: pointer; transition: all var(--transition);
+        }
+        .pack-btn:hover { border-color: var(--accent); transform: translateY(-2px); }
+        .pack-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
         .demo-notice {
             display: flex;
             align-items: center;
@@ -1123,10 +1171,46 @@
             <div class="header-actions">
                 <span class="badge" id="versionBadge">📦 v1.0</span>
                 <span class="badge badge-accent">Demo</span>
+                <div id="accountArea" style="display:flex;align-items:center;gap:8px;">
+                    <button class="btn btn-outline btn-sm" id="signinBtn">Sign in</button>
+                    <span id="walletChip" style="display:none;align-items:center;gap:8px;">
+                        <a class="btn btn-ghost btn-sm" id="adminLink" href="/arena/admin" style="display:none;">Admin</a>
+                        <button class="btn btn-outline btn-sm" id="creditsBtn" title="Add credits">💰 <span id="balanceLabel">$0.00</span></button>
+                        <button class="btn btn-ghost btn-sm" id="signoutBtn" title="Sign out">↩</button>
+                    </span>
+                </div>
                 <button class="theme-toggle" id="themeToggle" aria-label="Toggle theme">🌙</button>
             </div>
         </div>
     </header>
+
+    <!-- ============================================================ -->
+    <!-- ACCOUNT MODAL (sign in / sign up + credits)                   -->
+    <!-- ============================================================ -->
+    <div class="modal-overlay" id="modalOverlay">
+        <div class="modal" id="authModal" style="display:none;">
+            <button class="modal-close" data-close aria-label="Close">✕</button>
+            <h3 id="authTitle">Sign in</h3>
+            <p class="modal-sub" id="authSub">Sign in to run real models and manage credits.</p>
+            <form id="authForm">
+                <input type="email" id="authEmail" placeholder="you@example.com" autocomplete="email" required />
+                <input type="password" id="authPassword" placeholder="Password (6+ characters)" autocomplete="current-password" required minlength="6" />
+                <div class="modal-err" id="authErr"></div>
+                <button type="submit" class="btn btn-primary w-full" id="authSubmit">Sign in</button>
+            </form>
+            <p class="modal-toggle">
+                <span id="authToggleText">New here?</span>
+                <a href="#" id="authToggle">Create an account</a>
+            </p>
+        </div>
+        <div class="modal" id="creditsModal" style="display:none;">
+            <button class="modal-close" data-close aria-label="Close">✕</button>
+            <h3>Add credits</h3>
+            <p class="modal-sub">Credits pay for real model runs. Balance: <strong id="creditsBalance">$0.00</strong></p>
+            <div class="pack-row" id="packRow"></div>
+            <p class="modal-note" id="creditsNote"></p>
+        </div>
+    </div>
 
     <!-- ============================================================ -->
     <!-- HERO                                                          -->

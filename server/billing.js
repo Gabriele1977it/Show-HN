@@ -58,6 +58,43 @@ export function createBilling({ store, config = {}, fetchImpl = fetch }) {
   }
 
   /**
+   * One-time Agent Arena credit top-up (Stripe Checkout in `payment` mode, or
+   * an instant grant in dev mode). Amount is an arbitrary number of cents, so
+   * we use ad-hoc price_data rather than a fixed Stripe Price.
+   */
+  async function createCreditsCheckout({ userId, cents, successUrl, cancelUrl }) {
+    const amount = Math.max(50, Math.round(cents)); // Stripe min is 50c
+    if (!enabled) {
+      // Dev mode: no Stripe — credit the wallet immediately so the flow works.
+      const { credits } = store.addArenaCredits(userId, amount, { provider: "dev" });
+      return { url: successUrl, dev: true, credits };
+    }
+    const body = new URLSearchParams({
+      mode: "payment",
+      "line_items[0][price_data][currency]": "usd",
+      "line_items[0][price_data][unit_amount]": String(amount),
+      "line_items[0][price_data][product_data][name]": "Agent Arena credits",
+      "line_items[0][quantity]": "1",
+      success_url: successUrl,
+      cancel_url: cancelUrl,
+      "metadata[kind]": "arena-credits",
+      "metadata[userId]": userId,
+      "metadata[cents]": String(amount),
+      "payment_intent_data[metadata][kind]": "arena-credits",
+      "payment_intent_data[metadata][userId]": userId,
+      "payment_intent_data[metadata][cents]": String(amount),
+    });
+    const res = await fetchImpl("https://api.stripe.com/v1/checkout/sessions", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${config.secretKey}`, "Content-Type": "application/x-www-form-urlencoded" },
+      body: body.toString(),
+    });
+    if (!res.ok) throw new Error(`Stripe checkout failed (${res.status})`);
+    const data = await res.json();
+    return { url: data.url, id: data.id };
+  }
+
+  /**
    * Open the Stripe billing portal so a customer can manage / cancel. In dev
    * mode (no keys) there's nothing to manage, so we simulate a cancellation by
    * downgrading the workspace to Free.
@@ -97,6 +134,11 @@ export function createBilling({ store, config = {}, fetchImpl = fetch }) {
     const obj = event?.data?.object ?? {};
     switch (event?.type) {
       case "checkout.session.completed": {
+        // Agent Arena credit top-up (one-time payment).
+        if (obj.metadata?.kind === "arena-credits" && obj.metadata?.userId) {
+          store.addArenaCredits(obj.metadata.userId, Number(obj.metadata.cents) || 0, { provider: "stripe", sessionId: obj.id });
+          return { handled: true };
+        }
         const ws = obj.metadata?.workspaceId;
         const plan = obj.metadata?.plan;
         if (ws && plan) store.setWorkspacePlan(ws, plan, { provider: "stripe", customerId: obj.customer, subscriptionId: obj.subscription, status: "active" });
@@ -121,5 +163,5 @@ export function createBilling({ store, config = {}, fetchImpl = fetch }) {
     }
   }
 
-  return { enabled, annualAvailable, createCheckout, createPortal, verifyWebhook, applyEvent };
+  return { enabled, annualAvailable, createCheckout, createCreditsCheckout, createPortal, verifyWebhook, applyEvent };
 }

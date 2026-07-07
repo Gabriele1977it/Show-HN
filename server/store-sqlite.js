@@ -71,9 +71,18 @@ CREATE TABLE IF NOT EXISTS arena_scorecards (
   winner TEXT, winner_score INTEGER, data TEXT NOT NULL, created_at INTEGER
 );
 CREATE INDEX IF NOT EXISTS idx_arena_created ON arena_scorecards(created_at);
+CREATE TABLE IF NOT EXISTS arena_wallets (
+  user_id TEXT PRIMARY KEY, credits INTEGER NOT NULL DEFAULT 0, created_at INTEGER
+);
+CREATE TABLE IF NOT EXISTS arena_ledger (
+  id TEXT PRIMARY KEY, user_id TEXT NOT NULL, kind TEXT NOT NULL,
+  amount_cents INTEGER NOT NULL, meta TEXT, at INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_arena_ledger_user ON arena_ledger(user_id);
 `;
 
 const newMember = (name, role) => ({ id: nanoid(8), name: name?.trim() || "Member", role, key: nanoid(24), createdAt: Date.now() });
+const safeJson = (s) => { try { return JSON.parse(s || "{}"); } catch { return {}; } };
 const toCard = (r) => (r ? {
   id: r.id, deckId: r.deck_id, front: r.front, back: r.back, notes: r.notes,
   start: r.start_t, end: r.end_t, tags: JSON.parse(r.tags || "[]"), cloze: r.cloze ?? null,
@@ -658,6 +667,70 @@ export function createSqliteStore(dbPath, { migrateFrom } = {}) {
         if (out.length >= limit) break;
       }
       return out;
+    },
+
+    // --- Agent Arena credits (prepaid wallet) ------------------------
+    getArenaWallet(userId, { bonusCents = 0 } = {}) {
+      if (!userId) return null;
+      let w = db.prepare("SELECT credits FROM arena_wallets WHERE user_id=?").get(userId);
+      if (!w) {
+        const credits = Math.max(0, Math.round(bonusCents));
+        db.prepare("INSERT INTO arena_wallets (user_id, credits, created_at) VALUES (?,?,?)").run(userId, credits, Date.now());
+        if (credits > 0) {
+          db.prepare("INSERT INTO arena_ledger (id,user_id,kind,amount_cents,meta,at) VALUES (?,?,?,?,?,?)")
+            .run(nanoid(12), userId, "bonus", credits, "{}", Date.now());
+        }
+        w = { credits };
+      }
+      const agg = db.prepare(
+        "SELECT " +
+        "COALESCE(SUM(CASE WHEN kind IN ('topup','bonus') THEN amount_cents END),0) AS topup, " +
+        "COALESCE(SUM(CASE WHEN kind='run' THEN amount_cents END),0) AS spent, " +
+        "COALESCE(SUM(CASE WHEN kind='run' THEN 1 END),0) AS runs " +
+        "FROM arena_ledger WHERE user_id=?").get(userId);
+      return { credits: w.credits, topupCents: agg.topup, spentCents: agg.spent, runs: agg.runs };
+    },
+    addArenaCredits(userId, cents, meta = {}) {
+      const amt = Math.max(0, Math.round(cents));
+      db.prepare("INSERT INTO arena_wallets (user_id, credits, created_at) VALUES (?,?,?) ON CONFLICT(user_id) DO UPDATE SET credits = credits + ?")
+        .run(userId, amt, Date.now(), amt);
+      db.prepare("INSERT INTO arena_ledger (id,user_id,kind,amount_cents,meta,at) VALUES (?,?,?,?,?,?)")
+        .run(nanoid(12), userId, "topup", amt, JSON.stringify(meta), Date.now());
+      return { credits: db.prepare("SELECT credits FROM arena_wallets WHERE user_id=?").get(userId).credits };
+    },
+    chargeArenaRun(userId, cents, meta = {}) {
+      const amt = Math.max(0, Math.round(cents));
+      db.prepare("INSERT INTO arena_wallets (user_id, credits, created_at) VALUES (?,0,?) ON CONFLICT(user_id) DO NOTHING").run(userId, Date.now());
+      const cur = db.prepare("SELECT credits FROM arena_wallets WHERE user_id=?").get(userId).credits;
+      const charged = Math.min(cur, amt);
+      db.prepare("UPDATE arena_wallets SET credits = credits - ? WHERE user_id=?").run(charged, userId);
+      db.prepare("INSERT INTO arena_ledger (id,user_id,kind,amount_cents,meta,at) VALUES (?,?,?,?,?,?)")
+        .run(nanoid(12), userId, "run", charged, JSON.stringify(meta), Date.now());
+      return { credits: cur - charged, charged };
+    },
+    arenaCreditsStats({ limit = 25 } = {}) {
+      const emailOf = (id) => db.prepare("SELECT email FROM users WHERE id=?").get(id)?.email || "(unknown)";
+      const wallets = db.prepare("SELECT user_id, credits FROM arena_wallets").all();
+      const accounts = wallets.map((w) => {
+        const agg = db.prepare(
+          "SELECT " +
+          "COALESCE(SUM(CASE WHEN kind IN ('topup','bonus') THEN amount_cents END),0) AS topup, " +
+          "COALESCE(SUM(CASE WHEN kind='run' THEN amount_cents END),0) AS spent, " +
+          "COALESCE(SUM(CASE WHEN kind='run' THEN 1 END),0) AS runs " +
+          "FROM arena_ledger WHERE user_id=?").get(w.user_id);
+        return { userId: w.user_id, email: emailOf(w.user_id), credits: w.credits, topupCents: agg.topup, spentCents: agg.spent, runs: agg.runs };
+      }).sort((a, b) => b.spentCents - a.spentCents);
+      const recent = db.prepare("SELECT user_id, kind, amount_cents, meta, at FROM arena_ledger ORDER BY at DESC LIMIT ?").all(limit)
+        .map((e) => ({ email: emailOf(e.user_id), kind: e.kind, amountCents: e.amount_cents, meta: safeJson(e.meta), at: e.at }));
+      return {
+        totalAccounts: accounts.length,
+        totalTopupCents: accounts.reduce((n, a) => n + a.topupCents, 0),
+        totalSpentCents: accounts.reduce((n, a) => n + a.spentCents, 0),
+        totalRuns: accounts.reduce((n, a) => n + a.runs, 0),
+        outstandingCents: accounts.reduce((n, a) => n + a.credits, 0),
+        accounts,
+        recent,
+      };
     },
 
     // --- push subscriptions ------------------------------------------

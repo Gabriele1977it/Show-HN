@@ -21,6 +21,7 @@ import { canAdd, hasFeature, planPublic, listPlans, getPlan, allPlanIds } from "
 import { createRateLimiter, rateLimit, securityHeaders } from "./security.js";
 import { createArenaModels } from "./arena-models.js";
 import { createArenaRunner } from "./arena-run.js";
+import { creditsConfig, computeRunCents, CREDIT_PACKS, getPack } from "./arena-credits.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = join(__dirname, "..", "public");
@@ -59,7 +60,8 @@ function sendExport(res, deck, cards, format) {
   res.send(body);
 }
 
-export function createApp({ store, uploadsDir, reminders, billing, mailer, enrich, transcribe, importer, push, arenaModels, arenaRun, ownerEmails = new Set(), rateLimits = {}, aiLimits = {} }) {
+export function createApp({ store, uploadsDir, reminders, billing, mailer, enrich, transcribe, importer, push, arenaModels, arenaRun, arenaCreditsConfig, ownerEmails = new Set(), rateLimits = {}, aiLimits = {} }) {
+  const arenaCreditsCfg = arenaCreditsConfig || creditsConfig();
   // Default to a self-contained registry (no upstream feed, no release timer)
   // when the caller doesn't inject one — keeps tests and embedders simple.
   arenaModels = arenaModels || createArenaModels({ releaseIntervalMs: 0 });
@@ -774,16 +776,62 @@ export function createApp({ store, uploadsDir, reminders, billing, mailer, enric
           .map((m) => ({ id: m.id.slice(0, 80), provider: m.provider.slice(0, 60) }))
       : [];
     if (!prompt.trim() || !models.length) return res.status(400).json({ error: "prompt and models are required" });
-    // Only real (adapter-backed) models count against the daily cap.
+
+    // Only adapter-backed (real) models incur cost. If the selection has none,
+    // there's nothing to charge or gate — run it (all cards simulate).
     const liveProviders = new Set(arenaRun.providers());
-    const liveModelCount = models.filter((m) => liveProviders.has(m.provider)).length;
-    if (liveModelCount > 0) {
-      const quota = arenaRunCounter.take("global", arenaRunDailyMax, liveModelCount);
-      if (!quota.ok) return res.json({ enabled: false, reason: "daily-cap" });
+    const liveModels = models.filter((m) => liveProviders.has(m.provider));
+    if (!liveModels.length) {
+      const results = await arenaRun.runMany({ prompt, models });
+      return res.json({ enabled: true, providers: arenaRun.providers(), results });
     }
+
+    // SaaS gate: real runs require a signed-in account with a positive balance.
+    const user = sessionUser(req);
+    if (!user) return res.json({ enabled: false, reason: "signin" });
+    const wallet = store.getArenaWallet(user.id, { bonusCents: arenaCreditsCfg.signupBonusCents });
+    if (wallet.credits <= 0) return res.json({ enabled: false, reason: "no-credits" });
+    // Global daily backstop (money cap) — only real models count.
+    const quota = arenaRunCounter.take("global", arenaRunDailyMax, liveModels.length);
+    if (!quota.ok) return res.json({ enabled: false, reason: "daily-cap" });
+
     const results = await arenaRun.runMany({ prompt, models });
-    res.json({ enabled: true, providers: arenaRun.providers(), results });
+    const cents = computeRunCents(results, arenaModels.get().providers, arenaCreditsCfg.markup);
+    const tokens = results.reduce((n, r) => n + ((r.promptTokens || 0) + (r.completionTokens || 0)), 0);
+    const charge = store.chargeArenaRun(user.id, cents, {
+      task: (typeof b.taskId === "string" ? b.taskId : "").slice(0, 60),
+      tokens, models: results.filter((r) => r.live).map((r) => r.id),
+    });
+    res.json({ enabled: true, providers: arenaRun.providers(), results, charged: charge.charged, balance: charge.credits });
   });
+
+  // --- Agent Arena SaaS: accounts reuse EchoDeck auth; credits are a prepaid
+  // wallet metered by real runs above. Simulated runs stay free & open.
+  app.get("/api/arena/credits", (req, res) => {
+    const user = sessionUser(req);
+    if (!user) return res.status(401).json({ error: "Not signed in." });
+    const wallet = store.getArenaWallet(user.id, { bonusCents: arenaCreditsCfg.signupBonusCents });
+    res.json({ email: user.email, ...wallet, packs: CREDIT_PACKS, live: arenaRun.enabled, stripe: Boolean(billing?.enabled), owner: isOwner(user.email) });
+  });
+  app.post("/api/arena/credits/topup", authLimiter, async (req, res) => {
+    const user = sessionUser(req);
+    if (!user) return res.status(401).json({ error: "Not signed in." });
+    const pack = getPack(req.body?.pack);
+    if (!pack) return res.status(400).json({ error: "Unknown credit pack." });
+    const origin = `${req.protocol}://${req.get("host")}`;
+    try {
+      const out = await billing.createCreditsCheckout({
+        userId: user.id, cents: pack.cents,
+        successUrl: `${origin}/arena?topup=success`, cancelUrl: `${origin}/arena?topup=cancel`,
+      });
+      res.json(out);
+    } catch (err) {
+      console.error("[arena topup]", err.message);
+      res.status(502).json({ error: "Could not start checkout." });
+    }
+  });
+  // Owner dashboard data (same gate as EchoDeck admin: OWNER_EMAILS + session).
+  app.get("/api/arena/admin/stats", requireOwner, (_req, res) => res.json(store.arenaCreditsStats()));
   app.get("/api/arena/scorecards/:id", (req, res) => {
     const card = store.getScorecard(req.params.id);
     if (!card) return res.status(404).json({ error: "Scorecard not found" });
@@ -986,6 +1034,7 @@ export function createApp({ store, uploadsDir, reminders, billing, mailer, enric
   // (linked from the company hub's products grid).
   app.get("/arena", (_req, res) => res.sendFile(join(PUBLIC_DIR, "arena.html")));
   app.get("/arena/leaderboard", (_req, res) => res.sendFile(join(PUBLIC_DIR, "arena-leaderboard.html")));
+  app.get("/arena/admin", (_req, res) => res.sendFile(join(PUBLIC_DIR, "arena-admin.html")));
   // Public scorecard viewer. Inject per-scorecard SEO/social meta server-side
   // so shared links unfurl nicely (crawlers don't run the client JS).
   const arenaShareTemplate = readFileSync(join(PUBLIC_DIR, "arena-share.html"), "utf8");

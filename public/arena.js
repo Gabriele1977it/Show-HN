@@ -733,20 +733,31 @@
                 // { enabled:false } and every card falls back to simulation. When
                 // enabled, only providers with a server adapter come back live.
                 const liveById = {};
+                let runCharge = null;
                 try {
                     const res = await fetch('/api/arena/run', {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
+                        headers: { 'Content-Type': 'application/json', ...(Account.token() ? { 'X-Session': Account.token() } : {}) },
                         body: JSON.stringify({ taskId: task.id, prompt: task.prompt, models: selected.map(a => ({ id: a.id, provider: a.provider })) }),
                     });
                     if (res.ok) {
                         const data = await res.json();
                         if (data.enabled && Array.isArray(data.results)) {
                             for (const r of data.results) if (r.live) liveById[r.id] = r;
+                            if (typeof data.balance === 'number') runCharge = { charged: data.charged || 0, balance: data.balance };
+                        } else if (data.reason === 'signin') {
+                            showToast('Sign in to run real models — running the simulation instead.', '🔒');
+                            Account.openAuth();
+                        } else if (data.reason === 'no-credits') {
+                            showToast('Out of credits — running the simulation. Add credits for real runs.', '💰');
+                            Account.openCredits();
+                        } else if (data.reason === 'daily-cap') {
+                            showToast('Live runs paused for today (daily cap) — showing the simulation.', '⏳');
                         }
                     }
                 } catch (e) { /* offline / disabled → simulate everything */ }
                 const liveCount = Object.keys(liveById).length;
+                if (runCharge) Account.applyBalance(runCharge.balance);
 
                 // All agents "stream" concurrently (slightly staggered starts)
                 // so a full 12-agent run finishes in seconds, not minutes.
@@ -814,7 +825,8 @@
                 state.results = results;
                 renderScorecard(results);
                 if (liveCount) {
-                    showToast(`⚡ ${liveCount} card${liveCount > 1 ? 's' : ''} ran on real models · the rest are simulated`, '⚡');
+                    const chargeNote = runCharge && runCharge.charged ? ` · charged ${Account.fmt(runCharge.charged)}` : '';
+                    showToast(`⚡ ${liveCount} card${liveCount > 1 ? 's' : ''} ran on real models · the rest are simulated${chargeNote}`, '⚡');
                 }
                 state.isRunning = false;
                 runBtn.disabled = false;
@@ -866,9 +878,156 @@
         }
 
         // ----------------------------------------------------------------
+        //  ACCOUNT + CREDITS (SaaS)
+        //  Reuses EchoDeck's accounts (email+password sessions). Simulated runs
+        //  stay free; real runs require sign-in + a prepaid credits balance.
+        // ----------------------------------------------------------------
+        const Account = (function () {
+            const KEY = 'arena-session';
+            let token = null;
+            let wallet = null;      // { credits, ... } in cents
+            let authMode = 'login'; // or 'signup'
+            const fmt = (cents) => '$' + (Math.max(0, cents || 0) / 100).toFixed(2);
+
+            function headers(extra = {}) {
+                return { 'Content-Type': 'application/json', ...(token ? { 'X-Session': token } : {}), ...extra };
+            }
+
+            function renderChip() {
+                const signinBtn = $('signinBtn');
+                const walletChip = $('walletChip');
+                if (token && wallet) {
+                    signinBtn.style.display = 'none';
+                    walletChip.style.display = 'flex';
+                    $('balanceLabel').textContent = fmt(wallet.credits);
+                    $('adminLink').style.display = wallet.owner ? '' : 'none';
+                } else {
+                    signinBtn.style.display = '';
+                    walletChip.style.display = 'none';
+                }
+            }
+
+            async function refresh() {
+                if (!token) { wallet = null; renderChip(); return; }
+                try {
+                    const res = await fetch('/api/arena/credits', { headers: headers() });
+                    if (res.status === 401) { token = null; localStorage.removeItem(KEY); wallet = null; renderChip(); return; }
+                    if (res.ok) { wallet = await res.json(); renderChip(); }
+                } catch (e) { /* offline */ }
+            }
+
+            function overlay(show, which) {
+                const ov = $('modalOverlay');
+                $('authModal').style.display = which === 'auth' ? 'block' : 'none';
+                $('creditsModal').style.display = which === 'credits' ? 'block' : 'none';
+                ov.classList.toggle('show', show);
+            }
+
+            function openAuth(mode = 'login') {
+                authMode = mode;
+                $('authTitle').textContent = mode === 'signup' ? 'Create account' : 'Sign in';
+                $('authSubmit').textContent = mode === 'signup' ? 'Create account' : 'Sign in';
+                $('authToggleText').textContent = mode === 'signup' ? 'Already have an account?' : 'New here?';
+                $('authToggle').textContent = mode === 'signup' ? 'Sign in' : 'Create an account';
+                $('authErr').textContent = '';
+                overlay(true, 'auth');
+                setTimeout(() => $('authEmail').focus(), 50);
+            }
+
+            function openCredits() {
+                if (!token) { openAuth('signup'); return; }
+                $('creditsBalance').textContent = fmt(wallet?.credits || 0);
+                const note = wallet?.stripe
+                    ? 'Secure payment via Stripe. Credits are added when payment completes.'
+                    : 'Demo mode: credits are added instantly (no real charge) until Stripe is configured.';
+                $('creditsNote').textContent = note;
+                const row = $('packRow');
+                row.innerHTML = (wallet?.packs || []).map(p => `<button class="pack-btn" data-pack="${p.id}">${p.label}</button>`).join('');
+                row.querySelectorAll('.pack-btn').forEach(btn => btn.addEventListener('click', () => topup(btn.dataset.pack)));
+                overlay(true, 'credits');
+            }
+
+            async function submitAuth(e) {
+                e.preventDefault();
+                const email = $('authEmail').value.trim();
+                const password = $('authPassword').value;
+                const path = authMode === 'signup' ? '/api/auth/signup' : '/api/auth/login';
+                $('authErr').textContent = '';
+                $('authSubmit').disabled = true;
+                try {
+                    const res = await fetch(path, { method: 'POST', headers: headers(), body: JSON.stringify({ email, password }) });
+                    const data = await res.json().catch(() => ({}));
+                    if (!res.ok) { $('authErr').textContent = data.error || 'Something went wrong.'; return; }
+                    token = data.token;
+                    try { localStorage.setItem(KEY, token); } catch (e2) { /* ignore */ }
+                    overlay(false);
+                    await refresh();
+                    showToast(authMode === 'signup' ? 'Account created — welcome!' : 'Signed in.', '✅');
+                } catch (err) {
+                    $('authErr').textContent = 'Network error — please try again.';
+                } finally {
+                    $('authSubmit').disabled = false;
+                }
+            }
+
+            async function topup(packId) {
+                const row = $('packRow');
+                row.querySelectorAll('.pack-btn').forEach(b => b.disabled = true);
+                try {
+                    const res = await fetch('/api/arena/credits/topup', { method: 'POST', headers: headers(), body: JSON.stringify({ pack: packId }) });
+                    const data = await res.json().catch(() => ({}));
+                    if (!res.ok) { showToast(data.error || 'Top-up failed.', '❌'); return; }
+                    if (data.url && !data.dev) { window.location.href = data.url; return; } // Stripe redirect
+                    await refresh();                 // dev-mode instant credit
+                    openCredits();
+                    showToast(`Added credits — balance ${fmt(wallet?.credits || 0)}`, '💰');
+                } catch (err) {
+                    showToast('Top-up failed — please try again.', '❌');
+                } finally {
+                    row.querySelectorAll('.pack-btn').forEach(b => b.disabled = false);
+                }
+            }
+
+            async function signout() {
+                try { await fetch('/api/auth/logout', { method: 'POST', headers: headers() }); } catch (e) { /* ignore */ }
+                token = null; wallet = null;
+                try { localStorage.removeItem(KEY); } catch (e) { /* ignore */ }
+                renderChip();
+                showToast('Signed out.', '↩');
+            }
+
+            function init() {
+                try { token = localStorage.getItem(KEY); } catch (e) { token = null; }
+                $('signinBtn').addEventListener('click', () => openAuth('login'));
+                $('creditsBtn').addEventListener('click', openCredits);
+                $('signoutBtn').addEventListener('click', signout);
+                $('authForm').addEventListener('submit', submitAuth);
+                $('authToggle').addEventListener('click', (e) => { e.preventDefault(); openAuth(authMode === 'signup' ? 'login' : 'signup'); });
+                $('modalOverlay').addEventListener('click', (e) => { if (e.target === $('modalOverlay')) overlay(false); });
+                document.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', () => overlay(false)));
+                document.addEventListener('keydown', (e) => { if (e.key === 'Escape') overlay(false); });
+                renderChip();
+                refresh();
+                // If we just returned from a Stripe top-up, refresh + clean the URL.
+                if (/[?&]topup=success/.test(location.search)) {
+                    showToast('Payment complete — credits added.', '💰');
+                    history.replaceState(null, '', location.pathname);
+                }
+            }
+
+            return {
+                init, openAuth, openCredits,
+                token: () => token,
+                fmt,
+                applyBalance(cents) { if (wallet) { wallet.credits = cents; renderChip(); } },
+            };
+        })();
+
+        // ----------------------------------------------------------------
         //  EVENTS
         // ----------------------------------------------------------------
         document.addEventListener('DOMContentLoaded', () => {
+            Account.init();
             renderTasks();
             renderAgents();
             updateStep(1);

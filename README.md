@@ -284,6 +284,7 @@ server/
   stats.js       study dashboard aggregation (history, streak, forecast)
   arena-models.js Agent Arena model registry + auto-update (feed / demo release)
   arena-run.js   Agent Arena real model runs (opt-in adapters; simulated fallback)
+  arena-credits.js Agent Arena SaaS wallet — run pricing/metering + top-up config
 public/          landing.html, index.html (app), share.html, terms.html, privacy.html,
                  arena.html + arena.js + arena-theme.js (Agent Arena, at /arena)
 madlabs/         the MadLabs company hub (static site → madlabs.uk)
@@ -349,6 +350,20 @@ day and the client silently simulates. Adapters are injected
 (`server/arena-run.js`), so the whole path is testable without a live key.
 Scores remain a simulated heuristic for now (real evaluation / an LLM judge is
 the next step); the outputs, latency, and token counts on live cards are real.
+
+**SaaS: accounts + prepaid credits + admin** — Arena reuses EchoDeck's account
+system (email + password sessions). The simulated arena stays free and open
+(top of funnel); **real runs require sign-in and a prepaid balance**. New
+accounts get a small signup bonus (`ARENA_SIGNUP_BONUS_CENTS`) so they can try
+a live run immediately. Each real run is metered against the wallet — cost =
+provider token price × tokens × margin (`ARENA_CREDIT_MARKUP`), rounded up to
+the cent — via `server/arena-credits.js`. Top-ups (`/api/arena/credits/topup`)
+use the same `STRIPE_SECRET_KEY` as EchoDeck (one-time Stripe Checkout in
+`payment` mode); with no key they're granted instantly (dev mode) so the flow
+is testable. Owner accounts (`OWNER_EMAILS`) get an **admin dashboard at
+`/arena/admin`** — in the EchoDeck admin style — showing accounts, credits
+loaded, spend, outstanding balance, and a live activity ledger. Balances +
+ledger persist in the store (both JSON and SQLite backends).
 
 The long-term concept is a full community layer where founders and operators
 run reproducible workflow tasks against agents and publish trusted scorecards
