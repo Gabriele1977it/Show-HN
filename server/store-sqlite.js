@@ -109,6 +109,11 @@ export function createSqliteStore(dbPath, { migrateFrom } = {}) {
   addDeckCol("views", "views INTEGER NOT NULL DEFAULT 0");
   db.exec("CREATE INDEX IF NOT EXISTS idx_decks_listed ON decks(listed)");
 
+  // Account-level Agent Arena subscription plan columns on `users` (if missing).
+  const userCols = new Set(db.prepare("PRAGMA table_info(users)").all().map((c) => c.name));
+  if (!userCols.has("arena_plan")) db.exec("ALTER TABLE users ADD COLUMN arena_plan TEXT NOT NULL DEFAULT 'free'");
+  if (!userCols.has("arena_billing")) db.exec("ALTER TABLE users ADD COLUMN arena_billing TEXT");
+
   const ownedDeck = (id, ws) => db.prepare("SELECT * FROM decks WHERE id=? AND workspace_id=?").get(id, ws);
   const ownedCard = (id, ws) =>
     db.prepare("SELECT c.* FROM cards c JOIN decks d ON c.deck_id=d.id WHERE c.id=? AND d.workspace_id=?").get(id, ws);
@@ -684,7 +689,7 @@ export function createSqliteStore(dbPath, { migrateFrom } = {}) {
       }
       const agg = db.prepare(
         "SELECT " +
-        "COALESCE(SUM(CASE WHEN kind IN ('topup','bonus') THEN amount_cents END),0) AS topup, " +
+        "COALESCE(SUM(CASE WHEN kind != 'run' THEN amount_cents END),0) AS topup, " +
         "COALESCE(SUM(CASE WHEN kind='run' THEN amount_cents END),0) AS spent, " +
         "COALESCE(SUM(CASE WHEN kind='run' THEN 1 END),0) AS runs " +
         "FROM arena_ledger WHERE user_id=?").get(userId);
@@ -695,8 +700,17 @@ export function createSqliteStore(dbPath, { migrateFrom } = {}) {
       db.prepare("INSERT INTO arena_wallets (user_id, credits, created_at) VALUES (?,?,?) ON CONFLICT(user_id) DO UPDATE SET credits = credits + ?")
         .run(userId, amt, Date.now(), amt);
       db.prepare("INSERT INTO arena_ledger (id,user_id,kind,amount_cents,meta,at) VALUES (?,?,?,?,?,?)")
-        .run(nanoid(12), userId, "topup", amt, JSON.stringify(meta), Date.now());
+        .run(nanoid(12), userId, meta.kind === "allowance" ? "allowance" : "topup", amt, JSON.stringify(meta), Date.now());
       return { credits: db.prepare("SELECT credits FROM arena_wallets WHERE user_id=?").get(userId).credits };
+    },
+    getArenaAccountPlan(userId) {
+      const u = db.prepare("SELECT arena_plan, arena_billing FROM users WHERE id=?").get(userId);
+      return { plan: u?.arena_plan || "free", billing: safeJson(u?.arena_billing) || null };
+    },
+    setArenaAccountPlan(userId, plan, billing = null) {
+      const info = db.prepare("UPDATE users SET arena_plan=?, arena_billing=? WHERE id=?").run(plan, billing ? JSON.stringify(billing) : null, userId);
+      if (!info.changes) return { error: "not-found" };
+      return { plan, billing };
     },
     chargeArenaRun(userId, cents, meta = {}) {
       const amt = Math.max(0, Math.round(cents));
@@ -710,15 +724,16 @@ export function createSqliteStore(dbPath, { migrateFrom } = {}) {
     },
     arenaCreditsStats({ limit = 25 } = {}) {
       const emailOf = (id) => db.prepare("SELECT email FROM users WHERE id=?").get(id)?.email || "(unknown)";
+      const planOf = (id) => db.prepare("SELECT arena_plan FROM users WHERE id=?").get(id)?.arena_plan || "free";
       const wallets = db.prepare("SELECT user_id, credits FROM arena_wallets").all();
       const accounts = wallets.map((w) => {
         const agg = db.prepare(
           "SELECT " +
-          "COALESCE(SUM(CASE WHEN kind IN ('topup','bonus') THEN amount_cents END),0) AS topup, " +
+          "COALESCE(SUM(CASE WHEN kind != 'run' THEN amount_cents END),0) AS topup, " +
           "COALESCE(SUM(CASE WHEN kind='run' THEN amount_cents END),0) AS spent, " +
           "COALESCE(SUM(CASE WHEN kind='run' THEN 1 END),0) AS runs " +
           "FROM arena_ledger WHERE user_id=?").get(w.user_id);
-        return { userId: w.user_id, email: emailOf(w.user_id), credits: w.credits, topupCents: agg.topup, spentCents: agg.spent, runs: agg.runs };
+        return { userId: w.user_id, email: emailOf(w.user_id), plan: planOf(w.user_id), credits: w.credits, topupCents: agg.topup, spentCents: agg.spent, runs: agg.runs };
       }).sort((a, b) => b.spentCents - a.spentCents);
       const recent = db.prepare("SELECT user_id, kind, amount_cents, meta, at FROM arena_ledger ORDER BY at DESC LIMIT ?").all(limit)
         .map((e) => ({ email: emailOf(e.user_id), kind: e.kind, amountCents: e.amount_cents, meta: safeJson(e.meta), at: e.at }));

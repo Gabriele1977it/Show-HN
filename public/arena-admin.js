@@ -29,21 +29,26 @@ async function load() {
   $("#dash").classList.remove("hidden");
   $("#stamp").textContent = "as of " + new Date().toLocaleTimeString();
 
+  const planMix = (data.accounts || []).reduce((m, a) => { m[a.plan || "free"] = (m[a.plan || "free"] || 0) + 1; return m; }, {});
+  const paid = (data.accounts || []).filter((a) => a.plan && a.plan !== "free").length;
+  const mixStr = Object.entries(planMix).map(([p, n]) => `${n} ${p}`).join(" · ");
   $("#tiles").innerHTML = [
-    tile("accounts", data.totalAccounts),
+    tile("accounts", data.totalAccounts, mixStr),
+    tile("paid accounts", paid),
     tile("credits loaded", money(data.totalTopupCents)),
-    tile("spent on runs", money(data.totalSpentCents)),
-    tile("outstanding balance", money(data.outstandingCents), `${data.totalRuns} runs`),
+    tile("spent on runs", money(data.totalSpentCents), `${data.totalRuns} runs`),
   ].join("");
 
+  const planPill = (p) => `<span class="kind-pill ${p === "free" ? "" : "topup"}">${esc(p || "free")}</span>`;
   $("#accounts-table tbody").innerHTML = (data.accounts || []).map((a) => `
     <tr>
       <td>${esc(a.email)}</td>
+      <td>${planPill(a.plan)}</td>
       <td class="num">${money(a.credits)}</td>
       <td class="num">${money(a.topupCents)}</td>
       <td class="num">${money(a.spentCents)}</td>
       <td class="num">${a.runs}</td>
-    </tr>`).join("") || `<tr><td colspan="5" class="muted">No accounts yet.</td></tr>`;
+    </tr>`).join("") || `<tr><td colspan="6" class="muted">No accounts yet.</td></tr>`;
 
   $("#ledger-table tbody").innerHTML = (data.recent || []).map((e) => {
     const detail = e.kind === "run"

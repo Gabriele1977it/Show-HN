@@ -350,6 +350,11 @@
 
         function getMockResponse(agentId, taskId) {
             const agent = state.agents.find(a => a.id === agentId);
+            // Custom tasks have no canned mock — in simulation we return a
+            // placeholder (real output comes from live runs on the Ultimate plan).
+            if (taskId === 'custom') {
+                return `[Simulated preview]\n\nThis is where ${agent ? agent.name : 'the model'} would answer your custom prompt.\n\nEnable live runs to see the real response.`;
+            }
             if (!agent) return DEFAULT_MOCK[taskId] || 'No response.';
             const provider = agent.provider;
             const providerMocks = PROVIDER_MOCKS[provider];
@@ -448,26 +453,68 @@
         //  RENDER FUNCTIONS
         // ----------------------------------------------------------------
         function renderTasks() {
-            taskGrid.innerHTML = state.tasks.map(task => `
-                <div class="task-card ${state.selectedTask?.id === task.id ? 'active' : ''}" data-id="${escapeHtml(task.id)}" aria-pressed="${state.selectedTask?.id === task.id}">
+            const starterLimit = Account.taskLimit();        // how many preset tasks are unlocked
+            const allowCustom = Account.customTasksAllowed(); // top tier only
+            let html = state.tasks.map((task, i) => {
+                const locked = i >= starterLimit;
+                return `
+                <div class="task-card ${state.selectedTask?.id === task.id ? 'active' : ''} ${locked ? 'locked' : ''}" data-id="${escapeHtml(task.id)}" aria-pressed="${state.selectedTask?.id === task.id}">
                     <span class="emoji">${task.emoji}</span>
                     <div class="info">
                         <strong>${escapeHtml(task.title)}</strong>
                         <p>${escapeHtml(task.desc)}</p>
                         <div class="task-meta">${escapeHtml(task.difficulty)} · ${task.prompt.length} chars</div>
                     </div>
+                    ${locked ? '<span class="lock" title="Upgrade to unlock">🔒</span>' : ''}
+                </div>`;
+            }).join('');
+            // Custom-task authoring card (Ultimate). Locked card for others (an upsell).
+            html += `
+                <div class="task-card custom ${allowCustom ? '' : 'locked'}" id="customTaskCard" data-id="custom">
+                    <span class="emoji">✍️</span>
+                    <div class="info">
+                        <strong>Custom task</strong>
+                        <p>Write your own prompt and benchmark models on it.</p>
+                        <div class="task-meta">${allowCustom ? 'Your workflow' : 'Ultimate plan'}</div>
+                    </div>
+                    ${allowCustom ? '' : '<span class="lock" title="Ultimate plan">🔒</span>'}
                 </div>
-            `).join('');
+                <div class="custom-panel ${state.selectedTask?.id === 'custom' ? 'show' : ''}" id="customPanel">
+                    <input id="customTitle" placeholder="Task name (e.g. Refund reply)" maxlength="60" value="${escapeHtml(state.selectedTask?.custom ? state.selectedTask.title : '')}" />
+                    <textarea id="customPrompt" placeholder="Write the prompt you want to test the agents on…" maxlength="4000">${escapeHtml(state.selectedTask?.custom ? state.selectedTask.prompt : '')}</textarea>
+                    <button class="btn btn-primary" id="useCustomBtn">Use this task →</button>
+                </div>`;
+            taskGrid.innerHTML = html;
 
             taskGrid.querySelectorAll('.task-card').forEach(el => {
                 keyActivate(el);
                 el.addEventListener('click', () => {
                     const id = el.dataset.id;
+                    if (id === 'custom') {
+                        if (!allowCustom) { showToast('Custom tasks are an Ultimate-plan feature.', '🔒'); Account.openPricing(); return; }
+                        $('customPanel').classList.add('show');
+                        setTimeout(() => $('customPrompt').focus(), 30);
+                        return;
+                    }
+                    const idx = state.tasks.findIndex(t => t.id === id);
+                    if (idx >= starterLimit) { showToast('That workflow is on a paid plan.', '🔒'); Account.openPricing(); return; }
                     state.selectedTask = state.tasks.find(t => t.id === id);
                     renderTasks();
                     updateStep(2);
                 });
             });
+
+            const useCustom = $('useCustomBtn');
+            if (useCustom) {
+                useCustom.addEventListener('click', () => {
+                    const title = $('customTitle').value.trim() || 'Custom task';
+                    const prompt = $('customPrompt').value.trim();
+                    if (prompt.length < 10) { showToast('Write a longer prompt (10+ characters).', '⚠️'); return; }
+                    state.selectedTask = { id: 'custom', title, emoji: '✍️', desc: 'Your custom workflow', difficulty: 'Custom', prompt, custom: true };
+                    renderTasks();
+                    updateStep(2);
+                });
+            }
         }
 
         function renderAgents() {
@@ -545,10 +592,12 @@
             if (idx > -1) {
                 state.selectedAgents.splice(idx, 1);
             } else {
-                if (state.selectedAgents.length < 12) {
+                const cap = Account.maxModels();
+                if (state.selectedAgents.length < cap) {
                     state.selectedAgents.push(id);
                 } else {
-                    showToast('Maximum 12 agents per run.', '⚠️');
+                    showToast(`Your plan compares up to ${cap} models. Upgrade for more.`, '🔒');
+                    Account.openPricing();
                 }
             }
             renderAgents();
@@ -751,6 +800,18 @@
                         } else if (data.reason === 'no-credits') {
                             showToast('Out of credits — running the simulation. Add credits for real runs.', '💰');
                             Account.openCredits();
+                        } else if (data.reason === 'plan-upgrade') {
+                            showToast('Real runs are a paid feature — showing the simulation.', '🔒');
+                            Account.openPricing();
+                        } else if (data.reason === 'plan-custom') {
+                            showToast('Custom tasks need the Ultimate plan — showing the simulation.', '🔒');
+                            Account.openPricing();
+                        } else if (data.reason === 'plan-models') {
+                            showToast(`Your plan runs up to ${data.max} models live — showing the simulation.`, '🔒');
+                            Account.openPricing();
+                        } else if (data.reason === 'plan-quota') {
+                            showToast('You\'ve hit today\'s run limit for your plan.', '⏳');
+                            Account.openPricing();
                         } else if (data.reason === 'daily-cap') {
                             showToast('Live runs paused for today (daily cap) — showing the simulation.', '⏳');
                         }
@@ -885,9 +946,14 @@
         const Account = (function () {
             const KEY = 'arena-session';
             let token = null;
-            let wallet = null;      // { credits, ... } in cents
+            let wallet = null;      // { credits, plan, ... } in cents
+            let plans = [];         // [{ id, name, price, maxModels, tasks, ... }]
+            let planId = 'free';    // the signed-in account's current plan
             let authMode = 'login'; // or 'signup'
             const fmt = (cents) => '$' + (Math.max(0, cents || 0) / 100).toFixed(2);
+            // Free-plan fallback so gates work while logged out / before load.
+            const FREE = { id: 'free', maxModels: 2, tasks: 'starter', features: { customTasks: false } };
+            const currentPlan = () => plans.find(p => p.id === planId) || FREE;
 
             function headers(extra = {}) {
                 return { 'Content-Type': 'application/json', ...(token ? { 'X-Session': token } : {}), ...extra };
@@ -899,7 +965,8 @@
                 if (token && wallet) {
                     signinBtn.style.display = 'none';
                     walletChip.style.display = 'flex';
-                    $('balanceLabel').textContent = fmt(wallet.credits);
+                    const planName = (currentPlan().name || 'Free');
+                    $('balanceLabel').textContent = `${planName} · ${fmt(wallet.credits)}`;
                     $('adminLink').style.display = wallet.owner ? '' : 'none';
                 } else {
                     signinBtn.style.display = '';
@@ -907,19 +974,81 @@
                 }
             }
 
+            // Re-render the parts of the arena whose limits depend on the plan.
+            function applyGates() {
+                renderChip();
+                renderTasks();
+                if (state.currentStep === 2) renderAgents();
+            }
+
+            async function loadPlans() {
+                try {
+                    const res = await fetch('/api/arena/plans');
+                    if (res.ok) plans = await res.json();
+                } catch (e) { /* offline — FREE fallback used */ }
+            }
+
             async function refresh() {
-                if (!token) { wallet = null; renderChip(); return; }
+                if (!token) { wallet = null; planId = 'free'; applyGates(); return; }
                 try {
                     const res = await fetch('/api/arena/credits', { headers: headers() });
-                    if (res.status === 401) { token = null; localStorage.removeItem(KEY); wallet = null; renderChip(); return; }
-                    if (res.ok) { wallet = await res.json(); renderChip(); }
+                    if (res.status === 401) { token = null; localStorage.removeItem(KEY); wallet = null; planId = 'free'; applyGates(); return; }
+                    if (res.ok) { wallet = await res.json(); planId = wallet.plan || 'free'; applyGates(); }
                 } catch (e) { /* offline */ }
+            }
+
+            function openPricing() {
+                const cur = planId;
+                $('planGrid').innerHTML = plans.map(p => {
+                    const feats = [];
+                    feats.push(`${p.maxModels || 2} models per run`);
+                    feats.push(p.tasks === 'all' ? 'All 10 workflows' : '3 starter workflows');
+                    if (p.features?.realRuns) feats.push('Real model runs');
+                    if (p.features?.customTasks) feats.push('Custom tasks (your prompts)');
+                    if (p.monthlyCredits) feats.push(`${fmt(p.monthlyCredits)}/mo run credits`);
+                    const isCurrent = p.id === cur;
+                    const featured = p.id === 'pro';
+                    const btn = p.price === 0
+                        ? `<button class="btn btn-outline" disabled>${isCurrent ? 'Current plan' : 'Free'}</button>`
+                        : (isCurrent
+                            ? `<button class="btn btn-outline" disabled>Current plan</button>`
+                            : `<button class="btn btn-primary" data-plan="${p.id}">Upgrade to ${escapeHtml(p.name)}</button>`);
+                    return `<div class="plan-card ${featured ? 'featured' : ''} ${isCurrent ? 'current' : ''}">
+                        ${featured ? '<span class="plan-tag">Most popular</span>' : '<span class="plan-tag">&nbsp;</span>'}
+                        <h4>${escapeHtml(p.name)}</h4>
+                        <div class="price">${p.price === 0 ? 'Free' : '$' + p.price}${p.price ? '<small>/mo</small>' : ''}</div>
+                        <ul>${feats.map(f => `<li>${escapeHtml(f)}</li>`).join('')}</ul>
+                        ${btn}
+                    </div>`;
+                }).join('');
+                $('planGrid').querySelectorAll('button[data-plan]').forEach(b => b.addEventListener('click', () => subscribe(b.dataset.plan)));
+                overlay(true, 'pricing');
+            }
+
+            async function subscribe(plan) {
+                if (!token) { openAuth('signup'); return; }
+                const btns = $('planGrid').querySelectorAll('button');
+                btns.forEach(b => b.disabled = true);
+                try {
+                    const res = await fetch('/api/arena/subscribe', { method: 'POST', headers: headers(), body: JSON.stringify({ plan }) });
+                    const data = await res.json().catch(() => ({}));
+                    if (!res.ok) { showToast(data.error || 'Could not start upgrade.', '❌'); return; }
+                    if (data.url && !data.dev) { window.location.href = data.url; return; } // Stripe redirect
+                    await refresh();          // dev-mode instant upgrade
+                    overlay(false);
+                    showToast(`You're on ${currentPlan().name || plan}! 🎉`, '✅');
+                } catch (err) {
+                    showToast('Upgrade failed — please try again.', '❌');
+                } finally {
+                    btns.forEach(b => b.disabled = false);
+                }
             }
 
             function overlay(show, which) {
                 const ov = $('modalOverlay');
                 $('authModal').style.display = which === 'auth' ? 'block' : 'none';
                 $('creditsModal').style.display = which === 'credits' ? 'block' : 'none';
+                $('pricingModal').style.display = which === 'pricing' ? 'block' : 'none';
                 ov.classList.toggle('show', show);
             }
 
@@ -996,29 +1125,35 @@
                 showToast('Signed out.', '↩');
             }
 
-            function init() {
+            async function init() {
                 try { token = localStorage.getItem(KEY); } catch (e) { token = null; }
                 $('signinBtn').addEventListener('click', () => openAuth('login'));
                 $('creditsBtn').addEventListener('click', openCredits);
                 $('signoutBtn').addEventListener('click', signout);
                 $('authForm').addEventListener('submit', submitAuth);
                 $('authToggle').addEventListener('click', (e) => { e.preventDefault(); openAuth(authMode === 'signup' ? 'login' : 'signup'); });
+                $('pricingLink').addEventListener('click', (e) => { e.preventDefault(); openPricing(); });
                 $('modalOverlay').addEventListener('click', (e) => { if (e.target === $('modalOverlay')) overlay(false); });
                 document.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', () => overlay(false)));
                 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') overlay(false); });
+                await loadPlans();
                 renderChip();
-                refresh();
-                // If we just returned from a Stripe top-up, refresh + clean the URL.
-                if (/[?&]topup=success/.test(location.search)) {
-                    showToast('Payment complete — credits added.', '💰');
+                await refresh();
+                applyGates();
+                // Returning from a Stripe top-up or upgrade → refresh + clean the URL.
+                if (/[?&](topup|upgrade)=success/.test(location.search)) {
+                    showToast('Payment complete — you\'re all set.', '✅');
                     history.replaceState(null, '', location.pathname);
                 }
             }
 
             return {
-                init, openAuth, openCredits,
+                init, openAuth, openCredits, openPricing,
                 token: () => token,
                 fmt,
+                maxModels: () => currentPlan().maxModels || 2,
+                taskLimit: () => (currentPlan().tasks === 'all' ? state.tasks.length : 3),
+                customTasksAllowed: () => Boolean(currentPlan().features && currentPlan().features.customTasks),
                 applyBalance(cents) { if (wallet) { wallet.credits = cents; renderChip(); } },
             };
         })();

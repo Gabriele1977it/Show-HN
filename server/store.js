@@ -675,7 +675,7 @@ export function createStore(filePath) {
       const entries = state.arenaLedger.filter((e) => e.userId === userId);
       return {
         credits: w.credits,
-        topupCents: entries.filter((e) => e.kind === "topup" || e.kind === "bonus").reduce((n, e) => n + e.amountCents, 0),
+        topupCents: entries.filter((e) => e.kind !== "run").reduce((n, e) => n + e.amountCents, 0),
         spentCents: entries.filter((e) => e.kind === "run").reduce((n, e) => n + e.amountCents, 0),
         runs: entries.filter((e) => e.kind === "run").length,
       };
@@ -684,9 +684,23 @@ export function createStore(filePath) {
       const amt = Math.max(0, Math.round(cents));
       const w = state.arenaWallets[userId] || (state.arenaWallets[userId] = { userId, credits: 0, createdAt: Date.now() });
       w.credits += amt;
-      state.arenaLedger.push({ id: nanoid(12), userId, kind: "topup", amountCents: amt, meta, at: Date.now() });
+      state.arenaLedger.push({ id: nanoid(12), userId, kind: meta.kind === "allowance" ? "allowance" : "topup", amountCents: amt, meta, at: Date.now() });
       persist();
       return { credits: w.credits };
+    },
+    // Account-level Agent Arena subscription plan (distinct from EchoDeck's
+    // workspace plans). Defaults to free.
+    getArenaAccountPlan(userId) {
+      const u = state.users[userId];
+      return { plan: u?.arenaPlan || "free", billing: u?.arenaBilling || null };
+    },
+    setArenaAccountPlan(userId, plan, billing = null) {
+      const u = state.users[userId];
+      if (!u) return { error: "not-found" };
+      u.arenaPlan = plan;
+      u.arenaBilling = billing;
+      persist();
+      return { plan, billing };
     },
     chargeArenaRun(userId, cents, meta = {}) {
       const amt = Math.max(0, Math.round(cents));
@@ -707,7 +721,7 @@ export function createStore(filePath) {
         else { u.topupCents += e.amountCents; }
       }
       const accounts = Object.keys(state.arenaWallets).map((id) => ({
-        userId: id, email: emailOf(id), credits: state.arenaWallets[id].credits,
+        userId: id, email: emailOf(id), plan: state.users[id]?.arenaPlan || "free", credits: state.arenaWallets[id].credits,
         topupCents: byUser[id]?.topupCents || 0, spentCents: byUser[id]?.spentCents || 0, runs: byUser[id]?.runs || 0,
       }));
       const recent = [...state.arenaLedger].sort((a, b) => b.at - a.at).slice(0, limit)

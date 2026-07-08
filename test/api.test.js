@@ -422,7 +422,7 @@ test("POST /api/arena/run: disabled by default; live when a runner is injected",
     store: liveStore,
     uploadsDir: liveTmp,
     ownerEmails: new Set(["boss@arena.test"]),
-    billing: { enabled: false, createCreditsCheckout: async ({ userId, cents }) => ({ url: "/arena", dev: true, credits: liveStore.addArenaCredits(userId, cents).credits }) },
+    billing: createBilling({ store: liveStore, config: {} }), // dev mode (instant)
     arenaCreditsConfig: { markup: 1.5, signupBonusCents: 25 },
     arenaRun: createArenaRunner({
       adapters: {
@@ -433,25 +433,36 @@ test("POST /api/arena/run: disabled by default; live when a runner is injected",
   const liveServer = liveApp.listen(0);
   const lbase = `http://127.0.0.1:${liveServer.address().port}`;
   const sess = (email) => { const u = liveStore.createUser({ email, password: "secret1" }); return liveStore.createSession(u.id); };
+  const post = (path, headers, body) => realFetch(`${lbase}${path}`, {
+    method: "POST", headers: { "Content-Type": "application/json", ...headers }, body: JSON.stringify(body),
+  }).then(j);
   try {
-    const runReq = (headers, body) => realFetch(`${lbase}/api/arena/run`, {
-      method: "POST", headers: { "Content-Type": "application/json", ...headers }, body: JSON.stringify(body),
-    }).then(j);
+    const runReq = (headers, body) => post("/api/arena/run", headers, body);
 
-    // A run with only simulated providers needs no sign-in and no charge.
+    // Sim-only run: no sign-in, no charge.
     const simOnly = await runReq({}, { prompt: "p", models: [{ id: "gpt-5.1", provider: "OpenAI" }] });
     assert.equal(simOnly.enabled, true);
     assert.equal(simOnly.results[0].live, false);
     assert.equal(simOnly.charged, undefined);
 
-    // A live model without a session → gated: enabled:false, reason:'signin'.
-    const gated = await runReq({}, { prompt: "p", models: [{ id: "claude-opus-4.5", provider: "Anthropic" }] });
-    assert.equal(gated.enabled, false);
-    assert.equal(gated.reason, "signin");
+    // Live model, no session → gated for sign-in.
+    assert.equal((await runReq({}, { prompt: "p", models: [{ id: "claude-opus-4.5", provider: "Anthropic" }] })).reason, "signin");
 
-    // Signed in (fresh account gets the 25c signup bonus) → live run + charge.
+    // Signed in but on the FREE plan → real runs are gated ('plan-upgrade').
     const token = sess("buyer@arena.test");
-    const on = await runReq({ "X-Session": token }, { prompt: "Write a follow-up email", taskId: "sales-email", models: [
+    const auth = { "X-Session": token };
+    assert.equal((await runReq(auth, { prompt: "p", models: [{ id: "claude-opus-4.5", provider: "Anthropic" }] })).reason, "plan-upgrade");
+
+    // Upgrade to Pro (dev mode) → plan set + monthly allowance ($5) granted.
+    const up = await post("/api/arena/subscribe", auth, { plan: "pro" });
+    assert.equal(up.dev, true);
+    assert.equal(up.plan, "pro");
+    let wallet = await realFetch(`${lbase}/api/arena/credits`, { headers: auth }).then(j);
+    assert.equal(wallet.plan, "pro");
+    assert.equal(wallet.credits, 500); // allowance
+
+    // Pro can run real models now → charge 4c (1000 tok @ $0.025/1k ×1.5, ceil).
+    const on = await runReq(auth, { prompt: "Write a follow-up email", taskId: "sales-email", models: [
       { id: "gpt-5.1", provider: "OpenAI" },
       { id: "claude-opus-4.5", provider: "Anthropic" },
     ] });
@@ -459,32 +470,39 @@ test("POST /api/arena/run: disabled by default; live when a runner is injected",
     const byId = Object.fromEntries(on.results.map((r) => [r.id, r]));
     assert.equal(byId["claude-opus-4.5"].live, true);
     assert.equal(byId["gpt-5.1"].live, false);
-    // 1000 tokens @ $0.025/1k = 2.5c ×1.5 = 3.75c → 4c charged; 25 − 4 = 21 left.
     assert.equal(on.charged, 4);
-    assert.equal(on.balance, 21);
+    assert.equal(on.balance, 496);
 
-    // Wallet endpoint reflects the balance for the signed-in account.
-    const wallet = await realFetch(`${lbase}/api/arena/credits`, { headers: { "X-Session": token } }).then(j);
-    assert.equal(wallet.credits, 21);
-    assert.equal(wallet.runs, 1);
-    assert.ok(Array.isArray(wallet.packs));
+    // Pro caps at 6 models and can't author custom tasks.
+    const tooMany = await runReq(auth, { prompt: "p", models: [
+      { id: "claude-opus-4.5", provider: "Anthropic" },
+      ...Array.from({ length: 6 }, (_, i) => ({ id: `gpt-${i}`, provider: "OpenAI" })),
+    ] });
+    assert.equal(tooMany.reason, "plan-models");
+    assert.equal(tooMany.max, 6);
+    assert.equal((await runReq(auth, { prompt: "custom prompt", taskId: "custom", models: [{ id: "claude-opus-4.5", provider: "Anthropic" }] })).reason, "plan-custom");
 
-    // Top-up (dev mode) adds credits instantly.
-    const top = await realFetch(`${lbase}/api/arena/credits/topup`, {
-      method: "POST", headers: { "Content-Type": "application/json", "X-Session": token },
-      body: JSON.stringify({ pack: "p5" }),
-    }).then(j);
-    assert.equal(top.dev, true);
-    assert.equal((await realFetch(`${lbase}/api/arena/credits`, { headers: { "X-Session": token } }).then(j)).credits, 521);
+    // Upgrade to Ultimate → +$20 allowance; custom tasks now allowed.
+    await post("/api/arena/subscribe", auth, { plan: "ultimate" });
+    wallet = await realFetch(`${lbase}/api/arena/credits`, { headers: auth }).then(j);
+    assert.equal(wallet.plan, "ultimate");
+    assert.equal(wallet.credits, 496 + 2000);
+    const custom = await runReq(auth, { prompt: "my own workflow prompt", taskId: "custom", models: [{ id: "claude-opus-4.5", provider: "Anthropic" }] });
+    assert.equal(custom.enabled, true);
+    assert.equal(custom.results[0].live, true);
+    assert.equal(custom.balance, 496 + 2000 - 4);
 
-    // Admin stats: owner only.
-    assert.equal((await realFetch(`${lbase}/api/arena/admin/stats`, { headers: { "X-Session": token } })).status, 403);
-    const ownerToken = sess("boss@arena.test");
-    const stats = await realFetch(`${lbase}/api/arena/admin/stats`, { headers: { "X-Session": ownerToken } }).then(j);
-    assert.ok(stats.totalAccounts >= 1);
-    assert.equal(stats.totalSpentCents, 4);
-    assert.equal(stats.totalTopupCents, 25 + 500); // bonus + $5 top-up
-    assert.ok(stats.accounts.some((a) => a.email === "buyer@arena.test"));
+    // Owner admin stats include the account's plan + spend.
+    assert.equal((await realFetch(`${lbase}/api/arena/admin/stats`, { headers: auth })).status, 403);
+    const stats = await realFetch(`${lbase}/api/arena/admin/stats`, { headers: { "X-Session": sess("boss@arena.test") } }).then(j);
+    assert.equal(stats.totalSpentCents, 8); // two 4c live runs
+    const acct = stats.accounts.find((a) => a.email === "buyer@arena.test");
+    assert.ok(acct);
+    assert.equal(acct.plan, "ultimate");
+
+    // Public plans catalogue.
+    const plans = await realFetch(`${lbase}/api/arena/plans`).then(j);
+    assert.deepEqual(plans.map((p) => p.id), ["free", "pro", "ultimate"]);
 
     // Validation still applies.
     assert.equal((await realFetch(`${lbase}/api/arena/run`, {

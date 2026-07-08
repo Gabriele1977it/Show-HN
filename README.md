@@ -285,6 +285,7 @@ server/
   arena-models.js Agent Arena model registry + auto-update (feed / demo release)
   arena-run.js   Agent Arena real model runs (opt-in adapters; simulated fallback)
   arena-credits.js Agent Arena SaaS wallet — run pricing/metering + top-up config
+  arena-plans.js Agent Arena subscription tiers + entitlements (Free/Pro/Ultimate)
 public/          landing.html, index.html (app), share.html, terms.html, privacy.html,
                  arena.html + arena.js + arena-theme.js (Agent Arena, at /arena)
 madlabs/         the MadLabs company hub (static site → madlabs.uk)
@@ -350,6 +351,18 @@ day and the client silently simulates. Adapters are injected
 (`server/arena-run.js`), so the whole path is testable without a live key.
 Scores remain a simulated heuristic for now (real evaluation / an LLM judge is
 the next step); the outputs, latency, and token counts on live cards are real.
+
+**SaaS: subscription tiers** — 3 account-level plans (`server/arena-plans.js`),
+distinct from EchoDeck's, gate access + limits: **Free** (simulated, 2 models,
+3 starter workflows), **Pro $19** (real runs, 6 models, all 10 workflows,
+includes $5/mo run credits), **Ultimate $49** (12 models, unlimited runs,
+**custom tasks** — your own prompt box — includes $20/mo credits). Limits are
+enforced server-side on `/api/arena/run` (model cap, task access, real-run
+access, per-day quota, custom-task gate) and mirrored in the UI (locked task
+cards, model-selection cap, a pricing modal). Subscriptions use the same Stripe
+key as EchoDeck (`/api/arena/subscribe` → subscription Checkout; instant
+upgrade in dev mode), and each paid tier grants its monthly credit allowance on
+activation. The per-tier prices/limits are placeholders — trivially changed.
 
 **SaaS: accounts + prepaid credits + admin** — Arena reuses EchoDeck's account
 system (email + password sessions). The simulated arena stays free and open

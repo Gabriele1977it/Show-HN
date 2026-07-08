@@ -57,6 +57,48 @@ export function createBilling({ store, config = {}, fetchImpl = fetch }) {
     return { url: data.url, id: data.id };
   }
 
+  // Grant a plan's monthly credit allowance (as an "allowance" ledger entry).
+  function grantAllowance(userId, monthlyCredits, plan) {
+    if (userId && monthlyCredits > 0) store.addArenaCredits(userId, monthlyCredits, { kind: "allowance", plan });
+  }
+
+  /**
+   * Agent Arena subscription (account-level). Dev mode sets the plan + grants
+   * its monthly credit allowance immediately; live mode opens a Stripe
+   * subscription Checkout and does the same via the webhook.
+   */
+  async function createArenaSubscription({ userId, plan, priceId, monthlyCredits = 0, successUrl, cancelUrl }) {
+    if (!enabled) {
+      store.setArenaAccountPlan(userId, plan, { provider: "dev", status: "active" });
+      grantAllowance(userId, monthlyCredits, plan);
+      return { url: successUrl, dev: true, plan };
+    }
+    if (!priceId) throw new Error(`No Stripe price configured for the Arena ${plan} plan`);
+    const body = new URLSearchParams({
+      mode: "subscription",
+      "line_items[0][price]": priceId,
+      "line_items[0][quantity]": "1",
+      success_url: successUrl,
+      cancel_url: cancelUrl,
+      "metadata[kind]": "arena-sub",
+      "metadata[userId]": userId,
+      "metadata[plan]": plan,
+      "metadata[monthlyCredits]": String(monthlyCredits),
+      "subscription_data[metadata][kind]": "arena-sub",
+      "subscription_data[metadata][userId]": userId,
+      "subscription_data[metadata][plan]": plan,
+      "subscription_data[metadata][monthlyCredits]": String(monthlyCredits),
+    });
+    const res = await fetchImpl("https://api.stripe.com/v1/checkout/sessions", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${config.secretKey}`, "Content-Type": "application/x-www-form-urlencoded" },
+      body: body.toString(),
+    });
+    if (!res.ok) throw new Error(`Stripe checkout failed (${res.status})`);
+    const data = await res.json();
+    return { url: data.url, id: data.id };
+  }
+
   /**
    * One-time Agent Arena credit top-up (Stripe Checkout in `payment` mode, or
    * an instant grant in dev mode). Amount is an arbitrary number of cents, so
@@ -139,6 +181,12 @@ export function createBilling({ store, config = {}, fetchImpl = fetch }) {
           store.addArenaCredits(obj.metadata.userId, Number(obj.metadata.cents) || 0, { provider: "stripe", sessionId: obj.id });
           return { handled: true };
         }
+        // Agent Arena subscription — set plan + grant the monthly allowance.
+        if (obj.metadata?.kind === "arena-sub" && obj.metadata?.userId) {
+          store.setArenaAccountPlan(obj.metadata.userId, obj.metadata.plan, { provider: "stripe", customerId: obj.customer, subscriptionId: obj.subscription, status: "active" });
+          grantAllowance(obj.metadata.userId, Number(obj.metadata.monthlyCredits) || 0, obj.metadata.plan);
+          return { handled: true };
+        }
         const ws = obj.metadata?.workspaceId;
         const plan = obj.metadata?.plan;
         if (ws && plan) store.setWorkspacePlan(ws, plan, { provider: "stripe", customerId: obj.customer, subscriptionId: obj.subscription, status: "active" });
@@ -154,6 +202,10 @@ export function createBilling({ store, config = {}, fetchImpl = fetch }) {
         return { handled: true };
       }
       case "customer.subscription.deleted": {
+        if (obj.metadata?.kind === "arena-sub" && obj.metadata?.userId) {
+          store.setArenaAccountPlan(obj.metadata.userId, "free", { provider: "stripe", status: "canceled" });
+          return { handled: true };
+        }
         const ws = obj.metadata?.workspaceId || store.findWorkspaceBySubscription(obj.id);
         if (ws) store.setWorkspacePlan(ws, "free", { provider: "stripe", status: "canceled" });
         return { handled: true };
@@ -163,5 +215,5 @@ export function createBilling({ store, config = {}, fetchImpl = fetch }) {
     }
   }
 
-  return { enabled, annualAvailable, createCheckout, createCreditsCheckout, createPortal, verifyWebhook, applyEvent };
+  return { enabled, annualAvailable, createCheckout, createCreditsCheckout, createArenaSubscription, createPortal, verifyWebhook, applyEvent };
 }

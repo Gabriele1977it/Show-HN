@@ -22,6 +22,7 @@ import { createRateLimiter, rateLimit, securityHeaders } from "./security.js";
 import { createArenaModels } from "./arena-models.js";
 import { createArenaRunner } from "./arena-run.js";
 import { creditsConfig, computeRunCents, CREDIT_PACKS, getPack } from "./arena-credits.js";
+import { getArenaPlan, arenaPlanPublic, listArenaPlans, ARENA_PLANS } from "./arena-plans.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = join(__dirname, "..", "public");
@@ -117,6 +118,8 @@ export function createApp({ store, uploadsDir, reminders, billing, mailer, enric
   // for the rest of the day and the client silently falls back to simulation.
   const arenaRunDailyMax = Number(process.env.ARENA_LIVE_DAILY_MAX) || rateLimits.arenaRunDaily || 200;
   const arenaRunCounter = dailyCounter();
+  // Per-user daily real-run quota (the plan's runsPerDay entitlement).
+  const arenaUserRunCounter = dailyCounter();
   const takeAiQuota = (req, n = 1) =>
     aiCounter.take(req.ws, aiLimits.perWorkspacePerDay ?? getPlan(planOf(req)).aiPerDay ?? 0, n);
   const takeImportQuota = (req) =>
@@ -786,9 +789,21 @@ export function createApp({ store, uploadsDir, reminders, billing, mailer, enric
       return res.json({ enabled: true, providers: arenaRun.providers(), results });
     }
 
-    // SaaS gate: real runs require a signed-in account with a positive balance.
+    // SaaS gate: real runs require a signed-in account on a plan that unlocks
+    // them, within its entitlements, with a positive balance.
     const user = sessionUser(req);
     if (!user) return res.json({ enabled: false, reason: "signin" });
+    const planId = store.getArenaAccountPlan(user.id).plan;
+    const plan = getArenaPlan(planId);
+    if (!plan.realRuns) return res.json({ enabled: false, reason: "plan-upgrade", plan: planId });
+    if (typeof b.taskId === "string" && b.taskId === "custom" && !plan.customTasks) {
+      return res.json({ enabled: false, reason: "plan-custom", plan: planId });
+    }
+    if (models.length > plan.maxModels) {
+      return res.json({ enabled: false, reason: "plan-models", plan: planId, max: plan.maxModels });
+    }
+    const userQuota = arenaUserRunCounter.take(user.id, plan.runsPerDay ?? Infinity, 1);
+    if (!userQuota.ok) return res.json({ enabled: false, reason: "plan-quota", plan: planId });
     const wallet = store.getArenaWallet(user.id, { bonusCents: arenaCreditsCfg.signupBonusCents });
     if (wallet.credits <= 0) return res.json({ enabled: false, reason: "no-credits" });
     // Global daily backstop (money cap) — only real models count.
@@ -811,7 +826,31 @@ export function createApp({ store, uploadsDir, reminders, billing, mailer, enric
     const user = sessionUser(req);
     if (!user) return res.status(401).json({ error: "Not signed in." });
     const wallet = store.getArenaWallet(user.id, { bonusCents: arenaCreditsCfg.signupBonusCents });
-    res.json({ email: user.email, ...wallet, packs: CREDIT_PACKS, live: arenaRun.enabled, stripe: Boolean(billing?.enabled), owner: isOwner(user.email) });
+    const planId = store.getArenaAccountPlan(user.id).plan;
+    res.json({ email: user.email, ...wallet, plan: planId, planInfo: arenaPlanPublic(planId), packs: CREDIT_PACKS, live: arenaRun.enabled, stripe: Boolean(billing?.enabled), owner: isOwner(user.email) });
+  });
+  // Public: the subscription tiers (for the pricing UI).
+  app.get("/api/arena/plans", (_req, res) => res.json(listArenaPlans()));
+  // Start an Agent Arena subscription (dev-mode instant, or Stripe Checkout).
+  app.post("/api/arena/subscribe", authLimiter, async (req, res) => {
+    const user = sessionUser(req);
+    if (!user) return res.status(401).json({ error: "Not signed in." });
+    const planId = req.body?.plan;
+    const plan = ARENA_PLANS[planId];
+    if (!plan || plan.price === 0 || plan.hidden) return res.status(400).json({ error: "Unknown plan." });
+    const interval = req.body?.interval === "year" ? "year" : "month";
+    const priceId = process.env[interval === "year" ? plan.stripeEnvYear : plan.stripeEnv];
+    const origin = `${req.protocol}://${req.get("host")}`;
+    try {
+      const out = await billing.createArenaSubscription({
+        userId: user.id, plan: planId, priceId, monthlyCredits: plan.monthlyCredits || 0,
+        successUrl: `${origin}/arena?upgrade=success`, cancelUrl: `${origin}/arena?upgrade=cancel`,
+      });
+      res.json(out);
+    } catch (err) {
+      console.error("[arena subscribe]", err.message);
+      res.status(502).json({ error: "Could not start checkout." });
+    }
   });
   app.post("/api/arena/credits/topup", authLimiter, async (req, res) => {
     const user = sessionUser(req);

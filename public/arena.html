@@ -213,6 +213,37 @@
         .pack-btn:hover { border-color: var(--accent); transform: translateY(-2px); }
         .pack-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
 
+        .modal-wide { max-width: 760px; }
+        .plan-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 8px; }
+        @media (max-width: 680px) { .plan-grid { grid-template-columns: 1fr; } }
+        .plan-card {
+            border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 18px 16px;
+            display: flex; flex-direction: column; gap: 8px; background: var(--bg-secondary);
+        }
+        .plan-card.featured { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(124,58,237,0.12); }
+        .plan-card.current { border-color: var(--text-muted); }
+        .plan-card h4 { font-size: 1rem; font-weight: 800; display: flex; align-items: center; gap: 8px; }
+        .plan-card .price { font-size: 1.8rem; font-weight: 800; letter-spacing: -1px; }
+        .plan-card .price small { font-size: 0.8rem; color: var(--text-muted); font-weight: 500; }
+        .plan-card ul { list-style: none; font-size: 0.82rem; color: var(--text-secondary); display: flex; flex-direction: column; gap: 5px; flex: 1; margin: 6px 0; }
+        .plan-card ul li::before { content: "✓ "; color: var(--accent); font-weight: 700; }
+        .plan-card .plan-tag { font-size: 0.6rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--accent); }
+        .plan-card button { width: 100%; }
+
+        .task-card.locked { opacity: 0.55; }
+        .task-card.locked .lock { margin-left: auto; font-size: 1rem; align-self: center; }
+        .task-card.custom { border-style: dashed; }
+        .custom-panel {
+            grid-column: 1 / -1; border: 2px dashed var(--accent); border-radius: var(--radius-sm);
+            padding: 16px; background: var(--accent-light); display: none; flex-direction: column; gap: 10px; margin-top: 4px;
+        }
+        .custom-panel.show { display: flex; }
+        .custom-panel input, .custom-panel textarea {
+            padding: 10px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-color);
+            background: var(--bg-card); color: var(--text-primary); font-size: 0.9rem; font-family: inherit; width: 100%;
+        }
+        .custom-panel textarea { min-height: 100px; resize: vertical; }
+
         .demo-notice {
             display: flex;
             align-items: center;
@@ -1165,6 +1196,7 @@
             <nav>
                 <a href="#stepper" class="active">Arena</a>
                 <a href="/arena/leaderboard">Leaderboard</a>
+                <a href="#" id="pricingLink">Pricing</a>
                 <a href="https://www.madlabs.uk">MadLabs</a>
                 <a href="/">EchoDeck</a>
             </nav>
@@ -1209,6 +1241,13 @@
             <p class="modal-sub">Credits pay for real model runs. Balance: <strong id="creditsBalance">$0.00</strong></p>
             <div class="pack-row" id="packRow"></div>
             <p class="modal-note" id="creditsNote"></p>
+        </div>
+        <div class="modal modal-wide" id="pricingModal" style="display:none;">
+            <button class="modal-close" data-close aria-label="Close">✕</button>
+            <h3>Choose your plan</h3>
+            <p class="modal-sub" id="pricingSub">Real runs, more models, and custom tasks unlock on paid plans.</p>
+            <div class="plan-grid" id="planGrid"></div>
+            <p class="modal-note">Prices in USD / month. Cancel anytime. Real runs also draw from your credit balance for the tokens used.</p>
         </div>
     </div>
 
