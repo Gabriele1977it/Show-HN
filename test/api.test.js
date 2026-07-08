@@ -397,6 +397,33 @@ test("Agent Arena leaderboard aggregates models and supports search/task filters
   assert.match(await page.text(), /Community leaderboard/);
 });
 
+test("Agent Arena blind votes update the community ELO leaderboard", async () => {
+  const gpt = { id: "gpt-5.1", name: "GPT-5.1", provider: "OpenAI", color: "#10a37f" };
+  const claude = { id: "claude-opus-4.5", name: "Claude Opus 4.5", provider: "Anthropic", color: "#d97757" };
+  const vote = (winner) => realFetch(`${base}/api/arena/vote`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ task: "Draft Sales Email", a: gpt, b: claude, winner }),
+  });
+
+  const first = await vote("a");
+  assert.equal(first.status, 201);
+  const body = await first.json();
+  assert.equal(body.a.delta, 12);
+  assert.equal(body.b.delta, -12);
+  assert.ok(body.totalVotes >= 1);
+
+  const lb = await realFetch(`${base}/api/arena/vote/leaderboard`).then(j);
+  const g = lb.models.find((m) => m.id === "gpt-5.1");
+  assert.ok(g && g.rating > 1500 && g.wins === 1);
+
+  // Validation: bad winner, and same model on both sides, are rejected.
+  assert.equal((await vote("nonsense")).status, 400);
+  assert.equal((await realFetch(`${base}/api/arena/vote`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ task: "x", a: gpt, b: gpt, winner: "a" }),
+  })).status, 400);
+});
+
 test("Agent Arena model registry is served and versioned", async () => {
   const models = await realFetch(`${base}/api/arena/models`).then(j);
   assert.equal(typeof models.version, "number");

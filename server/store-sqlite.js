@@ -13,6 +13,7 @@ import { freshSrs, review, isDue } from "./srs.js";
 import { computeStats } from "./stats.js";
 import { suggestCloze } from "./cloze.js";
 import { hashPassword, verifyPassword, newToken, hashToken } from "./auth.js";
+import { START_RATING, eloUpdate, scoreForA } from "./arena-vote.js";
 
 const SESSION_TTL = 30 * 24 * 60 * 60 * 1000;
 const RESET_TTL = 60 * 60 * 1000;
@@ -79,6 +80,15 @@ CREATE TABLE IF NOT EXISTS arena_ledger (
   amount_cents INTEGER NOT NULL, meta TEXT, at INTEGER
 );
 CREATE INDEX IF NOT EXISTS idx_arena_ledger_user ON arena_ledger(user_id);
+CREATE TABLE IF NOT EXISTS arena_ratings (
+  model_id TEXT PRIMARY KEY, name TEXT, provider TEXT, color TEXT,
+  rating REAL NOT NULL DEFAULT 1500, wins INTEGER NOT NULL DEFAULT 0,
+  losses INTEGER NOT NULL DEFAULT 0, ties INTEGER NOT NULL DEFAULT 0, games INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS arena_votes (
+  id TEXT PRIMARY KEY, task TEXT, a_id TEXT, b_id TEXT, winner TEXT, at INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_arena_votes_at ON arena_votes(at);
 `;
 
 const newMember = (name, role) => ({ id: nanoid(8), name: name?.trim() || "Member", role, key: nanoid(24), createdAt: Date.now() });
@@ -702,6 +712,43 @@ export function createSqliteStore(dbPath, { migrateFrom } = {}) {
       db.prepare("INSERT INTO arena_ledger (id,user_id,kind,amount_cents,meta,at) VALUES (?,?,?,?,?,?)")
         .run(nanoid(12), userId, meta.kind === "allowance" ? "allowance" : "topup", amt, JSON.stringify(meta), Date.now());
       return { credits: db.prepare("SELECT credits FROM arena_wallets WHERE user_id=?").get(userId).credits };
+    },
+    // --- Agent Arena blind votes (community ELO) ---------------------
+    recordArenaVote({ task = "", a, b, winner }) {
+      if (!a?.id || !b?.id || a.id === b.id) return { error: "invalid" };
+      const ensure = (m) => {
+        db.prepare("INSERT INTO arena_ratings (model_id,name,provider,color) VALUES (?,?,?,?) ON CONFLICT(model_id) DO NOTHING")
+          .run(m.id, m.name || m.id, m.provider || "", m.color || "#7c3aed");
+        return db.prepare("SELECT * FROM arena_ratings WHERE model_id=?").get(m.id);
+      };
+      const ra = ensure(a), rb = ensure(b);
+      let na = ra.rating, nb = rb.rating;
+      if (winner === "a" || winner === "b" || winner === "tie") {
+        [na, nb] = eloUpdate(ra.rating, rb.rating, scoreForA(winner));
+      }
+      const wA = winner === "a" ? 1 : 0, wB = winner === "b" ? 1 : 0;
+      const lA = winner === "b" ? 1 : 0, lB = winner === "a" ? 1 : 0;
+      const tA = (winner === "tie" || winner === "bad") ? 1 : 0;
+      db.prepare("UPDATE arena_ratings SET rating=?, wins=wins+?, losses=losses+?, ties=ties+?, games=games+1 WHERE model_id=?").run(na, wA, lA, tA, a.id);
+      db.prepare("UPDATE arena_ratings SET rating=?, wins=wins+?, losses=losses+?, ties=ties+?, games=games+1 WHERE model_id=?").run(nb, wB, lB, tA, b.id);
+      db.prepare("INSERT INTO arena_votes (id,task,a_id,b_id,winner,at) VALUES (?,?,?,?,?,?)").run(nanoid(12), task, a.id, b.id, winner, Date.now());
+      db.prepare("DELETE FROM arena_votes WHERE id NOT IN (SELECT id FROM arena_votes ORDER BY at DESC LIMIT 5000)").run();
+      const total = db.prepare("SELECT COUNT(*) n FROM arena_votes").get().n;
+      return {
+        a: { rating: Math.round(na), delta: Math.round(na - ra.rating) },
+        b: { rating: Math.round(nb), delta: Math.round(nb - rb.rating) },
+        totalVotes: total,
+      };
+    },
+    arenaVoteLeaderboard({ limit = 100 } = {}) {
+      const models = db.prepare("SELECT * FROM arena_ratings ORDER BY rating DESC LIMIT ?").all(limit).map((m) => ({
+        id: m.model_id, name: m.name, provider: m.provider, color: m.color,
+        rating: Math.round(m.rating), wins: m.wins, losses: m.losses, ties: m.ties, games: m.games,
+        winRate: m.games ? Math.round((m.wins / m.games) * 100) : 0,
+      }));
+      const total = db.prepare("SELECT COUNT(*) n FROM arena_votes").get().n;
+      const totalModels = db.prepare("SELECT COUNT(*) n FROM arena_ratings").get().n;
+      return { totalVotes: total, totalModels, models };
     },
     getArenaAccountPlan(userId) {
       const u = db.prepare("SELECT arena_plan, arena_billing FROM users WHERE id=?").get(userId);

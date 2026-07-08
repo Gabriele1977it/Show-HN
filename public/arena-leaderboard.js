@@ -119,6 +119,29 @@
     });
     taskFilter.addEventListener('change', () => { loadLeaderboard(); loadCards(); });
 
+    function loadEloBoard() {
+        fetch('/api/arena/vote/leaderboard?limit=25')
+            .then((r) => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
+            .then((data) => {
+                const body = $('eloBody');
+                if (!data.models || !data.models.length) { body.innerHTML = ''; $('eloEmpty').style.display = 'block'; return; }
+                $('eloEmpty').style.display = 'none';
+                body.innerHTML = data.models.map((m, i) => {
+                    const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}`;
+                    const cls = i === 0 ? 'medal-gold' : i === 1 ? 'medal-silver' : i === 2 ? 'medal-bronze' : '';
+                    return `<tr>
+                        <td class="rank-cell ${cls}">${medal}</td>
+                        <td><div class="model-cell"><div class="avatar" style="background:${safeColor(m.color)}">${escapeHtml((m.name || '?')[0])}</div><div><div class="mname">${escapeHtml(m.name)}</div><div class="mprov">${escapeHtml(m.provider || '')}</div></div></div></td>
+                        <td class="num"><span class="avg-pill">${m.rating}</span></td>
+                        <td class="num">${m.winRate}%</td>
+                        <td class="num">${m.games}</td>
+                    </tr>`;
+                }).join('');
+            })
+            .catch(() => { $('eloEmpty').style.display = 'block'; });
+    }
+
+    loadEloBoard();
     loadLeaderboard();
     loadCards();
 })();

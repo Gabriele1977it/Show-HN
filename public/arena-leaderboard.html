@@ -86,6 +86,7 @@
             <a class="logo" href="/arena">⚡ <span>Agent Arena</span></a>
             <nav>
                 <a href="/arena">Arena</a>
+                <a href="/arena/vote">Vote</a>
                 <a href="/arena/leaderboard" class="active">Leaderboard</a>
                 <a href="https://www.madlabs.uk">MadLabs</a>
                 <button class="theme-toggle" id="themeToggle" aria-label="Toggle theme">🌙</button>
@@ -102,7 +103,18 @@
         </section>
 
         <div class="panel">
-            <h2>📊 Model ranking</h2>
+            <h2>⚔️ Community ELO <span style="font-weight:400;color:var(--text-muted);font-size:0.8rem;">— from blind head-to-head votes · <a href="/arena/vote" style="color:var(--accent);">cast a vote →</a></span></h2>
+            <div class="table-scroll">
+                <table>
+                    <thead><tr><th class="rank-cell">#</th><th>Model</th><th class="num">ELO</th><th class="num">Win rate</th><th class="num">Votes</th></tr></thead>
+                    <tbody id="eloBody"></tbody>
+                </table>
+            </div>
+            <div class="empty" id="eloEmpty" style="display:none;">No votes yet — <a href="/arena/vote" style="color:var(--accent);">be the first to vote</a>.</div>
+        </div>
+
+        <div class="panel">
+            <h2>📊 Model ranking <span style="font-weight:400;color:var(--text-muted);font-size:0.8rem;">— from published scorecards</span></h2>
             <div class="controls">
                 <select id="taskFilter" aria-label="Filter by task"><option value="">All tasks</option></select>
             </div>

@@ -286,6 +286,7 @@ server/
   arena-run.js   Agent Arena real model runs (opt-in adapters; simulated fallback)
   arena-credits.js Agent Arena SaaS wallet — run pricing/metering + top-up config
   arena-plans.js Agent Arena subscription tiers + entitlements (Free/Pro/Ultimate)
+  arena-vote.js  Agent Arena blind-vote ELO (crowd-sourced community leaderboard)
 public/          landing.html, index.html (app), share.html, terms.html, privacy.html,
                  arena.html + arena.js + arena-theme.js (Agent Arena, at /arena)
 madlabs/         the MadLabs company hub (static site → madlabs.uk)
@@ -317,6 +318,18 @@ works standalone.
 no per-run network calls, and scores are deterministic per model+task pair.
 It's a static page served by this app at `/arena`, with light/dark theme,
 JSON export of results, and a simulated "model sync".
+
+**Blind-vote arena → community ELO** (`/arena/vote`) — the standout mechanic
+(à la LMSYS Chatbot Arena): two models answer the same task with their names
+hidden, the visitor picks the better one (or tie / both bad), and each vote
+updates a per-model **ELO rating** (`server/arena-vote.js`, K=24) — a
+crowd-sourced, genuinely trustworthy leaderboard, no simulated scores. Votes
+are anonymous, rate-limited, and persisted in both store backends; the ranking
+shows on the vote page and as a panel on `/arena/leaderboard`
+(`GET /api/arena/vote/leaderboard`, `POST /api/arena/vote`). The two answers
+are simulated in demo mode (shared task/output data lives in
+`public/arena-mocks.js`, loaded by both the wizard and the vote page) and
+become real once live runs are on.
 
 **Publish & share scorecards** — the first slice of the community layer is
 live. Finishing a run and hitting **Publish** POSTs the result to

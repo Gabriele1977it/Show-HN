@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Vote · Agent Arena — which AI agent is better?</title>
+    <meta name="description" content="Blind side-by-side voting for AI agents on real SMB workflows. Pick the better answer without seeing the model name; votes build a crowd-sourced ELO leaderboard. A MadLabs experiment." />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%9A%94%EF%B8%8F%3C/text%3E%3C/svg%3E" />
+    <script src="/arena-theme.js"></script>
+    <style>
+        :root {
+            --bg-primary: #f6f8fc; --bg-secondary: #ffffff; --bg-card: #ffffff;
+            --bg-input: #f1f4f9; --text-primary: #0b0d10; --text-secondary: #4a5568;
+            --text-muted: #94a3b8; --border-color: #e2e8f0; --accent: #7c3aed;
+            --accent-light: #ede9fe; --accent-gradient: linear-gradient(135deg, #7c3aed, #4f46e5);
+            --shadow-sm: 0 1px 3px rgba(0,0,0,0.04); --shadow-md: 0 8px 24px rgba(0,0,0,0.06);
+            --radius: 16px; --radius-sm: 10px; --transition: 0.2s cubic-bezier(0.4,0,0.2,1);
+        }
+        [data-theme="dark"] {
+            --bg-primary: #0b0d10; --bg-secondary: #14171c; --bg-card: #1c2027;
+            --bg-input: #262b33; --text-primary: #f1f5f9; --text-secondary: #94a3b8;
+            --text-muted: #64748b; --border-color: #2d333b; --accent-light: #2d1b4e;
+            --shadow-sm: 0 1px 3px rgba(0,0,0,0.4); --shadow-md: 0 8px 24px rgba(0,0,0,0.5);
+        }
+        * , *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background: var(--bg-primary); color: var(--text-primary); line-height: 1.6; min-height: 100vh; transition: background var(--transition), color var(--transition); }
+        .container { max-width: 1000px; margin: 0 auto; padding: 0 24px; }
+        header { background: var(--bg-secondary); border-bottom: 1px solid var(--border-color); padding: 14px 0; position: sticky; top: 0; z-index: 50; }
+        header .container { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+        .logo { font-size: 1.3rem; font-weight: 800; letter-spacing: -0.5px; display: flex; align-items: center; gap: 8px; color: var(--text-primary); text-decoration: none; }
+        .logo span { background: var(--accent-gradient); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+        header nav { margin-left: auto; display: flex; gap: 18px; align-items: center; }
+        header nav a { color: var(--text-secondary); text-decoration: none; font-weight: 500; font-size: 0.9rem; }
+        header nav a:hover, header nav a.active { color: var(--text-primary); }
+        .theme-toggle { background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 40px; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 1.1rem; }
+        .hero { text-align: center; padding: 40px 0 10px; }
+        .hero .badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 14px; border-radius: 40px; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; background: var(--accent-light); color: var(--accent); margin-bottom: 12px; }
+        .hero h1 { font-size: 1.9rem; font-weight: 800; letter-spacing: -0.6px; }
+        .hero .sub { color: var(--text-secondary); margin-top: 6px; }
+        .demo-notice { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 14px auto 0; padding: 8px 18px; width: fit-content; max-width: 100%; border-radius: 40px; border: 1px dashed var(--accent); background: var(--accent-light); color: var(--accent); font-size: 0.78rem; font-weight: 600; }
+        .taskbar { text-align: center; margin: 22px 0 12px; font-size: 0.95rem; color: var(--text-secondary); }
+        .taskbar strong { color: var(--text-primary); }
+        .duel { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+        @media (max-width: 720px) { .duel { grid-template-columns: 1fr; } }
+        .side { background: var(--bg-secondary); border: 2px solid var(--border-color); border-radius: var(--radius-sm); overflow: hidden; display: flex; flex-direction: column; transition: border-color var(--transition); }
+        .side.win { border-color: #16a34a; }
+        .side .side-head { padding: 12px 16px; border-bottom: 1px solid var(--border-color); background: var(--bg-card); display: flex; align-items: center; justify-content: space-between; font-weight: 700; }
+        .side .reveal { font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); display: flex; align-items: center; gap: 8px; }
+        .side .reveal .avatar { width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.6rem; color: #fff; }
+        .side .delta { font-size: 0.72rem; font-weight: 700; padding: 1px 8px; border-radius: 40px; }
+        .side .delta.up { color: #16a34a; background: rgba(22,163,74,0.12); }
+        .side .delta.down { color: #dc2626; background: rgba(220,38,38,0.12); }
+        .side .body { padding: 16px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.82rem; line-height: 1.7; color: var(--text-secondary); white-space: pre-wrap; word-break: break-word; flex: 1; min-height: 220px; max-height: 360px; overflow-y: auto; }
+        .votebar { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin: 22px 0 8px; }
+        .btn { display: inline-flex; align-items: center; gap: 8px; padding: 12px 22px; border-radius: var(--radius-sm); font-weight: 700; font-size: 0.95rem; border: 1px solid var(--border-color); cursor: pointer; background: var(--bg-secondary); color: var(--text-primary); transition: all var(--transition); }
+        .btn:hover:not(:disabled) { border-color: var(--accent); transform: translateY(-1px); }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn.primary { background: var(--accent-gradient); color: #fff; border-color: transparent; }
+        .btn.win { background: var(--accent-gradient); color: #fff; border-color: transparent; }
+        .btn.minor { font-size: 0.85rem; padding: 10px 16px; color: var(--text-secondary); }
+        .next-row { text-align: center; margin-top: 12px; min-height: 30px; }
+        .voted-note { color: var(--text-secondary); font-size: 0.85rem; }
+        .panel { background: var(--bg-secondary); border-radius: var(--radius-sm); border: 1px solid var(--border-color); padding: 20px 24px; margin: 34px 0; }
+        .panel h2 { font-size: 1.05rem; font-weight: 700; margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
+        table { width: 100%; border-collapse: collapse; }
+        thead th { text-align: left; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); padding: 8px 10px; border-bottom: 1px solid var(--border-color); }
+        thead th.num, tbody td.num { text-align: right; font-variant-numeric: tabular-nums; }
+        tbody td { padding: 10px; border-bottom: 1px solid var(--border-color); font-size: 0.9rem; }
+        tbody tr:last-child td { border-bottom: none; }
+        .rank { font-weight: 800; width: 40px; }
+        .medal-gold { color: #f59e0b; } .medal-silver { color: #94a3b8; } .medal-bronze { color: #d97706; }
+        .m-cell { display: flex; align-items: center; gap: 8px; }
+        .m-cell .avatar { width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.65rem; color: #fff; }
+        .m-cell .mprov { font-size: 0.7rem; color: var(--text-muted); }
+        .elo-pill { font-weight: 700; background: var(--bg-input); padding: 2px 12px; border-radius: 40px; border: 1px solid var(--border-color); }
+        footer { padding: 26px 0; border-top: 1px solid var(--border-color); background: var(--bg-secondary); text-align: center; margin-top: 30px; }
+        footer p { color: var(--text-secondary); font-size: 0.82rem; }
+        footer a { color: var(--accent); text-decoration: none; }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="container">
+            <a class="logo" href="/arena">⚡ <span>Agent Arena</span></a>
+            <nav>
+                <a href="/arena">Arena</a>
+                <a href="/arena/vote" class="active">Vote</a>
+                <a href="/arena/leaderboard">Leaderboard</a>
+                <a href="https://www.madlabs.uk">MadLabs</a>
+                <button class="theme-toggle" id="themeToggle" aria-label="Toggle theme">🌙</button>
+            </nav>
+        </div>
+    </header>
+
+    <main class="container">
+        <section class="hero">
+            <span class="badge">⚔️ Blind vote</span>
+            <h1>Which answer is better?</h1>
+            <p class="sub">Two agents, one task, names hidden. Pick the winner — your votes build the community leaderboard.</p>
+            <div class="demo-notice">🧪 Demo mode — the two answers are simulated. Votes are real and rank models by ELO.</div>
+        </section>
+
+        <div class="taskbar" id="taskbar">Loading a matchup…</div>
+        <div class="duel">
+            <div class="side" id="sideA">
+                <div class="side-head"><span id="labelA">Model A</span><span class="reveal" id="revealA"></span></div>
+                <div class="body" id="bodyA"></div>
+            </div>
+            <div class="side" id="sideB">
+                <div class="side-head"><span id="labelB">Model B</span><span class="reveal" id="revealB"></span></div>
+                <div class="body" id="bodyB"></div>
+            </div>
+        </div>
+
+        <div class="votebar" id="votebar">
+            <button class="btn" data-vote="a" id="voteA">👈 A is better</button>
+            <button class="btn minor" data-vote="tie">🤝 Tie</button>
+            <button class="btn minor" data-vote="bad">👎 Both bad</button>
+            <button class="btn" data-vote="b" id="voteB">B is better 👉</button>
+        </div>
+        <div class="next-row" id="nextRow"></div>
+
+        <div class="panel">
+            <h2>🏆 Community leaderboard <span style="font-weight:400;color:var(--text-muted);font-size:0.8rem;" id="voteCount"></span></h2>
+            <table>
+                <thead><tr><th class="rank">#</th><th>Model</th><th class="num">ELO</th><th class="num">Win rate</th><th class="num">Votes</th></tr></thead>
+                <tbody id="lbBody"><tr><td colspan="5" style="color:var(--text-muted)">No votes yet — cast the first one!</td></tr></tbody>
+            </table>
+        </div>
+    </main>
+
+    <footer>
+        <div class="container"><p>Agent Arena · A <a href="https://www.madlabs.uk">MadLabs</a> experiment · Crowd-sourced model rankings</p></div>
+    </footer>
+
+    <script src="/arena-mocks.js"></script>
+    <script src="/arena-vote.js"></script>
+</body>
+</html>

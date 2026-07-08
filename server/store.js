@@ -13,8 +13,11 @@ import { freshSrs, review, isDue } from "./srs.js";
 import { computeStats } from "./stats.js";
 import { suggestCloze } from "./cloze.js";
 import { hashPassword, verifyPassword, newToken, hashToken } from "./auth.js";
+import { START_RATING, eloUpdate, scoreForA } from "./arena-vote.js";
 
-const EMPTY = { users: {}, sessions: {}, resets: {}, workspaces: {}, decks: {}, cards: {}, reviewLog: [], pushSubs: {}, invites: {}, arenaScorecards: {}, arenaWallets: {}, arenaLedger: [] };
+const EMPTY = { users: {}, sessions: {}, resets: {}, workspaces: {}, decks: {}, cards: {}, reviewLog: [], pushSubs: {}, invites: {}, arenaScorecards: {}, arenaWallets: {}, arenaLedger: [], arenaRatings: {}, arenaVotes: [] };
+
+const MAX_VOTES = 5000;
 
 // A published Agent Arena scorecard set can't grow without bound: cap it
 // (newest kept) so the JSON document stays small.
@@ -688,6 +691,44 @@ export function createStore(filePath) {
       persist();
       return { credits: w.credits };
     },
+    // --- Agent Arena blind votes (community ELO) -----------------------
+    recordArenaVote({ task = "", a, b, winner }) {
+      if (!a?.id || !b?.id || a.id === b.id) return { error: "invalid" };
+      const ensure = (m) => state.arenaRatings[m.id] || (state.arenaRatings[m.id] = {
+        id: m.id, name: m.name || m.id, provider: m.provider || "", color: m.color || "#7c3aed",
+        rating: START_RATING, wins: 0, losses: 0, ties: 0, games: 0,
+      });
+      const ra = ensure(a), rb = ensure(b);
+      const before = { a: ra.rating, b: rb.rating };
+      if (winner === "a") { ra.wins++; rb.losses++; }
+      else if (winner === "b") { rb.wins++; ra.losses++; }
+      else { ra.ties++; rb.ties++; }
+      if (winner === "a" || winner === "b" || winner === "tie") {
+        const [na, nb] = eloUpdate(ra.rating, rb.rating, scoreForA(winner));
+        ra.rating = na; rb.rating = nb;
+      }
+      ra.games++; rb.games++;
+      state.arenaVotes.push({ id: nanoid(12), task, a: a.id, b: b.id, winner, at: Date.now() });
+      if (state.arenaVotes.length > MAX_VOTES) state.arenaVotes = state.arenaVotes.slice(-MAX_VOTES);
+      persist();
+      return {
+        a: { rating: Math.round(ra.rating), delta: Math.round(ra.rating - before.a) },
+        b: { rating: Math.round(rb.rating), delta: Math.round(rb.rating - before.b) },
+        totalVotes: state.arenaVotes.length,
+      };
+    },
+    arenaVoteLeaderboard({ limit = 100 } = {}) {
+      const models = Object.values(state.arenaRatings)
+        .sort((x, y) => y.rating - x.rating)
+        .slice(0, limit)
+        .map((m) => ({
+          id: m.id, name: m.name, provider: m.provider, color: m.color,
+          rating: Math.round(m.rating), wins: m.wins, losses: m.losses, ties: m.ties, games: m.games,
+          winRate: m.games ? Math.round((m.wins / m.games) * 100) : 0,
+        }));
+      return { totalVotes: state.arenaVotes.length, totalModels: Object.keys(state.arenaRatings).length, models };
+    },
+
     // Account-level Agent Arena subscription plan (distinct from EchoDeck's
     // workspace plans). Defaults to free.
     getArenaAccountPlan(userId) {
@@ -842,6 +883,8 @@ function load(filePath) {
         arenaScorecards: parsed.arenaScorecards ?? {},
         arenaWallets: parsed.arenaWallets ?? {},
         arenaLedger: parsed.arenaLedger ?? [],
+        arenaRatings: parsed.arenaRatings ?? {},
+        arenaVotes: parsed.arenaVotes ?? [],
       };
     }
   } catch {

@@ -837,6 +837,26 @@ export function createApp({ store, uploadsDir, reminders, billing, mailer, enric
     const planId = arenaPlanOf(user);
     res.json({ email: user.email, ...wallet, plan: planId, planInfo: arenaPlanPublic(planId), packs: CREDIT_PACKS, live: arenaRun.enabled, stripe: Boolean(billing?.enabled), owner: isOwner(user.email) });
   });
+  // --- Blind-vote community arena (crowd-sourced ELO) ------------------
+  // Anonymous + public, so throttle per IP to blunt vote-stuffing.
+  app.post("/api/arena/vote", arenaLimiter, (req, res) => {
+    const b = req.body || {};
+    if (!["a", "b", "tie", "bad"].includes(b.winner)) return res.status(400).json({ error: "invalid winner" });
+    const clampModel = (m) => (m && typeof m.id === "string" ? {
+      id: m.id.slice(0, 80), name: clampStr(m.name, 60), provider: clampStr(m.provider, 60),
+      color: /^#[0-9a-fA-F]{3,8}$/.test(m.color) ? m.color : "#7c3aed",
+    } : null);
+    const a = clampModel(b.a), bb = clampModel(b.b);
+    if (!a || !bb || a.id === bb.id) return res.status(400).json({ error: "two distinct models required" });
+    const out = store.recordArenaVote({ task: clampStr(b.task, 120), a, b: bb, winner: b.winner });
+    if (out.error) return res.status(400).json({ error: "invalid vote" });
+    res.status(201).json(out);
+  });
+  app.get("/api/arena/vote/leaderboard", (req, res) => {
+    const limit = Math.min(Math.max(parseInt(req.query.limit) || 100, 1), 200);
+    res.json(store.arenaVoteLeaderboard({ limit }));
+  });
+
   // Public: the subscription tiers (for the pricing UI).
   app.get("/api/arena/plans", (_req, res) => res.json(listArenaPlans()));
   // Start an Agent Arena subscription (dev-mode instant, or Stripe Checkout).
@@ -1081,6 +1101,7 @@ export function createApp({ store, uploadsDir, reminders, billing, mailer, enric
   // (linked from the company hub's products grid).
   app.get("/arena", (_req, res) => res.sendFile(join(PUBLIC_DIR, "arena.html")));
   app.get("/arena/leaderboard", (_req, res) => res.sendFile(join(PUBLIC_DIR, "arena-leaderboard.html")));
+  app.get("/arena/vote", (_req, res) => res.sendFile(join(PUBLIC_DIR, "arena-vote.html")));
   app.get("/arena/admin", (_req, res) => res.sendFile(join(PUBLIC_DIR, "arena-admin.html")));
   // Public scorecard viewer. Inject per-scorecard SEO/social meta server-side
   // so shared links unfurl nicely (crawlers don't run the client JS).
