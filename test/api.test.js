@@ -7,6 +7,7 @@ import { createStore } from "../server/store.js";
 import { createSqliteStore } from "../server/store-sqlite.js";
 import { createApp } from "../server/app.js";
 import { createArenaRunner } from "../server/arena-run.js";
+import { createArenaJudge } from "../server/arena-judge.js";
 import { createReminderService } from "../server/reminders.js";
 import { createBilling } from "../server/billing.js";
 import { createMailer } from "../server/email.js";
@@ -450,12 +451,14 @@ test("POST /api/arena/run: disabled by default; live when a runner is injected",
     uploadsDir: liveTmp,
     ownerEmails: new Set(["boss@arena.test"]),
     billing: createBilling({ store: liveStore, config: {} }), // dev mode (instant)
-    arenaCreditsConfig: { markup: 1.5, signupBonusCents: 25 },
+    arenaCreditsConfig: { markup: 1.5, signupBonusCents: 25, judgeCostPer1k: 0 },
     arenaRun: createArenaRunner({
       adapters: {
         Anthropic: async ({ prompt }) => ({ output: `R:${prompt.slice(0, 12)}`, promptTokens: 500, completionTokens: 500 }),
       },
     }),
+    // Injected judge → live cards get real scores (no key needed).
+    arenaJudge: createArenaJudge({ judge: async () => ({ accuracy: 88, relevance: 82, overall: 85, promptTokens: 30, completionTokens: 10 }) }),
   });
   const liveServer = liveApp.listen(0);
   const lbase = `http://127.0.0.1:${liveServer.address().port}`;
@@ -499,6 +502,11 @@ test("POST /api/arena/run: disabled by default; live when a runner is injected",
     assert.equal(byId["gpt-5.1"].live, false);
     assert.equal(on.charged, 4);
     assert.equal(on.balance, 496);
+    // LLM judge scored the live card (real accuracy/relevance), not the sim card.
+    assert.equal(on.judged, true);
+    assert.equal(byId["claude-opus-4.5"].judge.accuracy, 88);
+    assert.equal(byId["claude-opus-4.5"].judge.relevance, 82);
+    assert.equal(byId["gpt-5.1"].judge, undefined);
 
     // Pro caps at 6 models and can't author custom tasks.
     const tooMany = await runReq(auth, { prompt: "p", models: [

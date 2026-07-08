@@ -655,12 +655,15 @@
                     if (lv) {
                         const head = cards[agent.id]?.querySelector('.card-head .agent-info div:last-child');
                         if (head && !head.querySelector('.live-badge')) {
-                            head.insertAdjacentHTML('beforeend', ' <span class="live-badge">● Live</span>');
+                            const judged = lv.judge ? ' <span class="live-badge" style="color:#7c3aed;background:rgba(124,58,237,0.12);">⚖️ Judged</span>' : '';
+                            head.insertAdjacentHTML('beforeend', ' <span class="live-badge">● Live</span>' + judged);
                         }
                     }
 
-                    const accuracy = Math.min(95, 65 + rand() * 30);
-                    const relevance = Math.min(92, 60 + rand() * 32);
+                    // A judged live card gets real accuracy/relevance from the LLM
+                    // judge; otherwise scores are the simulated heuristic.
+                    const accuracy = lv && lv.judge ? lv.judge.accuracy : Math.min(95, 65 + rand() * 30);
+                    const relevance = lv && lv.judge ? lv.judge.relevance : Math.min(92, 60 + rand() * 32);
                     const speedScore = Math.max(40, Math.min(98, 100 - latency * 20));
                     const costScore = Math.max(30, Math.min(98, 100 - cost * 8000));
 
@@ -685,6 +688,7 @@
                         color: agent.color,
                         output: mockText,
                         live: !!lv,
+                        judged: !!(lv && lv.judge),
                         latency,
                         tokens,
                         cost,
@@ -697,7 +701,8 @@
                 renderScorecard(results);
                 if (liveCount) {
                     const chargeNote = runCharge && runCharge.charged ? ` · charged ${Account.fmt(runCharge.charged)}` : '';
-                    showToast(`⚡ ${liveCount} card${liveCount > 1 ? 's' : ''} ran on real models · the rest are simulated${chargeNote}`, '⚡');
+                    const judgedNote = Object.values(liveById).some(r => r.judge) ? ' · scored by an AI judge ⚖️' : '';
+                    showToast(`⚡ ${liveCount} card${liveCount > 1 ? 's' : ''} ran on real models${judgedNote} · the rest are simulated${chargeNote}`, '⚡');
                 }
                 state.isRunning = false;
                 runBtn.disabled = false;

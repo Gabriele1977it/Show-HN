@@ -21,6 +21,7 @@ import { canAdd, hasFeature, planPublic, listPlans, getPlan, allPlanIds } from "
 import { createRateLimiter, rateLimit, securityHeaders } from "./security.js";
 import { createArenaModels } from "./arena-models.js";
 import { createArenaRunner } from "./arena-run.js";
+import { createArenaJudge } from "./arena-judge.js";
 import { creditsConfig, computeRunCents, CREDIT_PACKS, getPack } from "./arena-credits.js";
 import { getArenaPlan, arenaPlanPublic, listArenaPlans, ARENA_PLANS } from "./arena-plans.js";
 
@@ -61,8 +62,9 @@ function sendExport(res, deck, cards, format) {
   res.send(body);
 }
 
-export function createApp({ store, uploadsDir, reminders, billing, mailer, enrich, transcribe, importer, push, arenaModels, arenaRun, arenaCreditsConfig, ownerEmails = new Set(), rateLimits = {}, aiLimits = {} }) {
-  const arenaCreditsCfg = arenaCreditsConfig || creditsConfig();
+export function createApp({ store, uploadsDir, reminders, billing, mailer, enrich, transcribe, importer, push, arenaModels, arenaRun, arenaJudge, arenaCreditsConfig, ownerEmails = new Set(), rateLimits = {}, aiLimits = {} }) {
+  arenaJudge = arenaJudge || createArenaJudge({});
+  const arenaCreditsCfg = { ...creditsConfig(), ...(arenaCreditsConfig || {}) };
   // Default to a self-contained registry (no upstream feed, no release timer)
   // when the caller doesn't inject one — keeps tests and embedders simple.
   arenaModels = arenaModels || createArenaModels({ releaseIntervalMs: 0 });
@@ -817,15 +819,31 @@ export function createApp({ store, uploadsDir, reminders, billing, mailer, enric
     if (!quota.ok) return res.json({ enabled: false, reason: "daily-cap" });
 
     const results = await arenaRun.runMany({ prompt, models });
-    const cents = computeRunCents(results, arenaModels.get().providers, arenaCreditsCfg.markup);
-    const tokens = results.reduce((n, r) => n + ((r.promptTokens || 0) + (r.completionTokens || 0)), 0);
+
+    // LLM-as-judge: score the real outputs so live cards get a defended score
+    // instead of the simulated heuristic. Adds the judge's tokens to the bill.
+    let judgeTokens = 0;
+    if (arenaJudge.enabled) {
+      await Promise.all(results.map(async (r) => {
+        if (!r.live) return;
+        const sc = await arenaJudge.score({ task: b.taskId, prompt, output: r.output });
+        if (sc) {
+          r.judge = { accuracy: sc.accuracy, relevance: sc.relevance, overall: sc.overall };
+          judgeTokens += (sc.promptTokens || 0) + (sc.completionTokens || 0);
+        }
+      }));
+    }
+
+    const cents = computeRunCents(results, arenaModels.get().providers, arenaCreditsCfg.markup)
+      + Math.ceil((judgeTokens / 1000) * arenaCreditsCfg.judgeCostPer1k * 100 * arenaCreditsCfg.markup);
+    const tokens = results.reduce((n, r) => n + ((r.promptTokens || 0) + (r.completionTokens || 0)), 0) + judgeTokens;
     const charge = owner
       ? { charged: 0, credits: wallet.credits }
       : store.chargeArenaRun(user.id, cents, {
           task: (typeof b.taskId === "string" ? b.taskId : "").slice(0, 60),
-          tokens, models: results.filter((r) => r.live).map((r) => r.id),
+          tokens, models: results.filter((r) => r.live).map((r) => r.id), judged: arenaJudge.enabled,
         });
-    res.json({ enabled: true, providers: arenaRun.providers(), results, charged: charge.charged, balance: charge.credits });
+    res.json({ enabled: true, providers: arenaRun.providers(), judged: arenaJudge.enabled, results, charged: charge.charged, balance: charge.credits });
   });
 
   // --- Agent Arena SaaS: accounts reuse EchoDeck auth; credits are a prepaid

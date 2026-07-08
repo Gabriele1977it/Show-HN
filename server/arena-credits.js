@@ -51,5 +51,7 @@ export function creditsConfig(env = process.env) {
     // Free credits granted the first time an account opens its wallet, so new
     // users can try a real run immediately. Set 0 to disable.
     signupBonusCents: env.ARENA_SIGNUP_BONUS_CENTS != null ? Number(env.ARENA_SIGNUP_BONUS_CENTS) : 25,
+    // Price per 1k tokens for the LLM judge (cheap model), billed with the run.
+    judgeCostPer1k: Number(env.ARENA_JUDGE_COST_PER_1K) || 0.005,
   };
 }

@@ -18,6 +18,7 @@ import { createImporter } from "./importer.js";
 import { createPushService, deliverToWorkspace } from "./push.js";
 import { createArenaModels } from "./arena-models.js";
 import { createArenaRunner, createAnthropicAdapter } from "./arena-run.js";
+import { createArenaJudge, createAnthropicJudge } from "./arena-judge.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, "..");
@@ -140,8 +141,16 @@ if (arenaLive && process.env.ANTHROPIC_API_KEY) {
 }
 const arenaRun = createArenaRunner({ adapters: arenaAdapters, enabled: arenaLive });
 
+// LLM-as-judge: scores real outputs so live runs get a defended score. On when
+// live runs are on and a key is set (unless ARENA_JUDGE=0). Reuses ANTHROPIC_API_KEY.
+const judgeOff = process.env.ARENA_JUDGE === "0" || process.env.ARENA_JUDGE === "false";
+const judgeFn = (arenaLive && !judgeOff && process.env.ANTHROPIC_API_KEY)
+  ? await createAnthropicJudge({ apiKey: process.env.ANTHROPIC_API_KEY, model: process.env.ARENA_JUDGE_MODEL || "claude-haiku-4-5-20251001" })
+  : null;
+const arenaJudge = createArenaJudge({ judge: judgeFn, model: process.env.ARENA_JUDGE_MODEL || "" });
+
 const app = createApp({
-  store, uploadsDir: UPLOADS_DIR, reminders, billing, mailer, enrich, transcribe, importer, push, arenaModels, arenaRun, ownerEmails,
+  store, uploadsDir: UPLOADS_DIR, reminders, billing, mailer, enrich, transcribe, importer, push, arenaModels, arenaRun, arenaJudge, ownerEmails,
   // Cost backstop: max AI card fills per workspace per day (default 300).
   aiLimits: { perWorkspacePerDay: Number(process.env.ECHODECK_AI_DAILY_LIMIT) || undefined },
 });
@@ -157,6 +166,7 @@ const server = app.listen(PORT, () => {
   console.log(push.enabled ? "Web Push enabled." : "Web Push disabled (no VAPID keys).");
   console.log(arenaModels.enabled ? "Agent Arena model feed enabled (ARENA_MODELS_URL)." : "Agent Arena models: built-in catalog + demo release simulation.");
   console.log(arenaRun.enabled ? `Agent Arena live runs ENABLED (providers: ${arenaRun.providers().join(", ")}).` : "Agent Arena live runs disabled (simulated). Set ARENA_LIVE=1 + a provider key to enable.");
+  console.log(arenaJudge.enabled ? "Agent Arena LLM judge ENABLED (real scores on live runs)." : "Agent Arena LLM judge off (simulated scores).");
   console.log(mailer.enabled ? `Email enabled (${mailer.mode}).` : "Email in dev mode (logs only — set RESEND_API_KEY + EMAIL_FROM to send).");
   // Background polling only runs when explicitly enabled.
   if (process.env.REMINDER_ENABLED === "1" || process.env.REMINDER_ENABLED === "true") {

@@ -287,6 +287,7 @@ server/
   arena-credits.js Agent Arena SaaS wallet — run pricing/metering + top-up config
   arena-plans.js Agent Arena subscription tiers + entitlements (Free/Pro/Ultimate)
   arena-vote.js  Agent Arena blind-vote ELO (crowd-sourced community leaderboard)
+  arena-judge.js Agent Arena LLM-as-judge (real scores on live runs; injectable)
 public/          landing.html, index.html (app), share.html, terms.html, privacy.html,
                  arena.html + arena.js + arena-theme.js (Agent Arena, at /arena)
 madlabs/         the MadLabs company hub (static site → madlabs.uk)
@@ -362,8 +363,15 @@ tokens, prompt-truncated server-side, and bounded by a **global daily cap**
 endpoint can't run up an unbounded bill — once hit, live runs turn off for the
 day and the client silently simulates. Adapters are injected
 (`server/arena-run.js`), so the whole path is testable without a live key.
-Scores remain a simulated heuristic for now (real evaluation / an LLM judge is
-the next step); the outputs, latency, and token counts on live cards are real.
+**LLM-as-judge (real scores).** When a judge is configured, each *live* output
+is scored by an impartial judge model (accuracy + relevance, 0–100) instead of
+the simulated heuristic — so live cards get a defended score, badged ⚖️ Judged.
+Provider-agnostic and off by default (`server/arena-judge.js`): the judge is
+injected (a fake in tests; a real Anthropic judge built from `ANTHROPIC_API_KEY`
+in `index.js`, on when `ARENA_LIVE` is set unless `ARENA_JUDGE=0`). It never
+throws — a failed judge call leaves that card on the simulated score. The
+judge's tokens are billed with the run (`ARENA_JUDGE_COST_PER_1K`). Simulated
+cards keep the deterministic heuristic; only real outputs are judged.
 
 **SaaS: subscription tiers** — 3 account-level plans (`server/arena-plans.js`),
 distinct from EchoDeck's, gate access + limits: **Free** (simulated, 2 models,
