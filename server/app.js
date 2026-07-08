@@ -129,6 +129,10 @@ export function createApp({ store, uploadsDir, reminders, billing, mailer, enric
   const compOwnerWorkspaces = (userId) => {
     for (const k of store.getAccount(userId)?.keychain ?? []) store.setWorkspacePlan(k.workspaceId, "team");
   };
+  // Owner accounts are comped to the top Arena tier (Ultimate) — no purchase,
+  // driven by OWNER_EMAILS (the same allowlist that unlocks the admin panel).
+  const arenaPlanOf = (user) =>
+    !user ? "free" : (isOwner(user.email) ? "ultimate" : store.getArenaAccountPlan(user.id).plan);
   // Stripe webhooks need the raw body for signature verification, so skip JSON
   // parsing on that one route.
   app.use((req, res, next) =>
@@ -793,7 +797,8 @@ export function createApp({ store, uploadsDir, reminders, billing, mailer, enric
     // them, within its entitlements, with a positive balance.
     const user = sessionUser(req);
     if (!user) return res.json({ enabled: false, reason: "signin" });
-    const planId = store.getArenaAccountPlan(user.id).plan;
+    const owner = isOwner(user.email);
+    const planId = arenaPlanOf(user);
     const plan = getArenaPlan(planId);
     if (!plan.realRuns) return res.json({ enabled: false, reason: "plan-upgrade", plan: planId });
     if (typeof b.taskId === "string" && b.taskId === "custom" && !plan.customTasks) {
@@ -805,7 +810,8 @@ export function createApp({ store, uploadsDir, reminders, billing, mailer, enric
     const userQuota = arenaUserRunCounter.take(user.id, plan.runsPerDay ?? Infinity, 1);
     if (!userQuota.ok) return res.json({ enabled: false, reason: "plan-quota", plan: planId });
     const wallet = store.getArenaWallet(user.id, { bonusCents: arenaCreditsCfg.signupBonusCents });
-    if (wallet.credits <= 0) return res.json({ enabled: false, reason: "no-credits" });
+    // Owners run for free (operator testing); everyone else needs a balance.
+    if (!owner && wallet.credits <= 0) return res.json({ enabled: false, reason: "no-credits" });
     // Global daily backstop (money cap) — only real models count.
     const quota = arenaRunCounter.take("global", arenaRunDailyMax, liveModels.length);
     if (!quota.ok) return res.json({ enabled: false, reason: "daily-cap" });
@@ -813,10 +819,12 @@ export function createApp({ store, uploadsDir, reminders, billing, mailer, enric
     const results = await arenaRun.runMany({ prompt, models });
     const cents = computeRunCents(results, arenaModels.get().providers, arenaCreditsCfg.markup);
     const tokens = results.reduce((n, r) => n + ((r.promptTokens || 0) + (r.completionTokens || 0)), 0);
-    const charge = store.chargeArenaRun(user.id, cents, {
-      task: (typeof b.taskId === "string" ? b.taskId : "").slice(0, 60),
-      tokens, models: results.filter((r) => r.live).map((r) => r.id),
-    });
+    const charge = owner
+      ? { charged: 0, credits: wallet.credits }
+      : store.chargeArenaRun(user.id, cents, {
+          task: (typeof b.taskId === "string" ? b.taskId : "").slice(0, 60),
+          tokens, models: results.filter((r) => r.live).map((r) => r.id),
+        });
     res.json({ enabled: true, providers: arenaRun.providers(), results, charged: charge.charged, balance: charge.credits });
   });
 
@@ -826,7 +834,7 @@ export function createApp({ store, uploadsDir, reminders, billing, mailer, enric
     const user = sessionUser(req);
     if (!user) return res.status(401).json({ error: "Not signed in." });
     const wallet = store.getArenaWallet(user.id, { bonusCents: arenaCreditsCfg.signupBonusCents });
-    const planId = store.getArenaAccountPlan(user.id).plan;
+    const planId = arenaPlanOf(user);
     res.json({ email: user.email, ...wallet, plan: planId, planInfo: arenaPlanPublic(planId), packs: CREDIT_PACKS, live: arenaRun.enabled, stripe: Boolean(billing?.enabled), owner: isOwner(user.email) });
   });
   // Public: the subscription tiers (for the pricing UI).

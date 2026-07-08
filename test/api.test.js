@@ -493,12 +493,23 @@ test("POST /api/arena/run: disabled by default; live when a runner is injected",
     assert.equal(custom.balance, 496 + 2000 - 4);
 
     // Owner admin stats include the account's plan + spend.
+    const ownerTok = sess("boss@arena.test");
     assert.equal((await realFetch(`${lbase}/api/arena/admin/stats`, { headers: auth })).status, 403);
-    const stats = await realFetch(`${lbase}/api/arena/admin/stats`, { headers: { "X-Session": sess("boss@arena.test") } }).then(j);
+    const stats = await realFetch(`${lbase}/api/arena/admin/stats`, { headers: { "X-Session": ownerTok } }).then(j);
     assert.equal(stats.totalSpentCents, 8); // two 4c live runs
     const acct = stats.accounts.find((a) => a.email === "buyer@arena.test");
     assert.ok(acct);
     assert.equal(acct.plan, "ultimate");
+
+    // Owner accounts are comped to Ultimate and run for free (no charge).
+    const ownerWallet = await realFetch(`${lbase}/api/arena/credits`, { headers: { "X-Session": ownerTok } }).then(j);
+    assert.equal(ownerWallet.plan, "ultimate");
+    const ownerRun = await post("/api/arena/run", { "X-Session": ownerTok }, {
+      prompt: "owner custom prompt", taskId: "custom", models: [{ id: "claude-opus-4.5", provider: "Anthropic" }],
+    });
+    assert.equal(ownerRun.enabled, true);          // Ultimate → custom allowed
+    assert.equal(ownerRun.results[0].live, true);
+    assert.equal(ownerRun.charged, 0);              // owners aren't billed
 
     // Public plans catalogue.
     const plans = await realFetch(`${lbase}/api/arena/plans`).then(j);
