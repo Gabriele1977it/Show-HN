@@ -17,7 +17,7 @@ import { createTranscriber } from "./transcribe.js";
 import { createImporter } from "./importer.js";
 import { createPushService, deliverToWorkspace } from "./push.js";
 import { createArenaModels } from "./arena-models.js";
-import { createArenaRunner, createAnthropicAdapter } from "./arena-run.js";
+import { createArenaRunner, createAnthropicAdapter, createOpenAICompatibleAdapter, createGeminiAdapter } from "./arena-run.js";
 import { createArenaJudge, createAnthropicJudge } from "./arena-judge.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -138,6 +138,29 @@ if (arenaLive && process.env.ANTHROPIC_API_KEY) {
     })[id] || process.env.ARENA_ANTHROPIC_MODEL || undefined,
   });
   if (anthropicAdapter) arenaAdapters["Anthropic"] = anthropicAdapter;
+}
+// Optional arena model-id → real API model-string map (JSON), shared by the
+// OpenAI/xAI/Gemini adapters (their arena ids may not match real API strings).
+let arenaModelMap = {};
+try { arenaModelMap = JSON.parse(process.env.ARENA_MODEL_MAP || "{}"); } catch { /* ignore bad JSON */ }
+const mapModel = (id) => arenaModelMap[id] || id;
+if (arenaLive && process.env.OPENAI_API_KEY) {
+  arenaAdapters["OpenAI"] = createOpenAICompatibleAdapter({
+    apiKey: process.env.OPENAI_API_KEY, baseURL: "https://api.openai.com/v1",
+    resolveModel: mapModel, defaultModel: process.env.ARENA_OPENAI_MODEL || "gpt-4o",
+  });
+}
+if (arenaLive && process.env.XAI_API_KEY) {
+  arenaAdapters["xAI"] = createOpenAICompatibleAdapter({
+    apiKey: process.env.XAI_API_KEY, baseURL: "https://api.x.ai/v1",
+    resolveModel: mapModel, defaultModel: process.env.ARENA_XAI_MODEL || "grok-4",
+  });
+}
+if (arenaLive && (process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY)) {
+  arenaAdapters["Google"] = createGeminiAdapter({
+    apiKey: process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY,
+    resolveModel: mapModel, defaultModel: process.env.ARENA_GOOGLE_MODEL || "gemini-2.5-flash",
+  });
 }
 const arenaRun = createArenaRunner({ adapters: arenaAdapters, enabled: arenaLive });
 

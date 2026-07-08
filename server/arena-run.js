@@ -86,3 +86,57 @@ export async function createAnthropicAdapter({ apiKey, resolveModel, defaultMode
     };
   };
 }
+
+// OpenAI-compatible Chat Completions adapter — works for OpenAI and xAI (Grok),
+// which share the same request/response shape (just a different base URL + key).
+// `resolveModel` maps an arena model id → the provider's real API model string.
+export function createOpenAICompatibleAdapter({ apiKey, baseURL, resolveModel, defaultModel, fetchImpl }) {
+  if (!apiKey) return null;
+  const doFetch = fetchImpl || globalThis.fetch;
+  const resolve = resolveModel || ((id) => id || defaultModel);
+  return async function openAICompatibleAdapter({ model, prompt, maxTokens }) {
+    const res = await doFetch(`${baseURL}/chat/completions`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: resolve(model) || defaultModel,
+        messages: [{ role: "user", content: prompt }],
+        max_tokens: maxTokens,
+      }),
+    });
+    if (!res.ok) throw new Error(`provider HTTP ${res.status}`);
+    const data = await res.json();
+    return {
+      output: (data.choices?.[0]?.message?.content ?? "").trim(),
+      promptTokens: data.usage?.prompt_tokens ?? 0,
+      completionTokens: data.usage?.completion_tokens ?? 0,
+    };
+  };
+}
+
+// Google Gemini adapter (generateContent REST API; key as a query param).
+export function createGeminiAdapter({ apiKey, resolveModel, defaultModel = "gemini-2.5-flash", fetchImpl }) {
+  if (!apiKey) return null;
+  const doFetch = fetchImpl || globalThis.fetch;
+  const resolve = resolveModel || ((id) => id || defaultModel);
+  return async function geminiAdapter({ model, prompt, maxTokens }) {
+    const apiModel = resolve(model) || defaultModel;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(apiModel)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+    const res = await doFetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        generationConfig: { maxOutputTokens: maxTokens },
+      }),
+    });
+    if (!res.ok) throw new Error(`provider HTTP ${res.status}`);
+    const data = await res.json();
+    const output = (data.candidates?.[0]?.content?.parts ?? []).map((p) => p.text || "").join("").trim();
+    return {
+      output,
+      promptTokens: data.usageMetadata?.promptTokenCount ?? 0,
+      completionTokens: data.usageMetadata?.candidatesTokenCount ?? 0,
+    };
+  };
+}
