@@ -6,6 +6,7 @@ import disruptionsRouter from "./disruptions";
 import companionRouter from "./companion";
 import healthRouter from "./health";
 import flightsRouter from "./flights";
+import pushRouter from "./push";
 import askRouter from "./ask";
 import stripeRouter from "./stripe";
 
@@ -19,6 +20,7 @@ router.use(authRouter);
 router.use(disruptionsRouter);
 router.use(companionRouter);
 router.use(flightsRouter);
+router.use(pushRouter);
 router.use(askRouter);
 router.use(costOfLivingRouter);
 router.use(stripeRouter);

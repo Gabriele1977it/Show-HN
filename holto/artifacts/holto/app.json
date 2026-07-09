@@ -35,6 +35,12 @@
           ]
         }
       ],
+      [
+        "expo-notifications",
+        {
+          "color": "#0A2E38"
+        }
+      ],
       "expo-web-browser"
     ],
     "experiments": {

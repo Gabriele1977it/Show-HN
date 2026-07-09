@@ -110,9 +110,10 @@ export default function MonitorScreen() {
     setLoadingStatus(true);
     setStatusError(null);
     try {
-      const res = await fetch(`/api/flights/status?flightNumber=${encodeURIComponent(flightNum)}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await fetch(
+        `https://${process.env.EXPO_PUBLIC_DOMAIN}/api/flights/status?flightNumber=${encodeURIComponent(flightNum)}`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
       const data = await res.json() as Record<string, unknown>;
       if (!res.ok) {
         setStatusError((data.error as string) ?? "Could not fetch flight status.");
@@ -234,7 +235,7 @@ export default function MonitorScreen() {
         <View style={styles.header}>
           <Text style={[styles.heading, { color: colors.foreground }]}>My Flight</Text>
           <Text style={[styles.subheading, { color: colors.mutedForeground }]}>
-            Live status — checks every 15 minutes
+            Live status — HOLTO keeps watching in the background
           </Text>
         </View>
 
@@ -245,7 +246,8 @@ export default function MonitorScreen() {
             <Icon name="radio" size={32} color={colors.mutedForeground} style={{ marginBottom: 12 }} />
             <Text style={[styles.emptyTitle, { color: colors.foreground }]}>No flight tracked yet</Text>
             <Text style={[styles.emptyBody, { color: colors.mutedForeground }]}>
-              Enter your flight details below and HOLTO will check in every 15 minutes.
+              Enter your flight details below and HOLTO will watch it for you —
+              even when the app is closed — and alert you the moment anything changes.
             </Text>
           </View>
         ) : (

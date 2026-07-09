@@ -55,8 +55,8 @@ services:
     plan: starter
     rootDir: holto
     branch: claude/holto-app-improvements-8cefxv
-    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter @workspace/monitor-worker build
-    startCommand: pnpm --filter @workspace/monitor-worker start
+    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter @workspace/api-server build
+    startCommand: pnpm --filter @workspace/api-server start:worker
     autoDeploy: true
     envVars:
       - key: NODE_ENV

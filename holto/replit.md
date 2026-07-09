@@ -8,7 +8,7 @@ alert the moment its status changes.
 ## Run & Operate
 
 - `pnpm --filter @workspace/api-server run dev` — run the API server (port 5000)
-- `pnpm --filter @workspace/monitor-worker run dev` — run the flight-monitoring worker
+- `pnpm --filter @workspace/api-server run dev:worker` — run the flight-monitoring worker
 - `pnpm --filter holto run start` — run the Expo app
 - `pnpm run typecheck` — full typecheck across all packages
 - `pnpm run build` — typecheck + build all packages
@@ -30,16 +30,16 @@ alert the moment its status changes.
 
 - App (Expo): `artifacts/holto` — screens in `app/`, `(tabs)/` for the tab bar
 - API: `artifacts/api-server/src` — `routes/` (Express routers), `lib/` (shared logic)
-- Worker: `artifacts/monitor-worker` — background flight poller + alert delivery
+- Worker: `artifacts/api-server/src/worker.ts` — background flight poller + alert delivery (second entry point of the API package)
 - DB schema (source of truth): `lib/db/src/schema`
 - API contract (source of truth): `lib/api-spec/openapi.yaml` → generates `lib/api-zod` + `lib/api-client-react`
 
 ## Architecture decisions
 
 - **Proactive monitoring lives in a dedicated worker**, not the request path: the
-  API is stateless/request-scoped, and a separate long-running `monitor-worker`
-  process polls flights and sends alerts so notifications fire even when no client
-  is connected.
+  API is stateless/request-scoped, and a separate long-running worker process
+  (`artifacts/api-server/src/worker.ts`) polls flights and sends alerts so
+  notifications fire even when no client is connected.
 - **Flight-status logic is shared** via `artifacts/api-server/src/lib/flights.ts`
   so the `/flights/status` route and the worker use one implementation.
 - **Push + email fallback**: alerts go out as Expo push notifications, falling back

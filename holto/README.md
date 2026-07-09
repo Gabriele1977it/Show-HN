@@ -19,8 +19,9 @@ deploys independently.
 - **App** — Expo / React Native (Expo Router), also builds for web (`artifacts/holto`)
 - **API** — Express 5, PostgreSQL + Drizzle ORM, OpenAI (AI companion), AirLabs
   (live flight data), Stripe (billing) (`artifacts/api-server`)
-- **Worker** — background flight-monitoring poller → push + email alerts
-  (`artifacts/monitor-worker`)
+- **Worker** — background flight-monitoring poller → push + email alerts. Runs as
+  a second entry point of the API package (`artifacts/api-server`, `src/worker.ts`)
+  so it shares the flight-lookup, db, and alert code.
 - **Shared libs** — `lib/db` (schema), `lib/api-spec` (OpenAPI), `lib/api-zod`,
   `lib/api-client-react` (generated hooks)
 - pnpm workspaces, Node 24, TypeScript 5.9, esbuild
@@ -39,7 +40,7 @@ pnpm --filter @workspace/db run push
 pnpm --filter @workspace/api-server run dev
 
 # 3. Start the monitoring worker (separate terminal):
-pnpm --filter @workspace/monitor-worker run dev
+pnpm --filter @workspace/api-server run dev:worker
 
 # 4. Start the app (Expo):
 pnpm --filter holto run start
@@ -76,9 +77,9 @@ Copy `.env.example` to `.env`. Required unless noted.
 1. The app registers an **Expo push token** (`POST /api/push/register`) after the
    user grants notification permission.
 2. Users track a flight (`POST /api/flights/monitor`), stored in `monitored_flights`.
-3. The **worker** (`artifacts/monitor-worker`) polls every `MONITOR_POLL_MS`,
-   fetches each active flight's status through the shared `lib/flights.ts`, and
-   writes `lastStatus` / `lastStatusData` / `lastCheckedAt` back.
+3. The **worker** (`artifacts/api-server/src/worker.ts`) polls every
+   `MONITOR_POLL_MS`, fetches each active flight's status through the shared
+   `lib/flights.ts`, and writes `lastStatus` / `lastStatusData` / `lastCheckedAt` back.
 4. When `detectStatusChange(prev, next)` reports a **material change** (→ cancelled
    / diverted / incident, or a delay crossing the threshold), the worker sends a
    **push notification** (and an **email fallback** when no push token exists),

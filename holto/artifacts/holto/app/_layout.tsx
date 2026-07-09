@@ -15,6 +15,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AuthProvider } from "@/context/AuthContext";
 import { WizardProvider } from "@/context/WizardContext";
+import { usePushRegistration } from "@/hooks/usePushRegistration";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -28,6 +29,9 @@ const queryClient = new QueryClient({
 });
 
 function RootLayoutNav() {
+  // Register for push + handle notification taps once the user is signed in.
+  usePushRegistration();
+
   return (
     <Stack>
       <Stack.Screen name="index" options={{ headerShown: false }} />
