@@ -69,6 +69,33 @@ test("runMany preserves order and mixes live + simulated providers", async () =>
   assert.equal(results[1].output, "real");
 });
 
+test("defaultAdapter makes every provider live (OpenRouter catch-all)", async () => {
+  const seen = [];
+  const r = createArenaRunner({
+    adapters: {},
+    defaultAdapter: async ({ model }) => { seen.push(model); return { output: `ran ${model}` }; },
+  });
+  assert.equal(r.enabled, true);
+  const results = await r.runMany({
+    prompt: "p",
+    models: [
+      { id: "nousresearch/hermes-4", provider: "Nous Research" }, // no dedicated adapter
+      { id: "z-ai/glm-4.6", provider: "Z.AI" },
+    ],
+  });
+  assert.equal(results.every((x) => x.live), true);
+  assert.deepEqual(seen, ["nousresearch/hermes-4", "z-ai/glm-4.6"]);
+});
+
+test("a dedicated adapter still wins over the defaultAdapter", async () => {
+  const r = createArenaRunner({
+    adapters: { Anthropic: async () => ({ output: "dedicated" }) },
+    defaultAdapter: async () => ({ output: "fallback" }),
+  });
+  assert.equal((await r.run({ provider: "Anthropic", model: "m", prompt: "p" })).output, "dedicated");
+  assert.equal((await r.run({ provider: "Mistral", model: "mistralai/x", prompt: "p" })).output, "fallback");
+});
+
 test("prompt is truncated to maxPromptChars before reaching the adapter", async () => {
   let seen = "";
   const r = createArenaRunner({

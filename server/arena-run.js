@@ -15,16 +15,20 @@
 
 export function createArenaRunner({
   adapters = {},
-  enabled = Object.keys(adapters).length > 0,
+  defaultAdapter = null,
+  enabled = Object.keys(adapters).length > 0 || Boolean(defaultAdapter),
   maxOutputTokens = 400,
   maxPromptChars = 4000,
   now = () => (globalThis.performance?.now?.() ?? Date.now()),
 } = {}) {
   const providers = Object.keys(adapters);
-  const live = Boolean(enabled) && providers.length > 0;
+  // A defaultAdapter (e.g. OpenRouter, which serves every vendor under one key)
+  // makes the runner live even for providers with no dedicated adapter — the
+  // OpenRouter catalog's model ids are already full "vendor/model" slugs.
+  const live = Boolean(enabled) && (providers.length > 0 || Boolean(defaultAdapter));
 
   async function run({ provider, model, prompt }) {
-    const adapter = adapters[provider];
+    const adapter = adapters[provider] || defaultAdapter;
     if (!live || !adapter) return { live: false };
     const t0 = now();
     try {
@@ -51,7 +55,7 @@ export function createArenaRunner({
 
   return {
     get enabled() { return live; },
-    providers: () => providers.slice(),
+    providers: () => (defaultAdapter ? [...providers, "* (OpenRouter)"] : providers.slice()),
     run,
     // Run several models concurrently; returns one result per input (same order).
     async runMany({ prompt, models }) {

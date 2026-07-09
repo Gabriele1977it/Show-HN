@@ -308,12 +308,17 @@ per-dimension score bars, and a leaderboard scorecard.
 `GET /api/arena/models` (`server/arena-models.js`), so the arena always loads
 the current list and future models can be added without shipping new client
 code. The page fetches it on open and polls every 45s, auto-adding any newly
-released model to the agent list (badged 🆕, with a toast). New models come
-from an upstream feed if `ARENA_MODELS_URL` is configured — the hook for a
-real, live source — or from a built-in demo release simulation otherwise
-(cadence tunable via `ARENA_RELEASE_INTERVAL_MS`). If the endpoint is
-unreachable, the client falls back to an embedded catalog so the page still
-works standalone.
+released model to the agent list (badged 🆕, with a toast). The catalog source,
+in priority order: (1) a custom JSON feed if `ARENA_MODELS_URL` is set; (2) the
+**full OpenRouter model list** when `OPENROUTER_API_KEY` is set — hundreds of
+real models with their exact slugs and pricing, pulled from OpenRouter's
+`/models` endpoint, grouped by vendor, and refreshed hourly so new releases
+appear on their own (toggle with `ARENA_OPENROUTER_CATALOG=0`, cap with
+`ARENA_OPENROUTER_MAX`); (3) a built-in demo release simulation otherwise
+(cadence tunable via `ARENA_RELEASE_INTERVAL_MS`). Because the OpenRouter
+catalog carries the real `vendor/model` slugs, live runs resolve them with no
+`ARENA_MODEL_MAP` guessing. If the endpoint is unreachable, the client falls
+back to an embedded catalog so the page still works standalone.
 
 **Demo mode** — the agent outputs are simulated in the browser: no API keys,
 no per-run network calls, and scores are deterministic per model+task pair.
@@ -355,9 +360,12 @@ simulated and `POST /api/arena/run` returns `{ enabled: false }`. Set
 `ARENA_LIVE=1` plus one or more provider keys and the server calls real models
 for the providers it has an adapter for. The simplest is **OpenRouter**
 (`OPENROUTER_API_KEY`): one key + one bill covers OpenAI, Anthropic, Google,
-xAI, Meta, DeepSeek, Mistral and more (OpenAI-compatible), auto-filling every
-provider that lacks a native key — arena ids become `<prefix>/<id>` slugs (e.g.
-`anthropic/claude-opus-4.5`). Or set native keys, which take precedence per
+xAI, Meta, DeepSeek, Mistral and hundreds more (OpenAI-compatible). It
+auto-fills every provider that lacks a native key, plus a catch-all adapter so
+even less-common vendors from the ingested catalog run live — when the model id
+is already a full `vendor/model` slug it's used as-is; bare ids from the
+built-in catalog get a `<prefix>/<id>` slug (e.g. `anthropic/claude-opus-4.5`).
+Or set native keys, which take precedence per
 provider: **Anthropic** (`ANTHROPIC_API_KEY`, SDK), **OpenAI** (`OPENAI_API_KEY`),
 **xAI/Grok** (`XAI_API_KEY`) — sharing an OpenAI-compatible adapter — and
 **Google/Gemini** (`GOOGLE_API_KEY`), all via plain `fetch` (no extra deps).

@@ -116,8 +116,16 @@ const importer = process.env.ECHODECK_IMPORT_DISABLED === "1"
 // Agent Arena model registry. Point ARENA_MODELS_URL at a live feed to auto-add
 // real future models; otherwise a demo release simulation adds them over time
 // (cadence tunable via ARENA_RELEASE_INTERVAL_MS).
+// OpenRouter catalog: pull the full live model list (hundreds of models, real
+// slugs + pricing) unless explicitly disabled. A custom ARENA_MODELS_URL feed
+// still takes precedence over it.
+const arenaOpenRouterCatalog =
+  process.env.ARENA_OPENROUTER_CATALOG !== "0" && process.env.ARENA_OPENROUTER_CATALOG !== "false";
 const arenaModels = createArenaModels({
   upstreamUrl: process.env.ARENA_MODELS_URL || "",
+  ...(arenaOpenRouterCatalog && process.env.OPENROUTER_API_KEY
+    ? { openrouterKey: process.env.OPENROUTER_API_KEY, openrouterLimit: Number(process.env.ARENA_OPENROUTER_MAX) || 0 }
+    : {}),
   ...(process.env.ARENA_RELEASE_INTERVAL_MS ? { releaseIntervalMs: Number(process.env.ARENA_RELEASE_INTERVAL_MS) } : {}),
 });
 
@@ -126,6 +134,7 @@ const arenaModels = createArenaModels({
 // wired here (reusing ANTHROPIC_API_KEY); other providers are pluggable.
 const arenaLive = process.env.ARENA_LIVE === "1" || process.env.ARENA_LIVE === "true";
 const arenaAdapters = {};
+let arenaDefaultAdapter = null;
 if (arenaLive && process.env.ANTHROPIC_API_KEY) {
   const anthropicAdapter = await createAnthropicAdapter({
     apiKey: process.env.ANTHROPIC_API_KEY,
@@ -177,12 +186,23 @@ if (arenaLive && process.env.OPENROUTER_API_KEY) {
     arenaAdapters[provider] = createOpenAICompatibleAdapter({
       apiKey: process.env.OPENROUTER_API_KEY,
       baseURL: "https://openrouter.ai/api/v1",
-      resolveModel: (id) => arenaModelMap[id] || `${prefix}/${id}`,
+      // Catalog ids from OpenRouter are already full "vendor/model" slugs — pass
+      // those through untouched; only bare ids (base catalog) get the prefix.
+      resolveModel: (id) => arenaModelMap[id] || (String(id).includes("/") ? id : `${prefix}/${id}`),
       extraHeaders: { "HTTP-Referer": "https://echodeck.madlabs.uk/arena", "X-Title": "Agent Arena" },
     });
   }
+  // Catch-all: any vendor from the OpenRouter catalog whose display name isn't in
+  // OR_PREFIX (Nous, Microsoft, Z.AI, …) still runs live — its model id is a full
+  // slug, so identity resolution is exactly what OpenRouter expects.
+  arenaDefaultAdapter = createOpenAICompatibleAdapter({
+    apiKey: process.env.OPENROUTER_API_KEY,
+    baseURL: "https://openrouter.ai/api/v1",
+    resolveModel: (id) => arenaModelMap[id] || id,
+    extraHeaders: { "HTTP-Referer": "https://echodeck.madlabs.uk/arena", "X-Title": "Agent Arena" },
+  });
 }
-const arenaRun = createArenaRunner({ adapters: arenaAdapters, enabled: arenaLive });
+const arenaRun = createArenaRunner({ adapters: arenaAdapters, defaultAdapter: arenaDefaultAdapter, enabled: arenaLive });
 
 // LLM-as-judge: scores real outputs so live runs get a defended score. On when
 // live runs are on and a key is set (unless ARENA_JUDGE=0). Reuses ANTHROPIC_API_KEY.
@@ -219,7 +239,10 @@ const server = app.listen(PORT, () => {
   console.log(transcribe.enabled ? "Auto-transcription enabled." : "Auto-transcription disabled (no TRANSCRIBE_WEBHOOK_URL).");
   console.log(importer.enabled ? `URL / YouTube import enabled${process.env.SUPADATA_API_KEY ? " (Supadata transcript API)" : " (free best-effort)"}.` : "URL / YouTube import disabled (ECHODECK_IMPORT_DISABLED).");
   console.log(push.enabled ? "Web Push enabled." : "Web Push disabled (no VAPID keys).");
-  console.log(arenaModels.enabled ? "Agent Arena model feed enabled (ARENA_MODELS_URL)." : "Agent Arena models: built-in catalog + demo release simulation.");
+  console.log(
+    arenaModels.source === "openrouter" ? "Agent Arena models: OpenRouter live catalog (all models)."
+    : arenaModels.source === "feed" ? "Agent Arena model feed enabled (ARENA_MODELS_URL)."
+    : "Agent Arena models: built-in catalog + demo release simulation.");
   console.log(arenaRun.enabled ? `Agent Arena live runs ENABLED (providers: ${arenaRun.providers().join(", ")}).` : "Agent Arena live runs disabled (simulated). Set ARENA_LIVE=1 + a provider key to enable.");
   console.log(arenaJudge.enabled ? "Agent Arena LLM judge ENABLED (real scores on live runs)." : "Agent Arena LLM judge off (simulated scores).");
   console.log(mailer.enabled ? `Email enabled (${mailer.mode}).` : "Email in dev mode (logs only — set RESEND_API_KEY + EMAIL_FROM to send).");

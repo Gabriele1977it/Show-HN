@@ -5,14 +5,18 @@
 // without shipping new client code. The client fetches `GET /api/arena/models`
 // on load and polls periodically, auto-adding anything new to the agent list.
 //
-// Two ways the registry updates itself:
-//   1. Upstream feed (ARENA_MODELS_URL) — if set, the service periodically
-//      fetches that URL (same JSON shape as `providers` below), validates it,
-//      and swaps the catalog in. This is the hook for a real, live model feed.
-//   2. Demo release simulation — with no upstream feed configured, the service
-//      promotes one model from a small "upcoming" pool on a timer, so the
-//      auto-update is visible in the demo. These are illustrative, not real
-//      product announcements (the arena page is labeled demo-mode throughout).
+// Three ways the registry updates itself:
+//   1. OpenRouter catalog (OPENROUTER_API_KEY) — if set, the service pulls the
+//      full live model list from OpenRouter's /models endpoint, groups it by
+//      provider, and swaps it in. This is the "add every model on OpenRouter"
+//      path: hundreds of real models with real slugs + pricing, refreshed on a
+//      timer so new releases appear automatically.
+//   2. Upstream feed (ARENA_MODELS_URL) — a custom JSON feed (same shape as
+//      `providers` below). Takes precedence over OpenRouter when both are set.
+//   3. Demo release simulation — with no feed configured, the service promotes
+//      one model from a small "upcoming" pool on a timer, so the auto-update is
+//      visible in the demo. These are illustrative, not real product
+//      announcements (the arena page is labeled demo-mode throughout).
 
 // The base catalog (early-2026 snapshot). Same shape the client renders.
 export const BASE_PROVIDERS = {
@@ -144,8 +148,94 @@ export function isValidCatalog(providers) {
     info.models.every((m) => m && typeof m.id === "string" && typeof m.name === "string"));
 }
 
+// --- OpenRouter catalog ingestion -----------------------------------------
+// OpenRouter's GET /api/v1/models returns { data: [ { id: "vendor/model",
+// name: "Vendor: Model", pricing: { prompt, completion }, context_length,
+// created } ] }. We group those by vendor into the same `providers` shape the
+// rest of the app renders, so a single OPENROUTER_API_KEY lists every model
+// OpenRouter serves — with the exact slugs the run adapter needs (no guessing).
+
+// Known vendor slugs → display name + brand color. Anything not listed still
+// appears; its name is derived from the model label and its color from a palette.
+const OR_PROVIDER_META = {
+  openai: { name: "OpenAI", color: "#10a37f" },
+  anthropic: { name: "Anthropic", color: "#d97757" },
+  google: { name: "Google", color: "#4285f4" },
+  "meta-llama": { name: "Meta", color: "#e65c2e" },
+  "x-ai": { name: "xAI", color: "#000000" },
+  deepseek: { name: "DeepSeek", color: "#4d6bfe" },
+  mistralai: { name: "Mistral", color: "#f7a71e" },
+  cohere: { name: "Cohere", color: "#ff6b6b" },
+  perplexity: { name: "Perplexity", color: "#1f1f1f" },
+  qwen: { name: "Alibaba (Qwen)", color: "#ff6a00" },
+  ai21: { name: "AI21", color: "#00a3e0" },
+  nousresearch: { name: "Nous Research", color: "#7c3aed" },
+  microsoft: { name: "Microsoft", color: "#0078d4" },
+  nvidia: { name: "NVIDIA", color: "#76b900" },
+  amazon: { name: "Amazon", color: "#ff9900" },
+  "z-ai": { name: "Z.AI", color: "#2563eb" },
+  moonshotai: { name: "Moonshot AI", color: "#111827" },
+  "01-ai": { name: "01.AI", color: "#16a34a" },
+};
+
+const OR_PALETTE = [
+  "#7c3aed", "#0ea5e9", "#14b8a6", "#f59e0b", "#ef4444",
+  "#8b5cf6", "#22c55e", "#ec4899", "#64748b", "#6366f1",
+];
+
+function paletteColor(slug) {
+  let h = 0;
+  for (let i = 0; i < slug.length; i++) h = (h * 31 + slug.charCodeAt(i)) >>> 0;
+  return OR_PALETTE[h % OR_PALETTE.length];
+}
+
+function titleCase(slug) {
+  return String(slug).replace(/[-_]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+// Blend prompt + completion per-token USD prices into a headline cost per 1k.
+function pricePer1k(pricing) {
+  const p = Number(pricing?.prompt);
+  const c = Number(pricing?.completion);
+  const parts = [p, c].filter((x) => Number.isFinite(x) && x > 0);
+  const perToken = parts.length ? parts.reduce((a, b) => a + b, 0) / parts.length : 0;
+  return Math.round(perToken * 1000 * 1e6) / 1e6; // per 1k tokens, 6 dp
+}
+
+export function openRouterToCatalog(body, { limit = 0, defaultLatency = 1.0, now = Date.now() } = {}) {
+  const rows = Array.isArray(body?.data) ? body.data : Array.isArray(body) ? body : [];
+  const providers = {};
+  let count = 0;
+  for (const row of rows) {
+    if (!row || typeof row.id !== "string" || !row.id.includes("/")) continue;
+    if (limit && count >= limit) break;
+    const slug = row.id.slice(0, row.id.indexOf("/"));
+    const meta = OR_PROVIDER_META[slug];
+    const label = typeof row.name === "string" ? row.name : "";
+    const labelProvider = label.includes(":") ? label.split(":")[0].trim() : "";
+    const providerName = meta?.name || labelProvider || titleCase(slug);
+    const color = meta?.color || paletteColor(slug);
+    if (!providers[providerName]) providers[providerName] = { color, models: [] };
+    // Strip the "Vendor: " prefix from the model label for a clean display name.
+    let modelName = label;
+    if (labelProvider) modelName = label.slice(label.indexOf(":") + 1).trim();
+    modelName = modelName || row.id;
+    const model = { id: row.id, name: modelName, costPer1k: pricePer1k(row.pricing), latency: defaultLatency };
+    if (row.context_length) model.context = Number(row.context_length);
+    if (row.created && now - row.created * 1000 < 45 * 24 * 3600 * 1000) model.trend = "🆕 New";
+    if (providers[providerName].models.some((m) => m.id === model.id)) continue;
+    providers[providerName].models.push(model);
+    count++;
+  }
+  return providers;
+}
+
 export function createArenaModels({
   upstreamUrl = "",
+  openrouterKey = "",
+  openrouterUrl = "https://openrouter.ai/api/v1/models",
+  openrouterReferer = "https://echodeck.madlabs.uk/arena",
+  openrouterLimit = 0,
   refreshMs = 60 * 60 * 1000,
   releaseIntervalMs = 90 * 1000,
   upcoming = UPCOMING_MODELS,
@@ -159,6 +249,9 @@ export function createArenaModels({
   let timer = null;
 
   const doFetch = fetchImpl || globalThis.fetch;
+  // A custom feed (ARENA_MODELS_URL) wins over OpenRouter when both are set.
+  const useOpenRouter = Boolean(openrouterKey) && !upstreamUrl;
+  const feedEnabled = Boolean(upstreamUrl) || useOpenRouter;
 
   const modelIds = (p) => new Set(Object.values(p).flatMap((info) => info.models.map((m) => m.id)));
 
@@ -179,12 +272,28 @@ export function createArenaModels({
   // actually changed. Never throws — a bad/unreachable feed leaves the current
   // catalog untouched.
   async function refresh() {
-    if (!upstreamUrl || !doFetch) return { changed: false };
+    if (!feedEnabled || !doFetch) return { changed: false };
     try {
-      const res = await doFetch(upstreamUrl, { headers: { accept: "application/json" } });
-      if (!res.ok) return { changed: false };
-      const body = await res.json();
-      const next = body?.providers ?? body;
+      let next = null;
+      if (upstreamUrl) {
+        const res = await doFetch(upstreamUrl, { headers: { accept: "application/json" } });
+        if (!res.ok) return { changed: false };
+        const body = await res.json();
+        next = body?.providers ?? body;
+      } else {
+        // OpenRouter live catalog.
+        const res = await doFetch(openrouterUrl, {
+          headers: {
+            accept: "application/json",
+            Authorization: `Bearer ${openrouterKey}`,
+            "HTTP-Referer": openrouterReferer,
+            "X-Title": "Agent Arena",
+          },
+        });
+        if (!res.ok) return { changed: false };
+        const body = await res.json();
+        next = openRouterToCatalog(body, { limit: openrouterLimit });
+      }
       if (!isValidCatalog(next)) return { changed: false };
       const before = modelIds(providers);
       const after = modelIds(next);
@@ -202,7 +311,9 @@ export function createArenaModels({
 
   function start() {
     if (timer) return;
-    if (upstreamUrl) {
+    if (feedEnabled) {
+      // Load the live catalog immediately on boot, then refresh on a timer.
+      refresh();
       timer = setInterval(() => { refresh(); }, refreshMs);
     } else if (releaseIntervalMs > 0 && queue.length) {
       timer = setInterval(() => { promoteNext(); }, releaseIntervalMs);
@@ -223,6 +334,7 @@ export function createArenaModels({
     refresh,
     start,
     stop,
-    enabled: Boolean(upstreamUrl),
+    enabled: feedEnabled,
+    source: upstreamUrl ? "feed" : useOpenRouter ? "openrouter" : "demo",
   };
 }
