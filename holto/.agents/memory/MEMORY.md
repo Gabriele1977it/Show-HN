@@ -1,0 +1,5 @@
+- [Expo Go incompatible packages](expo-go-compat.md) — react-native-keyboard-controller and react-native-is-edge-to-edge crash Expo Go; remove KeyboardProvider from root.
+- [Tab icons reliability](tab-icons.md) — Use expo-symbols (SymbolView) on iOS with correct SF Symbol names + Feather fallback; load Feather via ...Feather.font spread (official), not manual local TTF key.
+- [Nested Pressable on iOS](nested-pressable.md) — Inner Pressable inside outer Pressable doesn't reliably fire on iOS; restructure to sibling Pressables in a View wrapper.
+- [Metro cache transient crashes](metro-cache.md) — "Invalid hook call" errors in specific components after a bundle change often self-resolve on 2nd/3rd rebundle; not always a code bug.
+- [Stripe integration](stripe-integration.md) — tier logic, product IDs, graceful-degradation when integration not yet connected

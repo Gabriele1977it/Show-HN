@@ -1,0 +1,27 @@
+kind = "mobile"
+previewPath = "/"
+title = "HOLTO"
+version = "1.0.0"
+id = "artifacts/holto"
+router = "expo-domain"
+
+[[integratedSkills]]
+name = "expo"
+version = "1.0.0"
+
+[[services]]
+ensurePreviewReachable = "/status"
+name = "expo"
+paths = [ "/" ]
+localPort = 24442
+
+[services.development]
+run = "pnpm --filter @workspace/holto run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/holto", "run", "build" ]
+run = [ "pnpm", "--filter", "@workspace/holto", "run", "serve" ]
+
+[services.env]
+PORT = "24442"
+BASE_PATH = "/"

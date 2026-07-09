@@ -1,0 +1,31 @@
+Build me a mobile-first web app called HOLTO — an honest travel-disruption companion. It helps travellers in the moment a flight is delayed or cancelled, and gently grows with them toward the idea of living abroad. It is the entry point to a wider platform (HOLTO Guides and HOLTO Living), so its real job is to EARN TRUST and be genuinely useful, not to sell. Brand promise: "Travel. Relocate. Live Better Abroad."
+
+=== BRAND PERSONALITY === Honest, calm, scam-aware, reassuring, quietly premium. Think trusted private concierge, not busy booking site. The founder's background is fraud analysis, so trust and straight talk are the whole point. Never hype, never pressure.
+
+=== SCOPE (build ONLY this core for now) === One primary flow: the Disruption Rescue.
+
+The user reports a problem (delay, cancellation, missed connection, denied boarding) via a calm, guided form: airline, flight number, route, scheduled time, what happened. Ask one thing per step — never a wall of fields.
+Instantly show, in plain English: (a) their likely passenger rights (UK261 / EU261 style guidance, clearly framed as guidance, not legal advice), (b) the concrete next actions to take right now, (c) a calm step-by-step checklist they can tick off.
+Offer to save the disruption and email them a summary. Do NOT build booking, payments, or property features yet.
+=== PREMIUM, USER-FRIENDLY DESIGN (non-negotiable) === The user is stressed, possibly older, on poor airport wifi. Premium here means CALM and EFFORTLESS, not decorative.
+
+Generous white space; one clear focus per screen.
+Restrained, elegant palette: midnight #0A2E38, teal #1C7C8C, aqua #3FB5C4, gold #C9A24B (accents only), off-white #F4F7F8 backgrounds.
+Large, highly readable type; large tap targets; high contrast. Usable one-handed by an anxious 65-year-old.
+Smooth, subtle micro-interactions and gentle transitions — nothing flashy or slow.
+Plain, warm, human microcopy. Fewest possible taps to the answer. Ease is the luxury.
+Every screen should lower the user's stress, not add to it.
+=== THE HOLTO COMPANION (proactive + reactive AI) === An assistant that is both:
+
+REACTIVE: when the user describes their situation or asks a question, it answers immediately, clearly, honestly, tailored to their exact case, and points to the next action in the app.
+PROACTIVE: it anticipates. From what the user enters, it surfaces the single most useful next step before being asked (e.g. "4+ hour delay — you may be owed care and compensation; here's exactly what to do"). And, gently and at most once per session, it plants the wider journey: "Travel here often? Some people start wondering if they could live somewhere warmer and cheaper — explore HOLTO Living when you're ready."
+HONESTY RULES (critical to the brand): never invent rights, amounts or guarantees; say clearly when it's unsure; always point to the official airline/regulator process for anything binding.
+=== DATA MODEL === Users (auth required to save data); Disruptions (linked to user: flight details, type, status, timestamps, generated rights + checklist); a simple interests/Saved field to support the Living journey later.
+
+=== QUALITY BAR ===
+
+STABILITY: handle empty states, errors and bad input gracefully — never a crash or blank screen; always a calm message and a way forward.
+EFFICIENCY: fast load, minimal taps, works on patchy airport wifi.
+SECURITY & PRIVACY: require auth wherever personal data is read/written; never expose secrets/keys client-side; validate and sanitise all input; collect minimum data; privacy-by-design / GDPR (UK & EU users).
+ACCESSIBILITY: usable by a stressed older traveller, one- handed, at a gate.
+Build this core cleanly, beautifully and reliably first. Confirm the structure and the look with me before adding anything else.

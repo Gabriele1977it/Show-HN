@@ -236,11 +236,13 @@ test/            node:test suites
 
 ## MadLabs hub (`/`)
 
-This repo hosts two apps under the **MadLabs** umbrella (madlabs.uk). The root
-serves a hub page linking both; each app keeps its own branding and pages:
+This repo hosts three apps under the **MadLabs** umbrella (madlabs.uk). The root
+serves a hub page linking them; each app keeps its own branding and pages:
 
 - **EchoDeck** — marketing at `/echodeck`, app at `/app` (this README's focus)
 - **Agent Arena** — `/arena` (below)
+- **HOLTO** — an honest travel-disruption companion; a self-contained app in
+  [`holto/`](holto/) with its own stack, deployed separately (see below)
 
 ## Second app: Agent Arena (`/arena`)
 
@@ -259,6 +261,29 @@ file (`public/arena.html`) served at `/arena`, with light/dark theme, JSON
 export of results, and a simulated "model sync" that adds fictional preview
 models. Swapping `getMockResponse()` for real provider calls is the obvious
 path if the concept graduates from demo to product.
+
+## Third app: HOLTO (`holto/`)
+
+An **honest travel-disruption companion**: when a flight is delayed or cancelled,
+HOLTO explains the traveller's passenger rights (UK261 / EU261 guidance) in plain
+English, gives a calm step-by-step checklist, and **proactively monitors** the
+flight — pushing an alert the moment its status changes, even with the app closed.
+Brand promise: *Travel. Relocate. Live better abroad.*
+
+Unlike EchoDeck and Agent Arena (a single Node process + vanilla JS + SQLite),
+HOLTO is a **self-contained pnpm monorepo** with its own stack, so it lives in
+[`holto/`](holto/) and deploys independently rather than being served by this
+repo's Node process:
+
+- **Mobile app** — Expo / React Native (also builds for web).
+- **API** — Express 5 + PostgreSQL (Drizzle ORM), OpenAI for the AI companion,
+  AirLabs for live flight data, Stripe for billing.
+- **Worker** — a background poller that checks monitored flights and sends push
+  (Expo) + email alerts on material status changes.
+
+See [`holto/README.md`](holto/README.md) for how to run and deploy it (Postgres,
+env vars, and the `holto/render.yaml` Blueprint that stands up the web API,
+worker, and database).
 
 ## Deploying to production
 

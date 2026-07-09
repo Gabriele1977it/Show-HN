@@ -1,0 +1,905 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: HOLTO travel disruption companion API
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: auth
+    description: Authentication
+  - name: disruptions
+    description: Flight disruption records
+  - name: companion
+    description: AI companion analysis
+  - name: flights
+    description: Real-time flight status and monitoring
+  - name: ask
+    description: Ask HOLTO for nearby facilities
+
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  /auth/register:
+    post:
+      operationId: register
+      tags: [auth]
+      summary: Create a new account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterBody"
+      responses:
+        "201":
+          description: Account created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Email already registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      summary: Log in
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginBody"
+      responses:
+        "200":
+          description: Logged in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/me:
+    get:
+      operationId: getMe
+      tags: [auth]
+      summary: Get current user
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/starter-pack:
+    post:
+      operationId: subscribeStarterPack
+      tags: [auth]
+      summary: Subscribe to the Hurghada Starter Pack
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StarterPackBody"
+      responses:
+        "200":
+          description: Subscribed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /disruptions:
+    get:
+      operationId: listDisruptions
+      tags: [disruptions]
+      summary: List all disruptions for the current user
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: List of disruptions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Disruption"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    post:
+      operationId: createDisruption
+      tags: [disruptions]
+      summary: Report a new disruption and get AI analysis
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateDisruptionBody"
+      responses:
+        "201":
+          description: Disruption created with AI analysis
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Disruption"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /disruptions/{id}:
+    get:
+      operationId: getDisruption
+      tags: [disruptions]
+      summary: Get a specific disruption
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Disruption details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Disruption"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    patch:
+      operationId: updateDisruption
+      tags: [disruptions]
+      summary: Update checklist items on a disruption
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateDisruptionBody"
+      responses:
+        "200":
+          description: Updated disruption
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Disruption"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /companion/analyze:
+    post:
+      operationId: analyzeDisruption
+      tags: [companion]
+      summary: AI analysis of a disruption (rights, actions, checklist)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AnalyzeBody"
+      responses:
+        "200":
+          description: AI analysis
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CompanionAnalysis"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /flights/status:
+    get:
+      operationId: getFlightStatus
+      tags: [flights]
+      summary: Get real-time flight status from AirLabs
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: flightNumber
+          in: query
+          required: true
+          schema:
+            type: string
+          description: IATA flight number (e.g. BA245)
+      responses:
+        "200":
+          description: Flight status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FlightStatus"
+        "400":
+          description: Missing flight number
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Flight not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Flight tracking not available
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /flights/monitor:
+    get:
+      operationId: listMonitoredFlights
+      tags: [flights]
+      summary: List monitored flights for the current user
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: List of monitored flights
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MonitoredFlight"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    post:
+      operationId: addMonitoredFlight
+      tags: [flights]
+      summary: Add a flight to monitor
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddMonitorBody"
+      responses:
+        "201":
+          description: Flight added to monitor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MonitoredFlight"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /flights/monitor/{id}:
+    delete:
+      operationId: removeMonitoredFlight
+      tags: [flights]
+      summary: Stop monitoring a flight
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Removed
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /ask:
+    post:
+      operationId: askHolto
+      tags: [ask]
+      summary: Ask HOLTO for help finding nearby facilities
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AskBody"
+      responses:
+        "200":
+          description: HOLTO answer with nearby places
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AskResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
+
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+        email:
+          type: string
+        name:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        starterPackEmail:
+          type: string
+          nullable: true
+      required:
+        - id
+        - email
+        - name
+        - createdAt
+
+    RegisterBody:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 8
+        name:
+          type: string
+          minLength: 1
+      required:
+        - email
+        - password
+        - name
+
+    LoginBody:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+      required:
+        - email
+        - password
+
+    AuthResponse:
+      type: object
+      properties:
+        user:
+          $ref: "#/components/schemas/User"
+        token:
+          type: string
+      required:
+        - user
+        - token
+
+    StarterPackBody:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+      required:
+        - email
+
+    DisruptionType:
+      type: string
+      enum:
+        - delay
+        - cancellation
+        - missed_connection
+        - denied_boarding
+
+    ChecklistItem:
+      type: object
+      properties:
+        id:
+          type: string
+        text:
+          type: string
+        done:
+          type: boolean
+        category:
+          type: string
+      required:
+        - id
+        - text
+        - done
+
+    ActionItem:
+      type: object
+      properties:
+        order:
+          type: integer
+        title:
+          type: string
+        description:
+          type: string
+      required:
+        - order
+        - title
+        - description
+
+    ProactiveAction:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        urgency:
+          type: string
+          enum: [high, medium, low]
+        why:
+          type: string
+      required:
+        - title
+        - description
+        - urgency
+        - why
+
+    Disruption:
+      type: object
+      properties:
+        id:
+          type: integer
+        userId:
+          type: integer
+        airline:
+          type: string
+        flightNumber:
+          type: string
+        origin:
+          type: string
+        destination:
+          type: string
+        scheduledAt:
+          type: string
+        disruptionType:
+          $ref: "#/components/schemas/DisruptionType"
+        details:
+          type: string
+        rights:
+          type: string
+          nullable: true
+        actions:
+          type: array
+          items:
+            $ref: "#/components/schemas/ActionItem"
+          nullable: true
+        checklist:
+          type: array
+          items:
+            $ref: "#/components/schemas/ChecklistItem"
+          nullable: true
+        companionMessage:
+          type: string
+          nullable: true
+        proactiveHint:
+          type: string
+          nullable: true
+        proactiveAction:
+          $ref: "#/components/schemas/ProactiveAction"
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - userId
+        - airline
+        - flightNumber
+        - origin
+        - destination
+        - scheduledAt
+        - disruptionType
+        - details
+        - createdAt
+        - updatedAt
+
+    CreateDisruptionBody:
+      type: object
+      properties:
+        airline:
+          type: string
+        flightNumber:
+          type: string
+        origin:
+          type: string
+        destination:
+          type: string
+        scheduledAt:
+          type: string
+        disruptionType:
+          $ref: "#/components/schemas/DisruptionType"
+        details:
+          type: string
+      required:
+        - airline
+        - flightNumber
+        - origin
+        - destination
+        - scheduledAt
+        - disruptionType
+        - details
+
+    UpdateDisruptionBody:
+      type: object
+      properties:
+        checklist:
+          type: array
+          items:
+            $ref: "#/components/schemas/ChecklistItem"
+
+    AnalyzeBody:
+      type: object
+      properties:
+        airline:
+          type: string
+        flightNumber:
+          type: string
+        origin:
+          type: string
+        destination:
+          type: string
+        scheduledAt:
+          type: string
+        disruptionType:
+          $ref: "#/components/schemas/DisruptionType"
+        details:
+          type: string
+      required:
+        - airline
+        - flightNumber
+        - origin
+        - destination
+        - scheduledAt
+        - disruptionType
+        - details
+
+    CompanionAnalysis:
+      type: object
+      properties:
+        rights:
+          type: string
+        actions:
+          type: array
+          items:
+            $ref: "#/components/schemas/ActionItem"
+        checklist:
+          type: array
+          items:
+            $ref: "#/components/schemas/ChecklistItem"
+        companionMessage:
+          type: string
+        proactiveHint:
+          type: string
+          nullable: true
+        proactiveAction:
+          $ref: "#/components/schemas/ProactiveAction"
+          nullable: true
+      required:
+        - rights
+        - actions
+        - checklist
+        - companionMessage
+
+    FlightStatus:
+      type: object
+      properties:
+        flightNumber:
+          type: string
+        airlineIata:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [scheduled, active, landed, cancelled, incident, diverted, unknown]
+        depAirport:
+          type: string
+          nullable: true
+        arrAirport:
+          type: string
+          nullable: true
+        scheduledDep:
+          type: string
+          nullable: true
+        estimatedDep:
+          type: string
+          nullable: true
+        scheduledArr:
+          type: string
+          nullable: true
+        estimatedArr:
+          type: string
+          nullable: true
+        depDelay:
+          type: integer
+          nullable: true
+        arrDelay:
+          type: integer
+          nullable: true
+        depGate:
+          type: string
+          nullable: true
+        depTerminal:
+          type: string
+          nullable: true
+        arrTerminal:
+          type: string
+          nullable: true
+        companionMessage:
+          type: string
+          nullable: true
+        checkedAt:
+          type: string
+          format: date-time
+      required:
+        - flightNumber
+        - status
+        - checkedAt
+
+    MonitoredFlight:
+      type: object
+      properties:
+        id:
+          type: integer
+        flightNumber:
+          type: string
+        destination:
+          type: string
+        lastStatus:
+          type: string
+          nullable: true
+        lastCheckedAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - flightNumber
+        - destination
+        - createdAt
+
+    AddMonitorBody:
+      type: object
+      properties:
+        flightNumber:
+          type: string
+        destination:
+          type: string
+      required:
+        - flightNumber
+        - destination
+
+    NearbyPlace:
+      type: object
+      properties:
+        name:
+          type: string
+        vicinity:
+          type: string
+        rating:
+          type: number
+          nullable: true
+        openNow:
+          type: boolean
+          nullable: true
+        placeId:
+          type: string
+          nullable: true
+        lat:
+          type: number
+          nullable: true
+        lng:
+          type: number
+          nullable: true
+      required:
+        - name
+        - vicinity
+
+    AskBody:
+      type: object
+      properties:
+        question:
+          type: string
+        lat:
+          type: number
+          nullable: true
+        lng:
+          type: number
+          nullable: true
+      required:
+        - question
+
+    AskResponse:
+      type: object
+      properties:
+        answer:
+          type: string
+        places:
+          type: array
+          items:
+            $ref: "#/components/schemas/NearbyPlace"
+      required:
+        - answer
+        - places

@@ -1,0 +1,8 @@
+uploads = []
+outputs = []
+
+[[generated]]
+id = "aoQEMNfX2N4nujg7u5fhR"
+uri = "file://artifacts/holto/assets/images/icon.png"
+type = "image"
+title = "holto app icon compass midnight"
