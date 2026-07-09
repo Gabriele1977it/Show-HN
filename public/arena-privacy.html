@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Privacy Policy · Agent Arena</title>
+    <meta name="description" content="Privacy Policy for Agent Arena, a benchmarking layer for AI models by MadLabs." />
+    <meta name="robots" content="index,follow" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%9A%A1%3C/text%3E%3C/svg%3E" />
+    <script src="/arena-theme.js"></script>
+    <style>
+        :root {
+            --bg-primary: #f6f8fc;
+            --bg-card: #ffffff;
+            --text-primary: #0b0d10;
+            --text-secondary: #4a5568;
+            --text-muted: #94a3b8;
+            --border-color: #e2e8f0;
+            --accent: #7c3aed;
+            --accent-light: #ede9fe;
+        }
+        html[data-theme="dark"] {
+            --bg-primary: #0b0d10;
+            --bg-card: #1c2027;
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            --border-color: #2d333b;
+            --accent: #a78bfa;
+            --accent-light: #2d1b4e;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.65;
+            -webkit-font-smoothing: antialiased;
+        }
+        .legal { max-width: 760px; margin: 0 auto; padding: 32px 24px 80px; }
+        .head {
+            display: flex; align-items: center; gap: 10px; padding: 12px 0 20px;
+            color: var(--text-primary); text-decoration: none; font-weight: 700; font-size: 18px;
+        }
+        .head .logo { font-size: 22px; }
+        .head .tag {
+            font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase;
+            color: var(--accent); background: var(--accent-light); padding: 3px 8px; border-radius: 6px;
+        }
+        h1 { font-size: 30px; letter-spacing: -.5px; margin: 8px 0 4px; }
+        .updated { color: var(--text-muted); font-size: 14px; margin: 0 0 8px; }
+        h2 { font-size: 18px; margin-top: 30px; margin-bottom: 6px; }
+        p, li { color: var(--text-secondary); }
+        ul { padding-left: 20px; }
+        li { margin: 4px 0; }
+        a { color: var(--accent); }
+        strong { color: var(--text-primary); }
+        .callout {
+            background: var(--accent-light); border: 1px solid var(--border-color); border-radius: 12px;
+            padding: 14px 16px; font-size: 14px; color: var(--text-primary); margin: 18px 0;
+        }
+        .callout strong { color: var(--accent); }
+        .note {
+            background: var(--accent-light); border: 1px solid var(--border-color); border-radius: 12px;
+            padding: 14px 16px; font-size: 13.5px; color: var(--accent); margin-top: 28px;
+        }
+        .backlinks { margin-top: 40px; font-size: 14px; }
+        .backlinks a { text-decoration: none; }
+    </style>
+</head>
+<body>
+    <div class="legal">
+        <a class="head" href="/arena"><span class="logo">⚡</span> Agent Arena <span class="tag">MadLabs</span></a>
+        <h1>Privacy Policy</h1>
+        <p class="updated">Last updated: 9 July 2026</p>
+
+        <p>This policy explains what Agent Arena (operated by <strong>MadLabs</strong>) collects, why, and who we share it with. Questions? Email <a href="mailto:gabriele.olivari@outlook.com">gabriele.olivari@outlook.com</a>.</p>
+
+        <h2>1. What we collect</h2>
+        <ul>
+            <li><strong>Account data</strong> — your email address and a hashed password. We never store your password in plain text.</li>
+            <li><strong>Usage data</strong> — the comparisons you run, votes you cast, your credit balance and a ledger of charges, and basic technical logs (e.g. approximate request counts for rate-limiting and abuse prevention).</li>
+            <li><strong>Content you submit</strong> — the prompts and tasks you send to models, and the outputs generated for you.</li>
+            <li><strong>Payment data</strong> — handled entirely by Stripe. We receive confirmation of a payment and a plan status; <strong>we never see or store your full card details</strong>.</li>
+        </ul>
+
+        <div class="callout"><strong>Prompts leave our servers.</strong> When you run a live comparison, your prompt is sent to third-party AI providers (see below) to generate the response. Please don’t include confidential, sensitive, or personal information in prompts you run live.</div>
+
+        <h2>2. Who we share it with (processors)</h2>
+        <ul>
+            <li><strong>AI model providers</strong> — OpenRouter and the underlying model vendors, which receive your prompt to produce live outputs, subject to their own terms and privacy policies.</li>
+            <li><strong>Stripe</strong> — to process payments and manage subscriptions.</li>
+            <li><strong>Hosting</strong> — our application and database are hosted on Render.</li>
+            <li><strong>Email</strong> — a transactional email provider is used to send account emails such as password resets.</li>
+        </ul>
+        <p>We don’t sell your personal data, and we don’t use your private prompts to train our own models.</p>
+
+        <h2>3. Public scorecards</h2>
+        <p>If you choose to <strong>Publish</strong> a scorecard, the task, prompts, and model outputs it contains become <strong>publicly accessible</strong> to anyone with the link and may appear in the community leaderboard. Votes are recorded anonymously and aggregated into model ratings. Don’t publish anything you want to keep private.</p>
+
+        <h2>4. Cookies &amp; local storage</h2>
+        <p>We use your browser’s local storage to keep you signed in (a session token), remember your theme preference, and hold your Arena session. We don’t use third-party advertising or cross-site tracking cookies.</p>
+
+        <h2>5. Retention</h2>
+        <p>We keep account and usage data while your account is active and as needed to operate the Service, meet legal obligations, and prevent abuse. Published scorecards persist until removed. You can ask us to delete your account and associated data at any time.</p>
+
+        <h2>6. Your rights</h2>
+        <p>Depending on your jurisdiction, you may have the right to access, correct, export, or delete your personal data, and to object to certain processing. To exercise any of these, email <a href="mailto:gabriele.olivari@outlook.com">gabriele.olivari@outlook.com</a> and we’ll respond within a reasonable time.</p>
+
+        <h2>7. Children</h2>
+        <p>The Service isn’t directed at children and isn’t intended for anyone below the age of digital consent in their jurisdiction.</p>
+
+        <h2>8. Changes</h2>
+        <p>We may update this policy as the Service evolves. Material changes will be reflected by the “Last updated” date above.</p>
+
+        <h2>9. Contact</h2>
+        <p>For any privacy question or request, email <a href="mailto:gabriele.olivari@outlook.com">gabriele.olivari@outlook.com</a>.</p>
+
+        <p class="note">This policy reflects how Agent Arena currently operates. We recommend an independent legal review for your jurisdiction before relying on it commercially.</p>
+
+        <p class="backlinks"><a href="/arena">← Back to Agent Arena</a> · <a href="/arena/terms">Terms of Service</a></p>
+    </div>
+</body>
+</html>

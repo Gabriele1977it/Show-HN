@@ -1121,6 +1121,8 @@ export function createApp({ store, uploadsDir, reminders, billing, mailer, enric
   app.get("/arena/leaderboard", (_req, res) => res.sendFile(join(PUBLIC_DIR, "arena-leaderboard.html")));
   app.get("/arena/vote", (_req, res) => res.sendFile(join(PUBLIC_DIR, "arena-vote.html")));
   app.get("/arena/admin", (_req, res) => res.sendFile(join(PUBLIC_DIR, "arena-admin.html")));
+  app.get("/arena/terms", (_req, res) => res.sendFile(join(PUBLIC_DIR, "arena-terms.html")));
+  app.get("/arena/privacy", (_req, res) => res.sendFile(join(PUBLIC_DIR, "arena-privacy.html")));
   // Public scorecard viewer. Inject per-scorecard SEO/social meta server-side
   // so shared links unfurl nicely (crawlers don't run the client JS).
   const arenaShareTemplate = readFileSync(join(PUBLIC_DIR, "arena-share.html"), "utf8");
