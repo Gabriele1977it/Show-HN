@@ -18,7 +18,7 @@ import { createImporter } from "./importer.js";
 import { createPushService, deliverToWorkspace } from "./push.js";
 import { createArenaModels } from "./arena-models.js";
 import { createArenaRunner, createAnthropicAdapter, createOpenAICompatibleAdapter, createGeminiAdapter } from "./arena-run.js";
-import { createArenaJudge, createAnthropicJudge } from "./arena-judge.js";
+import { createArenaJudge, createAnthropicJudge, createOpenAICompatibleJudge } from "./arena-judge.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, "..");
@@ -162,15 +162,47 @@ if (arenaLive && (process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY)) {
     resolveModel: mapModel, defaultModel: process.env.ARENA_GOOGLE_MODEL || "gemini-2.5-flash",
   });
 }
+// OpenRouter — one key for many providers (OpenAI-compatible). Fills in every
+// provider that doesn't already have a native key, so a single OPENROUTER_API_KEY
+// makes most of the arena live. Arena model ids become "<prefix>/<id>" OpenRouter
+// slugs (e.g. anthropic/claude-opus-4.5); override any via ARENA_MODEL_MAP.
+if (arenaLive && process.env.OPENROUTER_API_KEY) {
+  const OR_PREFIX = {
+    OpenAI: "openai", Anthropic: "anthropic", Google: "google", Meta: "meta-llama",
+    xAI: "x-ai", DeepSeek: "deepseek", Mistral: "mistralai", Cohere: "cohere",
+    Perplexity: "perplexity", "Alibaba (Qwen)": "qwen", AI21: "ai21",
+  };
+  for (const [provider, prefix] of Object.entries(OR_PREFIX)) {
+    if (arenaAdapters[provider]) continue; // a native provider key wins
+    arenaAdapters[provider] = createOpenAICompatibleAdapter({
+      apiKey: process.env.OPENROUTER_API_KEY,
+      baseURL: "https://openrouter.ai/api/v1",
+      resolveModel: (id) => arenaModelMap[id] || `${prefix}/${id}`,
+      extraHeaders: { "HTTP-Referer": "https://echodeck.madlabs.uk/arena", "X-Title": "Agent Arena" },
+    });
+  }
+}
 const arenaRun = createArenaRunner({ adapters: arenaAdapters, enabled: arenaLive });
 
 // LLM-as-judge: scores real outputs so live runs get a defended score. On when
 // live runs are on and a key is set (unless ARENA_JUDGE=0). Reuses ANTHROPIC_API_KEY.
 const judgeOff = process.env.ARENA_JUDGE === "0" || process.env.ARENA_JUDGE === "false";
-const judgeFn = (arenaLive && !judgeOff && process.env.ANTHROPIC_API_KEY)
-  ? await createAnthropicJudge({ apiKey: process.env.ANTHROPIC_API_KEY, model: process.env.ARENA_JUDGE_MODEL || "claude-haiku-4-5-20251001" })
-  : null;
-const arenaJudge = createArenaJudge({ judge: judgeFn, model: process.env.ARENA_JUDGE_MODEL || "" });
+let judgeFn = null;
+let judgeModel = process.env.ARENA_JUDGE_MODEL || "";
+if (arenaLive && !judgeOff) {
+  if (process.env.ANTHROPIC_API_KEY) {
+    judgeModel = judgeModel || "claude-haiku-4-5-20251001";
+    judgeFn = await createAnthropicJudge({ apiKey: process.env.ANTHROPIC_API_KEY, model: judgeModel });
+  } else if (process.env.OPENROUTER_API_KEY) {
+    // A cheap, capable judge routed through OpenRouter.
+    judgeModel = judgeModel || "openai/gpt-4o-mini";
+    judgeFn = createOpenAICompatibleJudge({
+      apiKey: process.env.OPENROUTER_API_KEY, baseURL: "https://openrouter.ai/api/v1", model: judgeModel,
+      extraHeaders: { "HTTP-Referer": "https://echodeck.madlabs.uk/arena", "X-Title": "Agent Arena" },
+    });
+  }
+}
+const arenaJudge = createArenaJudge({ judge: judgeFn, model: judgeModel });
 
 const app = createApp({
   store, uploadsDir: UPLOADS_DIR, reminders, billing, mailer, enrich, transcribe, importer, push, arenaModels, arenaRun, arenaJudge, ownerEmails,

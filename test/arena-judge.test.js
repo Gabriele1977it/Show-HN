@@ -27,3 +27,29 @@ test("judge returns null on empty output or a thrown adapter", async () => {
   const ok = createArenaJudge({ judge: async () => ({ accuracy: 80, relevance: 80, overall: 80 }) });
   assert.equal(await ok.score({ output: "   " }), null); // empty output → skip
 });
+
+test("OpenAI-compatible judge parses JSON (even wrapped in prose)", async () => {
+  const { createOpenAICompatibleJudge } = await import("../server/arena-judge.js");
+  let captured;
+  const judgeFn = createOpenAICompatibleJudge({
+    apiKey: "or", baseURL: "https://openrouter.ai/api/v1", model: "openai/gpt-4o-mini",
+    fetchImpl: async (url, opts) => {
+      captured = { url, opts };
+      return { ok: true, json: async () => ({ choices: [{ message: { content: 'Here you go: {"accuracy": 90, "relevance": 84, "overall": 88} — cheers' } }], usage: { prompt_tokens: 50, completion_tokens: 15 } }) };
+    },
+  });
+  const j = createArenaJudge({ judge: judgeFn });
+  const sc = await j.score({ task: "t", prompt: "p", output: "answer" });
+  assert.equal(captured.url, "https://openrouter.ai/api/v1/chat/completions");
+  assert.equal(sc.accuracy, 90);
+  assert.equal(sc.relevance, 84);
+  assert.equal(sc.overall, 88);
+  assert.equal(sc.promptTokens, 50);
+});
+
+test("OpenAI-compatible judge throws on non-ok (→ card keeps simulated score)", async () => {
+  const { createOpenAICompatibleJudge } = await import("../server/arena-judge.js");
+  const judgeFn = createOpenAICompatibleJudge({ apiKey: "or", baseURL: "x", model: "m", fetchImpl: async () => ({ ok: false, status: 500 }) });
+  const j = createArenaJudge({ judge: judgeFn });
+  assert.equal(await j.score({ task: "t", prompt: "p", output: "a" }), null);
+});

@@ -130,3 +130,21 @@ test("adapters return null without a key", () => {
   assert.equal(createOpenAICompatibleAdapter({ apiKey: "", baseURL: "x" }), null);
   assert.equal(createGeminiAdapter({ apiKey: "" }), null);
 });
+
+test("OpenRouter-style: extraHeaders + prefixed model resolution", async () => {
+  let captured;
+  const adapter = createOpenAICompatibleAdapter({
+    apiKey: "or-key", baseURL: "https://openrouter.ai/api/v1",
+    resolveModel: (id) => `anthropic/${id}`,          // per-provider slug prefix
+    extraHeaders: { "HTTP-Referer": "https://echodeck.madlabs.uk/arena", "X-Title": "Agent Arena" },
+    fetchImpl: async (url, opts) => {
+      captured = { url, opts };
+      return { ok: true, json: async () => ({ choices: [{ message: { content: "ok" } }], usage: { prompt_tokens: 3, completion_tokens: 2 } }) };
+    },
+  });
+  await adapter({ model: "claude-opus-4.5", prompt: "hi", maxTokens: 50 });
+  assert.equal(captured.url, "https://openrouter.ai/api/v1/chat/completions");
+  assert.equal(captured.opts.headers["HTTP-Referer"], "https://echodeck.madlabs.uk/arena");
+  assert.equal(captured.opts.headers["X-Title"], "Agent Arena");
+  assert.equal(JSON.parse(captured.opts.body).model, "anthropic/claude-opus-4.5");
+});

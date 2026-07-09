@@ -79,3 +79,42 @@ export async function createAnthropicJudge({ apiKey, model = "claude-haiku-4-5-2
     };
   };
 }
+
+// Pull the first {...} JSON object out of a model's text reply (defensive: some
+// models wrap JSON in prose or code fences).
+function extractJson(text) {
+  try { return JSON.parse(text); } catch { /* fall through */ }
+  const m = String(text).match(/\{[\s\S]*\}/);
+  if (m) { try { return JSON.parse(m[0]); } catch { /* ignore */ } }
+  return {};
+}
+
+// OpenAI-compatible judge (works via OpenRouter, OpenAI, xAI, …). Asks for a
+// JSON score in the prompt and parses it — no provider-specific structured-
+// output API required, so it runs against any OpenAI-style endpoint.
+export function createOpenAICompatibleJudge({ apiKey, baseURL, model, extraHeaders = {}, maxTokens = 200, fetchImpl }) {
+  if (!apiKey) return null;
+  const doFetch = fetchImpl || globalThis.fetch;
+  return async function openAICompatibleJudge({ task, prompt, output }) {
+    const res = await doFetch(`${baseURL}/chat/completions`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json", ...extraHeaders },
+      body: JSON.stringify({
+        model,
+        max_tokens: maxTokens,
+        messages: [
+          { role: "system", content: JUDGE_SYSTEM + ' Respond with ONLY a JSON object: {"accuracy":0-100,"relevance":0-100,"overall":0-100}.' },
+          { role: "user", content: `Task: ${task}\n\nInstructions given to the model:\n${prompt}\n\nThe model's answer:\n${output}\n\nScore it as JSON.` },
+        ],
+      }),
+    });
+    if (!res.ok) throw new Error(`judge HTTP ${res.status}`);
+    const data = await res.json();
+    const parsed = extractJson(data.choices?.[0]?.message?.content ?? "{}");
+    return {
+      accuracy: parsed.accuracy, relevance: parsed.relevance, overall: parsed.overall,
+      promptTokens: data.usage?.prompt_tokens ?? 0,
+      completionTokens: data.usage?.completion_tokens ?? 0,
+    };
+  };
+}

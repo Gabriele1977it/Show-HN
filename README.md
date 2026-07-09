@@ -353,13 +353,16 @@ community strip, and each shared scorecard.
 simulating. It's **off by default** (no keys, no spend): the page stays fully
 simulated and `POST /api/arena/run` returns `{ enabled: false }`. Set
 `ARENA_LIVE=1` plus one or more provider keys and the server calls real models
-for the providers it has an adapter for. Four ship wired: **Anthropic**
-(`ANTHROPIC_API_KEY`, official SDK), **OpenAI** (`OPENAI_API_KEY`), **xAI/Grok**
-(`XAI_API_KEY`) — the last two share an OpenAI-compatible adapter — and
+for the providers it has an adapter for. The simplest is **OpenRouter**
+(`OPENROUTER_API_KEY`): one key + one bill covers OpenAI, Anthropic, Google,
+xAI, Meta, DeepSeek, Mistral and more (OpenAI-compatible), auto-filling every
+provider that lacks a native key — arena ids become `<prefix>/<id>` slugs (e.g.
+`anthropic/claude-opus-4.5`). Or set native keys, which take precedence per
+provider: **Anthropic** (`ANTHROPIC_API_KEY`, SDK), **OpenAI** (`OPENAI_API_KEY`),
+**xAI/Grok** (`XAI_API_KEY`) — sharing an OpenAI-compatible adapter — and
 **Google/Gemini** (`GOOGLE_API_KEY`), all via plain `fetch` (no extra deps).
-Arena model ids are mapped to real API model strings with an optional
-`ARENA_MODEL_MAP` JSON (and per-provider `ARENA_*_MODEL` defaults). Adding
-another provider is one more adapter.
+Arena model ids map to real API strings via an optional `ARENA_MODEL_MAP` JSON.
+The LLM judge runs on Anthropic when its key is set, else through OpenRouter.
 Models whose provider has no adapter come back `live:false` and the client
 simulates them — so a single run cleanly mixes real + simulated cards, each
 labeled (● Live). Live runs are rate-limited hard (per IP), capped in model count and output

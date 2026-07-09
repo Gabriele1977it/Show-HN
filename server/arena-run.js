@@ -90,14 +90,14 @@ export async function createAnthropicAdapter({ apiKey, resolveModel, defaultMode
 // OpenAI-compatible Chat Completions adapter — works for OpenAI and xAI (Grok),
 // which share the same request/response shape (just a different base URL + key).
 // `resolveModel` maps an arena model id → the provider's real API model string.
-export function createOpenAICompatibleAdapter({ apiKey, baseURL, resolveModel, defaultModel, fetchImpl }) {
+export function createOpenAICompatibleAdapter({ apiKey, baseURL, resolveModel, defaultModel, extraHeaders = {}, fetchImpl }) {
   if (!apiKey) return null;
   const doFetch = fetchImpl || globalThis.fetch;
   const resolve = resolveModel || ((id) => id || defaultModel);
   return async function openAICompatibleAdapter({ model, prompt, maxTokens }) {
     const res = await doFetch(`${baseURL}/chat/completions`, {
       method: "POST",
-      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json", ...extraHeaders },
       body: JSON.stringify({
         model: resolve(model) || defaultModel,
         messages: [{ role: "user", content: prompt }],
