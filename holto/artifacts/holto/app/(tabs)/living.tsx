@@ -1,7 +1,6 @@
 import { Icon } from "@/components/Icon";
 import { useQuery } from "@tanstack/react-query";
 import { LinearGradient } from "expo-linear-gradient";
-import { Linking } from "react-native";
 import React, { useState } from "react";
 import {
   Platform,
@@ -15,6 +14,7 @@ import Animated, { FadeInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useColors } from "@/hooks/useColors";
+import { openUrl } from "@/utils/openUrl";
 
 const DESTINATIONS = [
   {
@@ -358,7 +358,7 @@ export default function LivingScreen() {
             {GUIDES.map((guide) => (
               <Pressable
                 key={guide.title}
-                onPress={() => Linking.openURL("https://www.holtotravel.com")}
+                onPress={() => openUrl("https://holtotravel.com")}
                 style={({ pressed }) => [
                   styles.guideCard,
                   {
@@ -396,7 +396,7 @@ export default function LivingScreen() {
               </Text>
             </View>
             <Pressable
-              onPress={() => Linking.openURL("https://www.holtotravel.com")}
+              onPress={() => openUrl("https://holtotravel.com")}
               style={({ pressed }) => [styles.ctaBtn, { opacity: pressed ? 0.85 : 1 }]}
             >
               <Text style={styles.ctaBtnText}>Explore HOLTO Living</Text>

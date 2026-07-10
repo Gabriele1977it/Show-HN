@@ -20,6 +20,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
 
 import { useColors } from "@/hooks/useColors";
+import { openUrl } from "@/utils/openUrl";
 import { useAuth } from "@/context/AuthContext";
 import { useSubscription, useStripeProducts, type StripeProduct } from "@/hooks/useSubscription";
 import { TIER_DISPLAY, PRODUCT_IDS, type Tier } from "@/constants/tiers";
@@ -426,7 +427,7 @@ export default function AccountScreen() {
             <SettingsRow
               icon="globe"
               label="Visit holtotravel.com"
-              onPress={() => void Linking.openURL("https://www.holtotravel.com")}
+              onPress={() => openUrl("https://holtotravel.com")}
               colors={colors}
             />
             <View style={[styles.rowDivider, { backgroundColor: colors.border }]} />
@@ -623,7 +624,7 @@ export default function AccountScreen() {
           <SettingsRow
             icon="globe"
             label="Visit holtotravel.com"
-            onPress={() => void Linking.openURL("https://www.holtotravel.com")}
+            onPress={() => openUrl("https://holtotravel.com")}
             colors={colors}
           />
           <View style={[styles.rowDivider, { backgroundColor: colors.border }]} />

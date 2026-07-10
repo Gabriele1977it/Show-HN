@@ -1,9 +1,9 @@
 import { Icon } from "@/components/Icon";
-import { Linking } from "react-native";
 import React from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { useColors } from "@/hooks/useColors";
+import { openUrl } from "@/utils/openUrl";
 
 export function BeyondSection() {
   const colors = useColors();
@@ -18,7 +18,7 @@ export function BeyondSection() {
 
       <Pressable
         style={({ pressed }) => [styles.row, { opacity: pressed ? 0.7 : 1 }]}
-        onPress={() => Linking.openURL("https://www.holtotravel.com/guides")}
+        onPress={() => openUrl("https://holtotravel.com/guides")}
       >
         <View
           style={[
@@ -41,7 +41,7 @@ export function BeyondSection() {
 
       <Pressable
         style={({ pressed }) => [styles.row, { opacity: pressed ? 0.7 : 1 }]}
-        onPress={() => Linking.openURL("https://www.holtotravel.com/living")}
+        onPress={() => openUrl("https://holtotravel.com/living")}
       >
         <View
           style={[

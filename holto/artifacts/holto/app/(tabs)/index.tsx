@@ -12,7 +12,6 @@ import { router } from "expo-router";
 import React, { useCallback, useState } from "react";
 import {
   ActivityIndicator,
-  Linking,
   Platform,
   Pressable,
   RefreshControl,
@@ -31,6 +30,7 @@ import { HoltoLogo } from "@/components/HoltoLogo";
 import { RetryError } from "@/components/RetryError";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
+import { openUrl } from "@/utils/openUrl";
 
 type FlightStatus = "scheduled" | "active" | "landed" | "cancelled" | "incident" | "diverted" | "unknown";
 
@@ -452,7 +452,7 @@ export default function HomeScreen() {
 
         <Animated.View entering={FadeInDown.delay(240).duration(450)} style={{ marginTop: 16 }}>
           <Pressable
-            onPress={() => Linking.openURL("https://www.holtotravel.com")}
+            onPress={() => openUrl("https://holtotravel.com")}
             style={[styles.ecosystemCard, { backgroundColor: colors.midnight, borderRadius: colors.radius }]}
           >
             <View style={styles.ecosystemTop}>
