@@ -42,8 +42,7 @@ const ENV_ORIGINS = [
   .filter((o): o is string => Boolean(o));
 
 const ALLOWED_ORIGIN_PATTERNS: (string | RegExp)[] = [
-  "https://holtotravel.com",
-  "https://www.holtotravel.com",
+  /^https:\/\/([\w-]+\.)?holtotravel\.com$/,   // holtotravel.com + any subdomain (app., www., …)
   ...ENV_ORIGINS,
   /^https:\/\/[\w-]+\.onrender\.com$/,         // the HOLTO web (PWA) on Render
   /^https:\/\/[\w-]+-[\w-]+\.replit\.app$/,   // published Replit apps
