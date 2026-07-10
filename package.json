@@ -10,7 +10,7 @@
   "scripts": {
     "start": "node server/index.js",
     "dev": "node --watch server/index.js",
-    "test": "node --test && ECHODECK_TEST_STORE=sqlite node --test test/api.test.js"
+    "test": "node --test test/ && ECHODECK_TEST_STORE=sqlite node --test test/api.test.js"
   },
   "dependencies": {
     "better-sqlite3": "^12.11.1",
