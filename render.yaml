@@ -76,3 +76,24 @@ services:
         sync: false
       - key: STRIPE_WEBHOOK_SECRET
         sync: false
+
+  # ── HOLTO web (installable PWA) ───────────────────────────────────────────
+  # Static export of the Expo app, pointed at the API. Free static hosting.
+  # Client-side routes fall back to index.html (SPA rewrite).
+  - type: web
+    name: holto-web
+    runtime: static
+    region: frankfurt
+    rootDir: holto
+    branch: claude/holto-app-improvements-8cefxv
+    autoDeploy: true
+    buildCommand: npx -y pnpm@10.33.0 install --frozen-lockfile --prod=false --filter "@workspace/holto..." && npx -y pnpm@10.33.0 --filter @workspace/holto exec expo export --platform web --output-dir dist-web && node artifacts/holto/scripts/inject-pwa.mjs artifacts/holto/dist-web
+    staticPublishPath: artifacts/holto/dist-web
+    envVars:
+      # Baked into the web bundle at build time → the app calls this API.
+      - key: EXPO_PUBLIC_DOMAIN
+        value: holto-api.onrender.com
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html

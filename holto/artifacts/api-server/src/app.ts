@@ -45,6 +45,7 @@ const ALLOWED_ORIGIN_PATTERNS: (string | RegExp)[] = [
   "https://holtotravel.com",
   "https://www.holtotravel.com",
   ...ENV_ORIGINS,
+  /^https:\/\/[\w-]+\.onrender\.com$/,         // the HOLTO web (PWA) on Render
   /^https:\/\/[\w-]+-[\w-]+\.replit\.app$/,   // published Replit apps
   /^https:\/\/[\w-]+-[\w-]+-[\w-]+\.replit\.dev$/, // Replit dev preview
   /^https?:\/\/localhost(:\d+)?$/,             // local dev
