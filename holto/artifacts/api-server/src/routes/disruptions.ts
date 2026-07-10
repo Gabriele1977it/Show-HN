@@ -47,6 +47,20 @@ router.post("/disruptions", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
+  // analyzeDisruption always returns full, honest guidance — rights/actions/
+  // checklist are computed deterministically, and the AI only warms the tone
+  // (skipped on any failure). So a single insert always carries complete
+  // guidance, even on poor airport wifi.
+  const analysis = await analyzeDisruption({
+    airline: airline.trim(),
+    flightNumber: flightNumber.trim(),
+    origin: origin.trim(),
+    destination: destination.trim(),
+    scheduledAt: scheduledAt.trim(),
+    disruptionType,
+    details: details?.trim() || "No additional details provided.",
+  });
+
   const [disruption] = await db
     .insert(disruptionsTable)
     .values({
@@ -58,44 +72,16 @@ router.post("/disruptions", requireAuth, async (req, res): Promise<void> => {
       scheduledAt: scheduledAt.trim(),
       disruptionType,
       details: details?.trim() ?? "",
+      rights: analysis.rights,
+      actions: analysis.actions,
+      checklist: analysis.checklist,
+      companionMessage: analysis.companionMessage,
+      proactiveHint: analysis.proactiveHint,
+      proactiveAction: analysis.proactiveAction,
     })
     .returning();
 
-  let analysis = null;
-  try {
-    analysis = await analyzeDisruption({
-      airline: airline.trim(),
-      flightNumber: flightNumber.trim(),
-      origin: origin.trim(),
-      destination: destination.trim(),
-      scheduledAt: scheduledAt.trim(),
-      disruptionType,
-      details: details?.trim() ?? "No additional details provided.",
-    });
-  } catch (e) {
-    req.log.warn({ err: e }, "AI analysis failed, returning bare disruption");
-  }
-
-  if (analysis) {
-    const [updated] = await db
-      .update(disruptionsTable)
-      .set({
-        rights: analysis.rights,
-        actions: analysis.actions,
-        checklist: analysis.checklist,
-        companionMessage: analysis.companionMessage,
-        proactiveHint: analysis.proactiveHint,
-        proactiveAction: analysis.proactiveAction,
-      })
-      .where(eq(disruptionsTable.id, disruption.id))
-      .returning();
-
-    req.log.info({ disruptionId: updated.id }, "Disruption created with AI analysis");
-    res.status(201).json(updated);
-    return;
-  }
-
-  req.log.info({ disruptionId: disruption.id }, "Disruption created without AI analysis");
+  req.log.info({ disruptionId: disruption.id }, "Disruption created with deterministic guidance");
   res.status(201).json(disruption);
 });
 

@@ -1,40 +1,25 @@
 import OpenAI from "openai";
 
 import { logger } from "./logger";
+import {
+  buildDeterministicAnalysis,
+  type ActionItem,
+  type ChecklistItem,
+  type DisruptionInput,
+  type ProactiveAction,
+} from "./rights";
 
-const client = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY ?? "no-key",
-});
+// The AI here is deliberately *tone-only*. The legal content — rights, actions,
+// and checklist — is computed deterministically in `rights.ts` and is never
+// generated or altered by the model. The model only rewrites the companion
+// message and the single proactive action into warmer, situation-specific
+// language, and may add a gentle "HOLTO Living" hint. If the model is
+// unavailable (bad airport wifi, no key, timeout), the deterministic copy is
+// used unchanged — so a stranded traveller always gets full, honest guidance.
 
-export interface DisruptionInput {
-  airline: string;
-  flightNumber: string;
-  origin: string;
-  destination: string;
-  scheduledAt: string;
-  disruptionType: string;
-  details: string;
-}
+const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY ?? "no-key" });
 
-export interface ActionItem {
-  order: number;
-  title: string;
-  description: string;
-}
-
-export interface ChecklistItem {
-  id: string;
-  text: string;
-  done: boolean;
-  category?: string;
-}
-
-export interface ProactiveAction {
-  title: string;
-  description: string;
-  urgency: "high" | "medium" | "low";
-  why: string;
-}
+export type { DisruptionInput, ActionItem, ChecklistItem, ProactiveAction } from "./rights";
 
 export interface CompanionAnalysis {
   rights: string;
@@ -52,102 +37,94 @@ const TYPE_LABEL: Record<string, string> = {
   denied_boarding: "denied boarding",
 };
 
-const TYPE_PROACTIVE_GUIDANCE: Record<string, string> = {
-  delay: `The single most important proactive action for a delayed flight is typically:
-  - If delay < 2 hours: Not much to do yet — monitor and document.
-  - If delay 2-3 hours: Ask airline staff for meal/drink vouchers (EU261 duty of care kicks in at 2hrs for short flights).
-  - If delay 3+ hours: The passenger may be entitled to cash compensation — instruct them to ask the airline for a delay confirmation letter and EU261 form.
-  - If delay 5+ hours: Passenger can choose to NOT travel and get a full refund instead.
-  Focus on what's actionable RIGHT NOW based on the details provided.`,
-  cancellation: `The single most important proactive action for a cancelled flight is:
-  - The passenger has a right to choose: full refund OR rebooking on next available flight.
-  - They should ask the airline for this IN WRITING at the desk or counter.
-  - If the cancellation was less than 14 days' notice and not due to extraordinary circumstances, EU/UK 261 compensation may apply.
-  - Instruct them to get to the airline desk NOW before queues build.`,
-  missed_connection: `The single most important proactive action for a missed connection is:
-  - If the connection was on ONE booking (same ticket/PNR): the airline is responsible and must rebook at no cost.
-  - If the connections were on SEPARATE tickets: the passenger is on their own — instruct them to book next available flight.
-  - They should go to the airline desk or transfer desk IMMEDIATELY — every minute matters.`,
-  denied_boarding: `The single most important proactive action for denied boarding is:
-  - This is likely the clearest EU/UK 261 entitlement — compensation is almost always owed (unless passenger volunteered).
-  - The FIRST thing to do: demand the airline provide written confirmation of the denial AND the EU261 compensation claim form.
-  - Do NOT leave the gate without this paperwork.
-  - Compensation is typically €250-€600 depending on route distance.`,
-};
-
-export async function analyzeDisruption(input: DisruptionInput): Promise<CompanionAnalysis> {
-  const typeLabel = TYPE_LABEL[input.disruptionType] ?? input.disruptionType;
-  const proactiveGuidance = TYPE_PROACTIVE_GUIDANCE[input.disruptionType] ?? "";
-
-  const prompt = `You are HOLTO, a calm, trustworthy travel disruption companion — like a knowledgeable friend who happens to know passenger rights law.
-
-A traveller has just reported a flight problem and needs your help RIGHT NOW. They are likely stressed. Be calm, honest, and clear.
-
-FLIGHT DETAILS:
-- Airline: ${input.airline}
-- Flight: ${input.flightNumber}  
-- Route: ${input.origin} → ${input.destination}
-- Scheduled: ${input.scheduledAt}
-- Problem type: ${typeLabel}
-- Passenger's description: "${input.details}"
-
-TYPE-SPECIFIC GUIDANCE FOR proactiveAction:
-${proactiveGuidance}
-
-Respond ONLY with valid JSON in this exact shape:
-
-{
-  "companionMessage": "One calm, warm, personal sentence. Acknowledge their specific situation (use their flight/route). Reassure them. Sound like a trusted friend, NOT a chatbot. No marketing. Max 2 sentences.",
-  
-  "proactiveAction": {
-    "title": "Concise action title (5-8 words max)",
-    "description": "2-3 sentences of specific, actionable instruction for RIGHT NOW. Use 'you' — talk directly to them. Be specific to their situation.",
-    "urgency": "high|medium|low",
-    "why": "One honest sentence explaining why this is the most important action — cite the regulation or practical reason."
-  },
-  
-  "rights": "2-3 clear paragraphs. Explain their likely rights under UK261/EU261 honestly. State clearly when rights DO and DON'T apply. Mention key thresholds. Note when entitlement is uncertain — never invent certainty. Use plain English. End with 'This is guidance only, not legal advice.'",
-  
-  "actions": [
-    {"order": 1, "title": "Short action title", "description": "Specific instruction."},
-    {"order": 2, ...},
-    ...
-  ],
-  
-  "checklist": [
-    {"id": "item_1", "text": "Specific task", "done": false, "category": "documentation|contact|claim|practical"},
-    ...
-  ],
-  
-  "proactiveHint": null
+interface ToneResult {
+  companionMessage: string;
+  proactiveHint: string | null;
+  proactiveAction: ProactiveAction;
 }
 
-RULES:
-- companionMessage: personal, warm, specific to their flight — NOT generic
-- proactiveAction: THE single most urgent thing to do right now — type-specific, honest
-- rights: honest about uncertainty; mention EU departure/EU carrier requirement for EU261; UK261 for UK flights
-- actions: 4-6 items, ordered by urgency, practical and specific
-- checklist: 5-8 items covering documentation + airline contact + rights claim
-- proactiveHint: ONLY include a gentle, natural mention of HOLTO Living if: (a) this is a cancellation or 5+ hour delay leaving them stranded for many hours, AND (b) it feels genuinely helpful in context. Example: "While you wait, some travellers use time like this to think about longer stays — HOLTO Living has honest guides for that." If not naturally relevant, return null. NEVER be pushy. Never mention it twice.
-- Respond ONLY with valid JSON, no markdown, no code fences`;
+// Ask the model ONLY to rephrase — it is given the already-decided facts and
+// must not change any rights, amounts, or the action itself.
+async function generateTone(
+  input: DisruptionInput,
+  base: { companionMessage: string; proactiveAction: ProactiveAction; rights: string },
+): Promise<ToneResult | null> {
+  const typeLabel = TYPE_LABEL[input.disruptionType] ?? input.disruptionType;
 
-  const response = await client.chat.completions.create({
-    model: "gpt-4o-mini",
-    messages: [{ role: "user", content: prompt }],
-    response_format: { type: "json_object" },
-    temperature: 0.3,
-    max_tokens: 2000,
-  });
+  const prompt = `You are HOLTO, a calm, trustworthy travel-disruption companion — like a knowledgeable friend.
+A traveller has a ${typeLabel} on ${input.airline} ${input.flightNumber} (${input.origin} → ${input.destination}).
+Their note: "${input.details}"
 
-  const content = response.choices[0]?.message?.content;
-  if (!content) {
-    throw new Error("No response from AI");
-  }
+Below is the ALREADY-DECIDED guidance. Your ONLY job is to rephrase the companion message and the proactive action so they sound warm, personal, and specific to this traveller. You MUST NOT change any facts, rights, amounts, thresholds, or the substance of the action. Do not invent entitlements.
+
+CURRENT companion message: "${base.companionMessage}"
+CURRENT proactive action: ${JSON.stringify(base.proactiveAction)}
+
+Respond ONLY with valid JSON, no markdown:
+{
+  "companionMessage": "1-2 warm sentences, personal to their flight. No hype.",
+  "proactiveAction": { "title": "5-8 words", "description": "2-3 sentences, direct 'you' voice, SAME substance as current", "urgency": "${base.proactiveAction.urgency}", "why": "one honest sentence" },
+  "proactiveHint": null
+}
+Set proactiveHint to a single gentle sentence about HOLTO Living ONLY if this is a cancellation or a very long delay leaving them stranded for hours, and it feels genuinely helpful; otherwise null. Never be pushy.`;
 
   try {
-    return JSON.parse(content) as CompanionAnalysis;
+    const response = await client.chat.completions.create(
+      {
+        model: "gpt-4o-mini",
+        messages: [{ role: "user", content: prompt }],
+        response_format: { type: "json_object" },
+        temperature: 0.4,
+        max_tokens: 500,
+      },
+      // Fail fast on poor airport wifi — the deterministic copy is the fallback,
+      // so there's no reason to wait long or retry.
+      { timeout: 8000, maxRetries: 0 },
+    );
+    const content = response.choices[0]?.message?.content;
+    if (!content) return null;
+
+    const parsed = JSON.parse(content) as Partial<ToneResult>;
+    if (!parsed.companionMessage || !parsed.proactiveAction?.title || !parsed.proactiveAction?.description) {
+      return null;
+    }
+    return {
+      companionMessage: parsed.companionMessage,
+      proactiveHint: parsed.proactiveHint ?? null,
+      proactiveAction: {
+        title: parsed.proactiveAction.title,
+        description: parsed.proactiveAction.description,
+        urgency: base.proactiveAction.urgency, // keep the computed urgency, not the model's
+        why: parsed.proactiveAction.why ?? base.proactiveAction.why,
+      },
+    };
   } catch (e) {
-    logger.error({ err: e, content }, "Failed to parse AI response");
-    throw new Error("Failed to parse AI response");
+    logger.warn({ err: e }, "AI tone generation failed — using deterministic copy");
+    return null;
   }
+}
+
+/**
+ * Produce the full companion analysis for a disruption. Rights, actions, and
+ * checklist are always the deterministic, honest computation; the AI only warms
+ * the companion message and proactive action, and is skipped entirely on any
+ * failure. This function never throws.
+ */
+export async function analyzeDisruption(input: DisruptionInput): Promise<CompanionAnalysis> {
+  const base = buildDeterministicAnalysis(input);
+
+  const tone = await generateTone(input, {
+    companionMessage: base.companionMessage,
+    proactiveAction: base.proactiveAction,
+    rights: base.rights,
+  });
+
+  return {
+    rights: base.rights,
+    actions: base.actions,
+    checklist: base.checklist,
+    companionMessage: tone?.companionMessage ?? base.companionMessage,
+    proactiveHint: tone?.proactiveHint ?? null,
+    proactiveAction: tone?.proactiveAction ?? base.proactiveAction,
+  };
 }
