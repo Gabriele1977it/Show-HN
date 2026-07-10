@@ -83,7 +83,6 @@ services:
   - type: web
     name: holto-web
     runtime: static
-    region: frankfurt
     rootDir: holto
     branch: claude/holto-app-improvements-8cefxv
     autoDeploy: true
