@@ -82,8 +82,14 @@ export async function pollOnce(): Promise<{ checked: number; alerts: number }> {
   let checked = 0;
   let alerts = 0;
 
+  // Once a flight has landed or been cancelled its status won't meaningfully
+  // change, so stop polling it — this keeps a forgotten past flight from
+  // draining the AirLabs quota indefinitely.
+  const TERMINAL: ReadonlySet<string> = new Set(["landed", "cancelled"]);
+
   for (const f of flights) {
     try {
+      if (f.lastStatus && TERMINAL.has(f.lastStatus)) continue;
       const raw = await fetchFlightData(f.flightNumber, apiKey);
       if (!raw) continue; // data gap — leave the last known state intact
       const resp = buildFlightResponse(f.flightNumber, raw, null);

@@ -100,7 +100,7 @@ function normaliseScheduleRow(row: Record<string, unknown>): Record<string, unkn
   };
 }
 
-export async function fetchFlightData(
+async function fetchFlightDataUncached(
   flightNumber: string,
   apiKey: string,
 ): Promise<Record<string, unknown> | null> {
@@ -135,6 +135,26 @@ export async function fetchFlightData(
   }
 
   return null;
+}
+
+// Short-lived in-memory cache in front of AirLabs. Flight status doesn't change
+// second-to-second, and AirLabs' free tier is small, so we dedupe repeated
+// lookups (a user opening "My Flight", several users watching the same flight,
+// the monitor tick landing near an on-demand check) within a TTL window.
+const FLIGHT_CACHE_TTL_MS = Number(process.env.FLIGHT_CACHE_TTL_MS) || 5 * 60 * 1000;
+const statusCache = new Map<string, { at: number; data: Record<string, unknown> | null }>();
+
+export async function fetchFlightData(
+  flightNumber: string,
+  apiKey: string,
+): Promise<Record<string, unknown> | null> {
+  const key = flightNumber.trim().toUpperCase();
+  const hit = statusCache.get(key);
+  if (hit && Date.now() - hit.at < FLIGHT_CACHE_TTL_MS) return hit.data;
+
+  const data = await fetchFlightDataUncached(flightNumber, apiKey);
+  statusCache.set(key, { at: Date.now(), data });
+  return data;
 }
 
 export interface FlightResponse {
