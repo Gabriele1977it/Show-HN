@@ -39,10 +39,13 @@ services:
     rootDir: holto
     branch: claude/holto-app-improvements-8cefxv
     autoDeploy: true
-    buildCommand: npm install -g pnpm@10.33.0 && pnpm install --frozen-lockfile --prod=false --filter "@workspace/api-server..." && pnpm --filter @workspace/api-server build
+    # Render's global node dir is read-only, so we can't `npm i -g pnpm` or
+    # `corepack enable`. Use npx (caches pnpm to a writable dir) for build/migrate,
+    # and start the server with plain node so runtime needs no pnpm at all.
+    buildCommand: npx -y pnpm@10.33.0 install --frozen-lockfile --prod=false --filter "@workspace/api-server..." && npx -y pnpm@10.33.0 --filter @workspace/api-server build
     # Create/update the database tables automatically before each release.
-    preDeployCommand: pnpm --filter @workspace/db run push-force
-    startCommand: pnpm --filter @workspace/api-server start
+    preDeployCommand: npx -y pnpm@10.33.0 --filter @workspace/db run push-force
+    startCommand: node --enable-source-maps artifacts/api-server/dist/index.mjs
     healthCheckPath: /api/healthz
     envVars:
       - key: NODE_ENV
