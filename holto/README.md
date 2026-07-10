@@ -111,8 +111,10 @@ the History tab lists every claim with its live status → a claim tracker
 **Non-technical walkthrough: see [`DEPLOY.md`](DEPLOY.md).**
 
 The repo-root `render.yaml` (on this branch) is a Render **Blueprint** that stands
-up three linked services — the web API, the monitoring worker, and a managed
-Postgres database — with almost no manual setup:
+up a web API + a managed Postgres database — with almost no manual setup. To keep
+costs low the flight monitor runs **inside** the API service (`ENABLE_MONITOR=1`)
+rather than as a separate paid worker; a dedicated worker is still available
+(`pnpm --filter @workspace/api-server start:worker`) if you prefer to split it out.
 
 - `DATABASE_URL` is injected from the managed database automatically.
 - `SESSION_SECRET` is auto-generated (`generateValue: true`).

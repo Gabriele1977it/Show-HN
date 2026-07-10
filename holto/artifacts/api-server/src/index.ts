@@ -2,7 +2,30 @@ import { runMigrations } from "stripe-replit-sync";
 
 import app from "./app";
 import { logger } from "./lib/logger";
+import { pollOnce } from "./lib/monitor";
 import { getStripeSync } from "./stripeClient";
+
+// Optional in-process flight monitor. Set ENABLE_MONITOR=1 to run the poll loop
+// inside the web service instead of a separate worker — saves the cost of a
+// dedicated worker instance for small deployments. Never blocks the request path.
+function startInProcessMonitor(): void {
+  const pollMs = Number(process.env.MONITOR_POLL_MS) || 15 * 60 * 1000;
+  logger.info({ pollMs }, "In-process flight monitor enabled");
+  let running = false;
+  const tick = async (): Promise<void> => {
+    if (running) return;
+    running = true;
+    try {
+      await pollOnce();
+    } catch (err) {
+      logger.error({ err }, "In-process monitor tick failed");
+    } finally {
+      running = false;
+    }
+  };
+  void tick();
+  setInterval(() => void tick(), pollMs).unref();
+}
 
 async function initStripe(): Promise<void> {
   const databaseUrl = process.env.DATABASE_URL;
@@ -74,6 +97,9 @@ app.listen(port, (err) => {
     process.exit(1);
   }
   logger.info({ port }, "Server listening");
+  if (process.env.ENABLE_MONITOR === "1" || process.env.ENABLE_MONITOR === "true") {
+    startInProcessMonitor();
+  }
 });
 
 initStripe().catch((err) => logger.error({ err }, "Stripe init uncaught error"));

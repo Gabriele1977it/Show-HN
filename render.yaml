@@ -1,21 +1,25 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # Render Blueprint for HOLTO (this branch: claude/holto-app-improvements-8cefxv).
 #
-# One click sets up three linked services + a database:
-#   • holto-api      the web API (Express)          → your app's backend URL
-#   • holto-monitor  the background flight watcher    (push + email alerts)
-#   • holto-db       a managed PostgreSQL database    (created automatically)
+# Low-cost setup: ONE web service + ONE database (2 billable items). The flight
+# monitor runs INSIDE the web service (ENABLE_MONITOR=1), so there's no separate
+# paid worker.
+#   • holto-api   the web API + in-process flight monitor  → your backend URL
+#   • holto-db    a managed PostgreSQL database             (created automatically)
 #
 # You do NOT need to set any secrets to get it running:
 #   - DATABASE_URL is wired in automatically from holto-db
 #   - SESSION_SECRET is generated automatically
 #   - the database tables are created automatically on first deploy
 #   - OPENAI_API_KEY / AIRLABS_API_KEY are OPTIONAL — the app works without them
-#     (add them later in the dashboard to turn on the AI wording and live flight
-#     tracking). See holto/DEPLOY.md for the plain-English walkthrough.
+#     (add them later to turn on the AI wording and live flight tracking).
+# See holto/DEPLOY.md for the plain-English walkthrough (incl. how to go cheaper).
 #
-# NOTE: EchoDeck (the other MadLabs app) deploys from its own branch; its
-# blueprint lives on that branch. This root file is HOLTO's on this branch.
+# IMPORTANT: the existing "MadLabs" Blueprint tracks the `main` branch and manages
+# the live echodeck + madlabs-hub services. THIS file (on the HOLTO branch) is a
+# HOLTO-only blueprint, added as a SEPARATE Blueprint Instance that tracks this
+# branch — so the two live apps are never touched. Do NOT merge this branch into
+# `main` as-is. See holto/DEPLOY.md.
 # ─────────────────────────────────────────────────────────────────────────────
 
 databases:
@@ -26,7 +30,7 @@ databases:
     postgresMajorVersion: "16"
 
 services:
-  # ── Web API ──────────────────────────────────────────────────────────────
+  # ── Web API (also runs the flight monitor in-process) ─────────────────────
   - type: web
     name: holto-api
     runtime: node
@@ -49,44 +53,23 @@ services:
           property: connectionString
       - key: SESSION_SECRET
         generateValue: true
+      # Run the flight monitor inside this service (no separate worker to pay for).
+      - key: ENABLE_MONITOR
+        value: "1"
+      - key: MONITOR_POLL_MS
+        value: "900000"
       # ── Optional — leave blank to start; add later in the dashboard ──
       - key: OPENAI_API_KEY      # warmer AI wording (deterministic copy is used if blank)
         sync: false
       - key: AIRLABS_API_KEY     # live flight status + monitoring (off if blank)
+        sync: false
+      - key: EXPO_ACCESS_TOKEN   # higher push throughput (optional)
+        sync: false
+      - key: EMAIL_WEBHOOK_URL   # email fallback for alerts (optional)
         sync: false
       - key: PUBLIC_URL          # set to this service's URL after first deploy (web CORS)
         sync: false
       - key: STRIPE_SECRET_KEY   # only if you turn on paid plans
         sync: false
       - key: STRIPE_WEBHOOK_SECRET
-        sync: false
-
-  # ── Background flight-monitoring worker ──────────────────────────────────
-  - type: worker
-    name: holto-monitor
-    runtime: node
-    plan: starter
-    region: frankfurt
-    rootDir: holto
-    branch: claude/holto-app-improvements-8cefxv
-    autoDeploy: true
-    buildCommand: corepack enable && pnpm install --frozen-lockfile --prod=false --filter "@workspace/api-server..." && pnpm --filter @workspace/api-server build
-    startCommand: pnpm --filter @workspace/api-server start:worker
-    envVars:
-      - key: NODE_ENV
-        value: production
-      - key: DATABASE_URL
-        fromDatabase:
-          name: holto-db
-          property: connectionString
-      - key: MONITOR_POLL_MS
-        value: "900000"
-      # ── Optional ──
-      - key: OPENAI_API_KEY
-        sync: false
-      - key: AIRLABS_API_KEY     # required for the worker to actually check flights
-        sync: false
-      - key: EXPO_ACCESS_TOKEN   # higher push throughput (optional)
-        sync: false
-      - key: EMAIL_WEBHOOK_URL   # email fallback for alerts (optional)
         sync: false
