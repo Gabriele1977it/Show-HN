@@ -1,5 +1,6 @@
 import { Icon } from "@/components/Icon";
 import {
+  customFetch,
   getListDisruptionsQueryKey,
   useListDisruptions,
 } from "@workspace/api-client-react";
@@ -57,10 +58,9 @@ export default function HistoryScreen() {
   const handleDelete = useCallback(
     async (id: number) => {
       try {
-        await fetch(`/api/disruptions/${id}`, {
-          method: "DELETE",
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        // customFetch applies the API base URL + auth; a raw relative fetch
+        // would hit the web host, not the API, and silently fail.
+        await customFetch(`/api/disruptions/${id}`, { method: "DELETE" });
         await refetch();
       } catch {
         // silently ignore — user can retry

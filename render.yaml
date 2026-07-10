@@ -66,6 +66,8 @@ services:
         sync: false
       - key: AIRLABS_API_KEY     # live flight status + monitoring (off if blank)
         sync: false
+      - key: ZYLA_API_KEY        # cost-of-living data for the Living tab (off if blank)
+        sync: false
       - key: EXPO_ACCESS_TOKEN   # higher push throughput (optional)
         sync: false
       - key: EMAIL_WEBHOOK_URL   # email fallback for alerts (optional)

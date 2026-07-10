@@ -18,7 +18,7 @@ export function BeyondSection() {
 
       <Pressable
         style={({ pressed }) => [styles.row, { opacity: pressed ? 0.7 : 1 }]}
-        onPress={() => Linking.openURL("https://www.holtotravel.co.uk/guides")}
+        onPress={() => Linking.openURL("https://www.holtotravel.com/guides")}
       >
         <View
           style={[
@@ -41,7 +41,7 @@ export function BeyondSection() {
 
       <Pressable
         style={({ pressed }) => [styles.row, { opacity: pressed ? 0.7 : 1 }]}
-        onPress={() => Linking.openURL("https://www.holtotravel.co.uk/living")}
+        onPress={() => Linking.openURL("https://www.holtotravel.com/living")}
       >
         <View
           style={[

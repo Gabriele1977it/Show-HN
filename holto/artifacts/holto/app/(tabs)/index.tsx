@@ -406,7 +406,7 @@ export default function HomeScreen() {
 
         <Animated.View entering={FadeInDown.delay(240).duration(450)} style={{ marginTop: 16 }}>
           <Pressable
-            onPress={() => Linking.openURL("https://www.holtotravel.co.uk")}
+            onPress={() => Linking.openURL("https://www.holtotravel.com")}
             style={[styles.ecosystemCard, { backgroundColor: colors.midnight, borderRadius: colors.radius }]}
           >
             <View style={styles.ecosystemTop}>
@@ -420,7 +420,7 @@ export default function HomeScreen() {
               Expert guides on relocating, long stays, and living well in Egypt, the Red Sea and beyond. Built for people who want more than a holiday.
             </Text>
             <View style={styles.ecosystemFooter}>
-              <Text style={styles.ecosystemLink}>Visit holtotravel.co.uk</Text>
+              <Text style={styles.ecosystemLink}>Visit holtotravel.com</Text>
               <Icon name="arrow-right" size={13} color="rgba(255,255,255,0.5)" />
             </View>
           </Pressable>

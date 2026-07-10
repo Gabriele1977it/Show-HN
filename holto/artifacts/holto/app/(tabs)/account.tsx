@@ -425,8 +425,8 @@ export default function AccountScreen() {
             <View style={[styles.rowDivider, { backgroundColor: colors.border }]} />
             <SettingsRow
               icon="globe"
-              label="Visit holtotravel.co.uk"
-              onPress={() => void Linking.openURL("https://www.holtotravel.co.uk")}
+              label="Visit holtotravel.com"
+              onPress={() => void Linking.openURL("https://www.holtotravel.com")}
               colors={colors}
             />
             <View style={[styles.rowDivider, { backgroundColor: colors.border }]} />
@@ -622,8 +622,8 @@ export default function AccountScreen() {
           <View style={[styles.rowDivider, { backgroundColor: colors.border }]} />
           <SettingsRow
             icon="globe"
-            label="Visit holtotravel.co.uk"
-            onPress={() => void Linking.openURL("https://www.holtotravel.co.uk")}
+            label="Visit holtotravel.com"
+            onPress={() => void Linking.openURL("https://www.holtotravel.com")}
             colors={colors}
           />
           <View style={[styles.rowDivider, { backgroundColor: colors.border }]} />

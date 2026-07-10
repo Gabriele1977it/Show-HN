@@ -67,7 +67,7 @@ export default function TermsScreen() {
 
       <Section title="1. About HOLTO">
         <Para>
-          HOLTO is a travel companion application that provides real-time flight tracking, disruption assistance, EU261 rights guidance, and relocation information for travellers and expats. HOLTO Travel Ltd is a company registered in England & Wales. Our website is holtotravel.co.uk.
+          HOLTO is a travel companion application that provides real-time flight tracking, disruption assistance, EU261 rights guidance, and relocation information for travellers and expats. HOLTO Travel Ltd is a company registered in England & Wales. Our website is holtotravel.com.
         </Para>
       </Section>
 

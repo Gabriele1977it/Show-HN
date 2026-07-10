@@ -1,7 +1,7 @@
 import { Icon } from "@/components/Icon";
 import { router } from "expo-router";
 import React from "react";
-import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
+import { Alert, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 
 import { useColors } from "@/hooks/useColors";
 
@@ -44,6 +44,15 @@ export function DisruptionCard({ disruption, onDelete }: Props) {
   });
 
   const handleDelete = () => {
+    // React Native's Alert.alert has no working multi-button confirm on web,
+    // so use the browser's confirm there and Alert.alert on native.
+    if (Platform.OS === "web") {
+      const ok =
+        typeof window === "undefined" ||
+        window.confirm("Remove this record?\nThis disruption record will be permanently deleted.");
+      if (ok) onDelete?.(disruption.id);
+      return;
+    }
     Alert.alert(
       "Remove this record?",
       "This disruption record will be permanently deleted.",

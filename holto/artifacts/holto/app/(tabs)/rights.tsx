@@ -1,5 +1,6 @@
 import { Icon } from "@/components/Icon";
 import {
+  customFetch,
   getListDisruptionsQueryKey,
   useListDisruptions,
 } from "@workspace/api-client-react";
@@ -123,26 +124,29 @@ export default function RightsScreen() {
 
   const handleDelete = useCallback(
     async (id: number) => {
+      const remove = async () => {
+        try {
+          // customFetch applies the API base URL + auth (a raw relative fetch
+          // would hit the web host, not the API).
+          await customFetch(`/api/disruptions/${id}`, { method: "DELETE" });
+          await refetch();
+        } catch {
+          // silent
+        }
+      };
+      // Alert.alert has no working confirm on web — use the browser dialog there.
+      if (Platform.OS === "web") {
+        if (typeof window === "undefined" || window.confirm("Delete disruption?\nThis will permanently remove this record.")) {
+          await remove();
+        }
+        return;
+      }
       Alert.alert("Delete disruption?", "This will permanently remove this record.", [
         { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await fetch(`/api/disruptions/${id}`, {
-                method: "DELETE",
-                headers: { Authorization: `Bearer ${token}` },
-              });
-              await refetch();
-            } catch {
-              // silent
-            }
-          },
-        },
+        { text: "Delete", style: "destructive", onPress: () => void remove() },
       ]);
     },
-    [token, refetch],
+    [refetch],
   );
 
   const [depCode, setDepCode] = useState("");
