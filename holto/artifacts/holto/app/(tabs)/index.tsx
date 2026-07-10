@@ -2,8 +2,10 @@ import { Icon } from "@/components/Icon";
 import {
   customFetch,
   getListDisruptionsQueryKey,
+  getListMonitoredFlightsQueryKey,
   useAddMonitoredFlight,
   useListDisruptions,
+  useListMonitoredFlights,
 } from "@workspace/api-client-react";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
@@ -228,6 +230,12 @@ export default function HomeScreen() {
 
   const { mutateAsync: addMonitored } = useAddMonitoredFlight();
 
+  // Surface tracked flights on Home so HOLTO is useful *before* anything goes
+  // wrong — a calm at-a-glance status every trip.
+  const { data: monitored = [] } = useListMonitoredFlights({
+    query: { queryKey: getListMonitoredFlightsQueryKey() },
+  });
+
   const handleDeleteDisruption = useCallback(
     async (id: number) => {
       try {
@@ -378,6 +386,44 @@ export default function HomeScreen() {
               colors={colors}
             />
           </View>
+        )}
+
+        {monitored.length > 0 && (
+          <Animated.View entering={FadeInDown.delay(120).duration(450)} style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Your flights</Text>
+              <Pressable onPress={() => router.push("/(tabs)/monitor")}>
+                <Text style={[styles.seeAll, { color: colors.primary }]}>Manage</Text>
+              </Pressable>
+            </View>
+            {monitored.slice(0, 3).map((m) => {
+              const st = (m.lastStatus as FlightStatus | null) ?? "unknown";
+              const known = !!m.lastStatus;
+              return (
+                <Pressable
+                  key={m.id}
+                  onPress={() => router.push("/(tabs)/monitor")}
+                  style={({ pressed }) => [
+                    styles.flightRow,
+                    { backgroundColor: colors.card, borderColor: colors.border, borderRadius: colors.radius, opacity: pressed ? 0.9 : 1 },
+                  ]}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.flightRowNum, { color: colors.foreground }]}>{m.flightNumber}</Text>
+                    <Text style={[styles.flightRowDest, { color: colors.mutedForeground }]}>→ {m.destination}</Text>
+                  </View>
+                  {known ? (
+                    <View style={[styles.flightRowBadge, { backgroundColor: statusColor(st) + "1A" }]}>
+                      <Text style={[styles.flightRowBadgeText, { color: statusColor(st) }]}>{statusLabel(st)}</Text>
+                    </View>
+                  ) : (
+                    <Text style={[styles.flightRowWatching, { color: colors.mutedForeground }]}>Watching…</Text>
+                  )}
+                  <Icon name="chevron-right" size={16} color={colors.mutedForeground} />
+                </Pressable>
+              );
+            })}
+          </Animated.View>
         )}
 
         {!flightResult && (
@@ -607,6 +653,19 @@ const styles = StyleSheet.create({
   sectionHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 14 },
   sectionTitle: { fontFamily: "Inter_600SemiBold", fontSize: 16 },
   seeAll: { fontFamily: "Inter_500Medium", fontSize: 14 },
+  flightRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    borderWidth: 1,
+    padding: 14,
+    marginBottom: 8,
+  },
+  flightRowNum: { fontFamily: "Inter_600SemiBold", fontSize: 15 },
+  flightRowDest: { fontFamily: "Inter_400Regular", fontSize: 12, marginTop: 2 },
+  flightRowBadge: { borderRadius: 40, paddingHorizontal: 10, paddingVertical: 4 },
+  flightRowBadgeText: { fontFamily: "Inter_600SemiBold", fontSize: 11 },
+  flightRowWatching: { fontFamily: "Inter_500Medium", fontSize: 12 },
   trustNote: { flexDirection: "row", alignItems: "flex-start", gap: 7, padding: 12, marginTop: 20 },
   trustText: { flex: 1, fontFamily: "Inter_400Regular", fontSize: 11, lineHeight: 16 },
   fab: {
