@@ -1,13 +1,16 @@
 import { Icon } from "@/components/Icon";
+import { customFetch } from "@workspace/api-client-react";
 import { useQuery } from "@tanstack/react-query";
 import { LinearGradient } from "expo-linear-gradient";
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
+  Modal,
   Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from "react-native";
 import Animated, { FadeInDown } from "react-native-reanimated";
@@ -52,81 +55,50 @@ const DESTINATIONS = [
   },
 ];
 
-type CostRow = { label: string; uk: string; egypt: string; icon: "home" | "zap" | "shopping-bag" | "coffee" | "activity" | "trending-up" };
-
-const COST_ROWS_BY_CODE: Record<string, CostRow[]> = {
-  HRG: [
-    { label: "1-bed apartment (sea view)", uk: "£1,800", egypt: "£280", icon: "home" },
-    { label: "Utilities (elec, water, internet)", uk: "£280", egypt: "£55", icon: "zap" },
-    { label: "Food shopping (monthly)", uk: "£380", egypt: "£100", icon: "shopping-bag" },
-    { label: "Dining out (per meal)", uk: "£20", egypt: "£3", icon: "coffee" },
-    { label: "Private healthcare visit", uk: "£120", egypt: "£25", icon: "activity" },
-    { label: "Gym membership", uk: "£54", egypt: "£18", icon: "trending-up" },
-  ],
-  SSH: [
-    { label: "1-bed apartment (sea view)", uk: "£1,800", egypt: "£490", icon: "home" },
-    { label: "Utilities (elec, water, internet)", uk: "£280", egypt: "£90", icon: "zap" },
-    { label: "Food shopping (monthly)", uk: "£380", egypt: "£130", icon: "shopping-bag" },
-    { label: "Dining out (per meal)", uk: "£20", egypt: "£5", icon: "coffee" },
-    { label: "Private healthcare visit", uk: "£120", egypt: "£30", icon: "activity" },
-    { label: "Gym membership", uk: "£54", egypt: "£20", icon: "trending-up" },
-  ],
-  CAI: [
-    { label: "1-bed apartment (city area)", uk: "£1,800", egypt: "£180", icon: "home" },
-    { label: "Utilities (elec, water, internet)", uk: "£280", egypt: "£50", icon: "zap" },
-    { label: "Food shopping (monthly)", uk: "£380", egypt: "£90", icon: "shopping-bag" },
-    { label: "Dining out (per meal)", uk: "£20", egypt: "£5", icon: "coffee" },
-    { label: "Private healthcare visit", uk: "£120", egypt: "£35", icon: "activity" },
-    { label: "Gym membership", uk: "£54", egypt: "£15", icon: "trending-up" },
-  ],
-};
-
-const BUDGET_TOTALS_BY_CODE: Record<string, { uk: string; egypt: string; saving: string }> = {
-  HRG: { uk: "~£3,000", egypt: "~£560", saving: "£2,440/month · £29,280/year" },
-  SSH: { uk: "~£3,000", egypt: "~£860", saving: "£2,140/month · £25,680/year" },
-  CAI: { uk: "~£3,000", egypt: "~£430", saving: "£2,570/month · £30,840/year" },
-};
+const ACCENT = "#1C7C8C";
 
 interface BudgetNumbers {
   rent: number;
   utilities: number;
-  food: number;
+  groceries: number;
   dining: number;
-  healthcare: number;
+  transport: number;
   gym: number;
   monthlyTotal: number;
 }
 
-interface LiveCostData {
-  HRG: BudgetNumbers;
-  SSH: BudgetNumbers;
-  CAI: BudgetNumbers;
-  LON: BudgetNumbers;
+interface CityBudget {
+  code: string;
+  label: string;
+  currency: string;
+  budget: BudgetNumbers;
+}
+
+interface CompareResponse {
+  a: CityBudget;
+  b: CityBudget;
   cachedUntil: string;
 }
 
+interface CityOption {
+  code: string;
+  label: string;
+  country: string;
+}
+
+type RowIcon = "home" | "zap" | "shopping-bag" | "coffee" | "trending-up" | "activity";
+
+const COMPARE_ROWS: { key: keyof BudgetNumbers; label: string; icon: RowIcon }[] = [
+  { key: "rent", label: "1-bed apartment", icon: "home" },
+  { key: "utilities", label: "Utilities + broadband", icon: "zap" },
+  { key: "groceries", label: "Groceries (monthly)", icon: "shopping-bag" },
+  { key: "dining", label: "Dining out (per meal)", icon: "coffee" },
+  { key: "transport", label: "Public transport (monthly)", icon: "trending-up" },
+  { key: "gym", label: "Gym membership", icon: "activity" },
+];
+
 function fmtGBP(n: number): string {
-  return `£${n.toLocaleString("en-GB")}`;
-}
-
-function buildCostRows(live: BudgetNumbers, lon: BudgetNumbers, code: string): CostRow[] {
-  return [
-    { label: code === "CAI" ? "1-bed apartment (city area)" : "1-bed apartment (sea view)", uk: fmtGBP(lon.rent), egypt: fmtGBP(live.rent), icon: "home" },
-    { label: "Utilities (elec, water, internet)", uk: fmtGBP(lon.utilities), egypt: fmtGBP(live.utilities), icon: "zap" },
-    { label: "Food shopping (monthly)", uk: fmtGBP(lon.food), egypt: fmtGBP(live.food), icon: "shopping-bag" },
-    { label: "Dining out (per meal)", uk: fmtGBP(lon.dining), egypt: fmtGBP(live.dining), icon: "coffee" },
-    { label: "Private healthcare visit", uk: fmtGBP(lon.healthcare), egypt: fmtGBP(live.healthcare), icon: "activity" },
-    { label: "Gym membership", uk: fmtGBP(lon.gym), egypt: fmtGBP(live.gym), icon: "trending-up" },
-  ];
-}
-
-function buildTotals(live: BudgetNumbers, lon: BudgetNumbers): { uk: string; egypt: string; saving: string } {
-  const saving = lon.monthlyTotal - live.monthlyTotal;
-  return {
-    uk: `~${fmtGBP(lon.monthlyTotal)}`,
-    egypt: `~${fmtGBP(live.monthlyTotal)}`,
-    saving: `${fmtGBP(saving)}/month · ${fmtGBP(saving * 12)}/year`,
-  };
+  return `£${Math.round(n).toLocaleString("en-GB")}`;
 }
 
 const LIFESTYLE_ITEMS = [
@@ -144,38 +116,163 @@ const GUIDES = [
   { title: "Red Sea Property Guide", subtitle: "Buying and renting as a foreigner", icon: "key" as const },
 ];
 
+// ── City picker modal ──────────────────────────────────────────────────────
+function CityPickerModal({
+  visible,
+  title,
+  cities,
+  selectedCode,
+  disabledCode,
+  onSelect,
+  onClose,
+}: {
+  visible: boolean;
+  title: string;
+  cities: CityOption[];
+  selectedCode: string;
+  disabledCode: string;
+  onSelect: (code: string) => void;
+  onClose: () => void;
+}) {
+  const colors = useColors();
+  const [query, setQuery] = useState("");
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return cities;
+    return cities.filter(
+      (c) => c.label.toLowerCase().includes(q) || c.country.toLowerCase().includes(q),
+    );
+  }, [cities, query]);
+
+  return (
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+      <Pressable style={styles.modalBackdrop} onPress={onClose}>
+        <Pressable
+          style={[styles.modalSheet, { backgroundColor: colors.background }]}
+          onPress={(e) => e.stopPropagation()}
+        >
+          <View style={styles.modalHeader}>
+            <Text style={[styles.modalTitle, { color: colors.foreground }]}>{title}</Text>
+            <Pressable onPress={onClose} hitSlop={10}>
+              <Icon name="x" size={22} color={colors.mutedForeground} />
+            </Pressable>
+          </View>
+          <View style={[styles.searchWrap, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <Icon name="search" size={16} color={colors.mutedForeground} />
+            <TextInput
+              value={query}
+              onChangeText={setQuery}
+              placeholder="Search a city or country"
+              placeholderTextColor={colors.mutedForeground}
+              autoFocus
+              style={[styles.searchInput, { color: colors.foreground }]}
+            />
+          </View>
+          <ScrollView style={{ maxHeight: 380 }} keyboardShouldPersistTaps="handled">
+            {filtered.map((c) => {
+              const isSelected = c.code === selectedCode;
+              const isDisabled = c.code === disabledCode;
+              return (
+                <Pressable
+                  key={c.code}
+                  disabled={isDisabled}
+                  onPress={() => {
+                    onSelect(c.code);
+                    onClose();
+                  }}
+                  style={({ pressed }) => [
+                    styles.cityRow,
+                    { borderBottomColor: colors.border, opacity: isDisabled ? 0.35 : pressed ? 0.6 : 1 },
+                  ]}
+                >
+                  <View>
+                    <Text style={[styles.cityRowLabel, { color: colors.foreground }]}>{c.label}</Text>
+                    <Text style={[styles.cityRowCountry, { color: colors.mutedForeground }]}>
+                      {c.country.replace(/\b\w/g, (m) => m.toUpperCase())}
+                    </Text>
+                  </View>
+                  {isSelected && <Icon name="check" size={18} color={ACCENT} />}
+                  {isDisabled && !isSelected && (
+                    <Text style={[styles.cityRowCountry, { color: colors.mutedForeground }]}>in use</Text>
+                  )}
+                </Pressable>
+              );
+            })}
+            {filtered.length === 0 && (
+              <Text style={[styles.cityRowCountry, { color: colors.mutedForeground, padding: 16 }]}>
+                No cities match "{query}".
+              </Text>
+            )}
+          </ScrollView>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
 export default function LivingScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const [selectedDest, setSelectedDest] = useState(0);
 
+  const [aCode, setACode] = useState("LON");
+  const [bCode, setBCode] = useState("HRG");
+  const [pickerOpen, setPickerOpen] = useState<null | "a" | "b">(null);
+
   const topPad = Platform.OS === "web" ? 60 : insets.top;
   const bottomPad = Platform.OS === "web" ? 34 + 60 : insets.bottom + 60;
 
-  const { data: liveData } = useQuery<LiveCostData>({
-    queryKey: ["cost-of-living"],
-    queryFn: async () => {
-      const res = await fetch("/api/cost-of-living");
-      if (!res.ok) throw new Error("fetch failed");
-      return res.json() as Promise<LiveCostData>;
-    },
+  const { data: cities } = useQuery<CityOption[]>({
+    queryKey: ["col-cities"],
+    queryFn: () => customFetch<CityOption[]>("/api/cost-of-living/cities", { responseType: "json" }),
+    staleTime: Infinity,
+    retry: false,
+  });
+
+  const { data: compareRaw, isLoading: comparing } = useQuery<CompareResponse>({
+    queryKey: ["col-compare", aCode, bCode],
+    queryFn: () =>
+      customFetch<CompareResponse>(
+        `/api/cost-of-living?a=${encodeURIComponent(aCode)}&b=${encodeURIComponent(bCode)}`,
+        { responseType: "json" },
+      ),
     staleTime: 24 * 60 * 60 * 1000,
     retry: false,
   });
 
-  const dest = DESTINATIONS[selectedDest];
-  const liveCity = liveData?.[dest.code as "HRG" | "SSH" | "CAI"];
-  const liveLon = liveData?.LON;
+  // Only trust a response that has the shape we expect — guards against a
+  // stray non-JSON 200 (e.g. a proxy/error page) ever crashing the screen.
+  const compare =
+    compareRaw && compareRaw.a?.budget && compareRaw.b?.budget ? compareRaw : null;
+  const compareFailed = !comparing && !compare;
 
-  const costRows =
-    liveCity && liveLon
-      ? buildCostRows(liveCity, liveLon, dest.code)
-      : (COST_ROWS_BY_CODE[dest.code] ?? COST_ROWS_BY_CODE["HRG"]!);
+  const cityList: CityOption[] =
+    cities ?? [
+      { code: "LON", label: "London", country: "united kingdom" },
+      ...DESTINATIONS.map((d) => ({ code: d.code, label: d.name, country: "egypt" })),
+    ];
 
-  const budgetTotals =
-    liveCity && liveLon
-      ? buildTotals(liveCity, liveLon)
-      : (BUDGET_TOTALS_BY_CODE[dest.code] ?? BUDGET_TOTALS_BY_CODE["HRG"]!);
+  const labelFor = (code: string) =>
+    cityList.find((c) => c.code === code)?.label ?? code;
+
+  const dest = DESTINATIONS[selectedDest]!;
+
+  const savingText = useMemo(() => {
+    if (!compare) return null;
+    const diff = compare.a.budget.monthlyTotal - compare.b.budget.monthlyTotal;
+    if (Math.abs(diff) < 20) return { text: "Roughly the same monthly cost", positive: false };
+    if (diff > 0) {
+      return {
+        text: `Living in ${compare.b.label} saves ${fmtGBP(diff)}/month · ${fmtGBP(diff * 12)}/year`,
+        positive: true,
+      };
+    }
+    return {
+      text: `${compare.b.label} costs ${fmtGBP(-diff)}/month more than ${compare.a.label}`,
+      positive: false,
+    };
+  }, [compare]);
 
   return (
     <ScrollView
@@ -194,7 +291,7 @@ export default function LivingScreen() {
           </View>
           <Text style={styles.heroTitle}>Life Beyond{"\n"}the Flight</Text>
           <Text style={styles.heroSubtitle}>
-            Join thousands of Brits who've made the Red Sea their home. Lower costs, better weather, richer life.
+            Compare the real monthly cost of living anywhere, then decide where your money — and your life — goes further.
           </Text>
           <View style={styles.heroStats}>
             <View style={styles.heroStat}>
@@ -216,13 +313,134 @@ export default function LivingScreen() {
       </LinearGradient>
 
       <View style={styles.body}>
+        {/* ── Cost of living comparison ─────────────────────────────────── */}
         <Animated.View entering={FadeInDown.delay(80).duration(400)} style={{ marginTop: 24 }}>
-          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Choose Your Destination</Text>
+          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Compare Cost of Living</Text>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 3 }}>
+            <Text style={[styles.sectionSub, { color: colors.mutedForeground }]}>
+              Pick any two cities · live market data
+            </Text>
+            <View style={{ backgroundColor: "#2ECC7122", borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
+              <Text style={{ fontSize: 10, color: "#2ECC71", fontFamily: "Inter_600SemiBold" }}>LIVE</Text>
+            </View>
+          </View>
+
+          {/* City selectors */}
+          <View style={styles.pickerRow}>
+            <Pressable
+              onPress={() => setPickerOpen("a")}
+              style={[styles.pickerBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
+            >
+              <Text style={[styles.pickerLabel, { color: colors.mutedForeground }]}>City A</Text>
+              <View style={styles.pickerValueRow}>
+                <Text style={[styles.pickerValue, { color: colors.foreground }]} numberOfLines={1}>
+                  {labelFor(aCode)}
+                </Text>
+                <Icon name="chevron-down" size={16} color={colors.mutedForeground} />
+              </View>
+            </Pressable>
+            <View style={[styles.vsBadge, { backgroundColor: colors.muted }]}>
+              <Text style={[styles.vsText, { color: colors.mutedForeground }]}>vs</Text>
+            </View>
+            <Pressable
+              onPress={() => setPickerOpen("b")}
+              style={[styles.pickerBtn, { backgroundColor: colors.card, borderColor: ACCENT }]}
+            >
+              <Text style={[styles.pickerLabel, { color: ACCENT }]}>City B</Text>
+              <View style={styles.pickerValueRow}>
+                <Text style={[styles.pickerValue, { color: colors.foreground }]} numberOfLines={1}>
+                  {labelFor(bCode)}
+                </Text>
+                <Icon name="chevron-down" size={16} color={ACCENT} />
+              </View>
+            </Pressable>
+          </View>
+
+          <View style={[styles.budgetTable, { backgroundColor: colors.card, borderColor: colors.border, borderRadius: colors.radius }]}>
+            <View style={styles.budgetTableHeader}>
+              <Text style={[styles.budgetColHead, { color: colors.mutedForeground, flex: 1 }]}>Category</Text>
+              <Text style={[styles.budgetColHead, { color: colors.mutedForeground, width: 78, textAlign: "right" }]} numberOfLines={1}>
+                {labelFor(aCode)}
+              </Text>
+              <Text style={[styles.budgetColHead, { color: ACCENT, width: 78, textAlign: "right" }]} numberOfLines={1}>
+                {labelFor(bCode)}
+              </Text>
+            </View>
+
+            {compareFailed ? (
+              <View style={{ padding: 20 }}>
+                <Text style={[styles.budgetRowLabel, { color: colors.mutedForeground, textAlign: "center" }]}>
+                  Couldn't load live data for this pair right now. Try another city.
+                </Text>
+              </View>
+            ) : (
+              <>
+                {COMPARE_ROWS.map((row, i) => (
+                  <View
+                    key={row.key}
+                    style={[
+                      styles.budgetRow,
+                      { borderTopColor: colors.border },
+                      i === 0 ? { borderTopWidth: 0 } : { borderTopWidth: 1 },
+                    ]}
+                  >
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flex: 1 }}>
+                      <Icon name={row.icon} size={13} color={colors.mutedForeground} />
+                      <Text style={[styles.budgetRowLabel, { color: colors.foreground }]}>{row.label}</Text>
+                    </View>
+                    <Text style={[styles.budgetRowUk, { color: colors.mutedForeground }]}>
+                      {compare ? fmtGBP(compare.a.budget[row.key]) : comparing ? "…" : "—"}
+                    </Text>
+                    <Text style={[styles.budgetRowEg, { color: ACCENT }]}>
+                      {compare ? fmtGBP(compare.b.budget[row.key]) : comparing ? "…" : "—"}
+                    </Text>
+                  </View>
+                ))}
+                <View style={[styles.budgetTotalRow, { borderTopColor: colors.border, backgroundColor: ACCENT + "12" }]}>
+                  <Text style={[styles.budgetTotalLabel, { color: colors.foreground }]}>Estimated total</Text>
+                  <Text style={[styles.budgetTotalUk, { color: colors.mutedForeground }]}>
+                    {compare ? fmtGBP(compare.a.budget.monthlyTotal) : "—"}
+                  </Text>
+                  <Text style={[styles.budgetTotalEg, { color: ACCENT }]}>
+                    {compare ? fmtGBP(compare.b.budget.monthlyTotal) : "—"}
+                  </Text>
+                </View>
+                {savingText && (
+                  <View style={[styles.savingBanner, { backgroundColor: savingText.positive ? ACCENT : colors.muted }]}>
+                    <Icon
+                      name={savingText.positive ? "trending-down" : "info"}
+                      size={16}
+                      color={savingText.positive ? "#fff" : colors.mutedForeground}
+                    />
+                    <Text
+                      style={[
+                        styles.savingBannerText,
+                        { color: savingText.positive ? "#fff" : colors.mutedForeground },
+                      ]}
+                    >
+                      {savingText.text}
+                    </Text>
+                  </View>
+                )}
+              </>
+            )}
+          </View>
+          <Text style={[styles.disclaimer, { color: colors.mutedForeground }]}>
+            Figures are approximate monthly estimates converted to GBP, for one person.
+          </Text>
+        </Animated.View>
+
+        {/* ── Destination showcase ──────────────────────────────────────── */}
+        <Animated.View entering={FadeInDown.delay(140).duration(400)} style={{ marginTop: 28 }}>
+          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Popular with the HOLTO community</Text>
           <View style={styles.destPicker}>
             {DESTINATIONS.map((d, i) => (
               <Pressable
                 key={d.code}
-                onPress={() => setSelectedDest(i)}
+                onPress={() => {
+                  setSelectedDest(i);
+                  setBCode(d.code);
+                }}
                 style={[
                   styles.destTab,
                   {
@@ -282,53 +500,6 @@ export default function LivingScreen() {
                 ))}
               </View>
             </LinearGradient>
-          </View>
-        </Animated.View>
-
-        <Animated.View entering={FadeInDown.delay(140).duration(400)} style={{ marginTop: 28 }}>
-          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Monthly Budget Comparison</Text>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-            <Text style={[styles.sectionSub, { color: colors.mutedForeground }]}>
-              London vs. {dest.name} · {liveData ? "live Numbeo data" : "2026 data"}
-            </Text>
-            {liveData && (
-              <View style={{ backgroundColor: "#2ECC7122", borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
-                <Text style={{ fontSize: 10, color: "#2ECC71", fontFamily: "Inter_600SemiBold" }}>LIVE</Text>
-              </View>
-            )}
-          </View>
-          <View style={[styles.budgetTable, { backgroundColor: colors.card, borderColor: colors.border, borderRadius: colors.radius }]}>
-            <View style={styles.budgetTableHeader}>
-              <Text style={[styles.budgetColHead, { color: colors.mutedForeground, flex: 1 }]}>Category</Text>
-              <Text style={[styles.budgetColHead, { color: colors.mutedForeground, width: 70, textAlign: "right" }]}>London</Text>
-              <Text style={[styles.budgetColHead, { color: dest.color, width: 70, textAlign: "right" }]}>{dest.code === "CAI" ? "Cairo" : "Egypt"}</Text>
-            </View>
-            {costRows.map((row, i) => (
-              <View
-                key={row.label}
-                style={[
-                  styles.budgetRow,
-                  { borderTopColor: colors.border },
-                  i === 0 ? { borderTopWidth: 0 } : { borderTopWidth: 1 },
-                ]}
-              >
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flex: 1 }}>
-                  <Icon name={row.icon} size={13} color={colors.mutedForeground} />
-                  <Text style={[styles.budgetRowLabel, { color: colors.foreground }]}>{row.label}</Text>
-                </View>
-                <Text style={[styles.budgetRowUk, { color: colors.mutedForeground }]}>{row.uk}</Text>
-                <Text style={[styles.budgetRowEg, { color: dest.color }]}>{row.egypt}</Text>
-              </View>
-            ))}
-            <View style={[styles.budgetTotalRow, { borderTopColor: colors.border, backgroundColor: dest.color + "12" }]}>
-              <Text style={[styles.budgetTotalLabel, { color: colors.foreground }]}>Estimated total</Text>
-              <Text style={[styles.budgetTotalUk, { color: colors.mutedForeground }]}>{budgetTotals.uk}</Text>
-              <Text style={[styles.budgetTotalEg, { color: dest.color }]}>{budgetTotals.egypt}</Text>
-            </View>
-            <View style={[styles.savingBanner, { backgroundColor: dest.color }]}>
-              <Icon name="trending-down" size={16} color="#fff" />
-              <Text style={styles.savingBannerText}>Average saving: {budgetTotals.saving}</Text>
-            </View>
           </View>
         </Animated.View>
 
@@ -392,7 +563,7 @@ export default function LivingScreen() {
             <View style={styles.ctaContent}>
               <Text style={styles.ctaTitle}>Ready to make the move?</Text>
               <Text style={styles.ctaSub}>
-                Join the HOLTO Living community — a private network of Brits building their life in Egypt and beyond.
+                Join the HOLTO Living community — a private network of Brits building their life abroad.
               </Text>
             </View>
             <Pressable
@@ -405,6 +576,25 @@ export default function LivingScreen() {
           </LinearGradient>
         </Animated.View>
       </View>
+
+      <CityPickerModal
+        visible={pickerOpen === "a"}
+        title="Compare from…"
+        cities={cityList}
+        selectedCode={aCode}
+        disabledCode={bCode}
+        onSelect={setACode}
+        onClose={() => setPickerOpen(null)}
+      />
+      <CityPickerModal
+        visible={pickerOpen === "b"}
+        title="Compare with…"
+        cities={cityList}
+        selectedCode={bCode}
+        disabledCode={aCode}
+        onSelect={setBCode}
+        onClose={() => setPickerOpen(null)}
+      />
     </ScrollView>
   );
 }
@@ -428,7 +618,15 @@ const styles = StyleSheet.create({
   heroStatDivider: { width: 1, height: 32, backgroundColor: "rgba(255,255,255,0.2)" },
   body: { paddingHorizontal: 20 },
   sectionTitle: { fontFamily: "Inter_700Bold", fontSize: 20, letterSpacing: -0.2 },
-  sectionSub: { fontFamily: "Inter_400Regular", fontSize: 14, marginTop: 3 },
+  sectionSub: { fontFamily: "Inter_400Regular", fontSize: 14 },
+  pickerRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 16 },
+  pickerBtn: { flex: 1, borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10 },
+  pickerLabel: { fontFamily: "Inter_600SemiBold", fontSize: 10, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 3 },
+  pickerValueRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 6 },
+  pickerValue: { fontFamily: "Inter_600SemiBold", fontSize: 15, flexShrink: 1 },
+  vsBadge: { borderRadius: 14, width: 28, height: 28, alignItems: "center", justifyContent: "center" },
+  vsText: { fontFamily: "Inter_700Bold", fontSize: 11 },
+  disclaimer: { fontFamily: "Inter_400Regular", fontSize: 11, marginTop: 8, lineHeight: 15 },
   destPicker: { flexDirection: "row", gap: 8, marginTop: 14, marginBottom: 14 },
   destTab: {
     flex: 1,
@@ -456,19 +654,19 @@ const styles = StyleSheet.create({
   highlightRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   highlightDot: { width: 6, height: 6, borderRadius: 3 },
   highlightText: { fontFamily: "Inter_400Regular", fontSize: 14 },
-  budgetTable: { borderWidth: 1, overflow: "hidden" },
+  budgetTable: { borderWidth: 1, overflow: "hidden", marginTop: 14 },
   budgetTableHeader: { flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingVertical: 12 },
   budgetColHead: { fontFamily: "Inter_600SemiBold", fontSize: 11, textTransform: "uppercase", letterSpacing: 0.7 },
   budgetRow: { flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingVertical: 12 },
   budgetRowLabel: { fontFamily: "Inter_400Regular", fontSize: 13 },
-  budgetRowUk: { fontFamily: "Inter_500Medium", fontSize: 13, width: 70, textAlign: "right" },
-  budgetRowEg: { fontFamily: "Inter_600SemiBold", fontSize: 13, width: 70, textAlign: "right" },
+  budgetRowUk: { fontFamily: "Inter_500Medium", fontSize: 13, width: 78, textAlign: "right" },
+  budgetRowEg: { fontFamily: "Inter_600SemiBold", fontSize: 13, width: 78, textAlign: "right" },
   budgetTotalRow: { flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingVertical: 14, borderTopWidth: 1 },
   budgetTotalLabel: { fontFamily: "Inter_700Bold", fontSize: 14, flex: 1 },
-  budgetTotalUk: { fontFamily: "Inter_600SemiBold", fontSize: 14, width: 70, textAlign: "right" },
-  budgetTotalEg: { fontFamily: "Inter_700Bold", fontSize: 15, width: 70, textAlign: "right" },
+  budgetTotalUk: { fontFamily: "Inter_600SemiBold", fontSize: 14, width: 78, textAlign: "right" },
+  budgetTotalEg: { fontFamily: "Inter_700Bold", fontSize: 15, width: 78, textAlign: "right" },
   savingBanner: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 14, paddingVertical: 12 },
-  savingBannerText: { fontFamily: "Inter_600SemiBold", fontSize: 13, color: "#fff" },
+  savingBannerText: { fontFamily: "Inter_600SemiBold", fontSize: 13, flex: 1 },
   lifestyleGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 14 },
   lifestyleItem: {
     width: "47%",
@@ -499,4 +697,13 @@ const styles = StyleSheet.create({
     alignSelf: "flex-start",
   },
   ctaBtnText: { fontFamily: "Inter_700Bold", fontSize: 15, color: "#0A2E38" },
+  modalBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
+  modalSheet: { borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, paddingBottom: 34 },
+  modalHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 14 },
+  modalTitle: { fontFamily: "Inter_700Bold", fontSize: 18 },
+  searchWrap: { flexDirection: "row", alignItems: "center", gap: 8, borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, height: 44, marginBottom: 8 },
+  searchInput: { flex: 1, fontFamily: "Inter_400Regular", fontSize: 15, height: "100%" },
+  cityRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 13, borderBottomWidth: 1 },
+  cityRowLabel: { fontFamily: "Inter_600SemiBold", fontSize: 15 },
+  cityRowCountry: { fontFamily: "Inter_400Regular", fontSize: 12, marginTop: 1 },
 });
