@@ -1,37 +1,92 @@
-# Render Blueprint — deploy EchoDeck as a web service with a persistent disk.
-# In Render: New + → Blueprint → connect this repo. A persistent disk needs a
-# paid instance type (Starter+); the free tier has no disk and would lose data.
+# ─────────────────────────────────────────────────────────────────────────────
+# Render Blueprint for HOLTO (this branch: claude/holto-app-improvements-8cefxv).
+#
+# One click sets up three linked services + a database:
+#   • holto-api      the web API (Express)          → your app's backend URL
+#   • holto-monitor  the background flight watcher    (push + email alerts)
+#   • holto-db       a managed PostgreSQL database    (created automatically)
+#
+# You do NOT need to set any secrets to get it running:
+#   - DATABASE_URL is wired in automatically from holto-db
+#   - SESSION_SECRET is generated automatically
+#   - the database tables are created automatically on first deploy
+#   - OPENAI_API_KEY / AIRLABS_API_KEY are OPTIONAL — the app works without them
+#     (add them later in the dashboard to turn on the AI wording and live flight
+#     tracking). See holto/DEPLOY.md for the plain-English walkthrough.
+#
+# NOTE: EchoDeck (the other MadLabs app) deploys from its own branch; its
+# blueprint lives on that branch. This root file is HOLTO's on this branch.
+# ─────────────────────────────────────────────────────────────────────────────
+
+databases:
+  - name: holto-db
+    plan: basic-256mb
+    databaseName: holto
+    region: frankfurt
+    postgresMajorVersion: "16"
+
 services:
+  # ── Web API ──────────────────────────────────────────────────────────────
   - type: web
-    name: echodeck
+    name: holto-api
     runtime: node
     plan: starter
-    branch: claude/saas-media-creators-product-at4st5
-    buildCommand: npm ci
-    startCommand: node server/index.js
-    healthCheckPath: /health
+    region: frankfurt
+    rootDir: holto
+    branch: claude/holto-app-improvements-8cefxv
     autoDeploy: true
-    disk:
-      name: data
-      mountPath: /data
-      sizeGB: 1
+    buildCommand: corepack enable && pnpm install --frozen-lockfile --prod=false --filter "@workspace/api-server..." && pnpm --filter @workspace/api-server build
+    # Create/update the database tables automatically before each release.
+    preDeployCommand: pnpm --filter @workspace/db run push-force
+    startCommand: pnpm --filter @workspace/api-server start
+    healthCheckPath: /api/healthz
     envVars:
       - key: NODE_ENV
         value: production
-      - key: ECHODECK_DB
-        value: /data/echodeck.db
-      - key: ECHODECK_UPLOADS
-        value: /data/uploads
-      # Secrets — set these in the Render dashboard (sync:false = not in git).
-      - key: STRIPE_SECRET_KEY
+      - key: DATABASE_URL
+        fromDatabase:
+          name: holto-db
+          property: connectionString
+      - key: SESSION_SECRET
+        generateValue: true
+      # ── Optional — leave blank to start; add later in the dashboard ──
+      - key: OPENAI_API_KEY      # warmer AI wording (deterministic copy is used if blank)
         sync: false
-      - key: STRIPE_PRICE_PRO
+      - key: AIRLABS_API_KEY     # live flight status + monitoring (off if blank)
         sync: false
-      - key: STRIPE_PRICE_TEAM
+      - key: PUBLIC_URL          # set to this service's URL after first deploy (web CORS)
+        sync: false
+      - key: STRIPE_SECRET_KEY   # only if you turn on paid plans
         sync: false
       - key: STRIPE_WEBHOOK_SECRET
         sync: false
-      - key: OWNER_EMAILS
+
+  # ── Background flight-monitoring worker ──────────────────────────────────
+  - type: worker
+    name: holto-monitor
+    runtime: node
+    plan: starter
+    region: frankfurt
+    rootDir: holto
+    branch: claude/holto-app-improvements-8cefxv
+    autoDeploy: true
+    buildCommand: corepack enable && pnpm install --frozen-lockfile --prod=false --filter "@workspace/api-server..." && pnpm --filter @workspace/api-server build
+    startCommand: pnpm --filter @workspace/api-server start:worker
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: holto-db
+          property: connectionString
+      - key: MONITOR_POLL_MS
+        value: "900000"
+      # ── Optional ──
+      - key: OPENAI_API_KEY
         sync: false
-      - key: EMAIL_WEBHOOK_URL
+      - key: AIRLABS_API_KEY     # required for the worker to actually check flights
+        sync: false
+      - key: EXPO_ACCESS_TOKEN   # higher push throughput (optional)
+        sync: false
+      - key: EMAIL_WEBHOOK_URL   # email fallback for alerts (optional)
         sync: false

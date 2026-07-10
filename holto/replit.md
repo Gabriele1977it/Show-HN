@@ -70,5 +70,6 @@ alert the moment its status changes.
 
 ## Pointers
 
-- See `README.md` for full env + deploy instructions (`holto/render.yaml` Blueprint).
+- See `README.md` and `DEPLOY.md` for deploy instructions (the Render Blueprint is
+  the repo-root `render.yaml` on this branch).
 - See the `pnpm-workspace` skill for workspace structure and package details.

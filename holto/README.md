@@ -108,18 +108,24 @@ the History tab lists every claim with its live status → a claim tracker
 
 ## Deploy
 
-`holto/render.yaml` is a Render **Blueprint** standing up three linked services —
-the web API, the monitoring worker, and a managed Postgres database.
+**Non-technical walkthrough: see [`DEPLOY.md`](DEPLOY.md).**
 
-> Render reads a single `render.yaml` at the repo root, which the MadLabs repo
-> already uses for EchoDeck. Deploy HOLTO as its **own** Render Blueprint pointing
-> at `holto/render.yaml` (New + → Blueprint → set the blueprint path to
-> `holto/render.yaml`), or deploy the two services + database manually. EchoDeck's
-> root blueprint is untouched.
+The repo-root `render.yaml` (on this branch) is a Render **Blueprint** that stands
+up three linked services — the web API, the monitoring worker, and a managed
+Postgres database — with almost no manual setup:
 
-Set the `sync:false` secrets (`OPENAI_API_KEY`, `AIRLABS_API_KEY`, Stripe keys,
-`EXPO_ACCESS_TOKEN`) in the host dashboard (`SESSION_SECRET` is auto-generated).
-The web service health check is `/api/healthz`.
+- `DATABASE_URL` is injected from the managed database automatically.
+- `SESSION_SECRET` is auto-generated (`generateValue: true`).
+- Database tables are created automatically via `preDeployCommand`
+  (`pnpm --filter @workspace/db run push-force`).
+- `OPENAI_API_KEY` and `AIRLABS_API_KEY` are **optional** (`sync:false`, may be
+  left blank): the app boots and serves accounts, deterministic rights, and claims
+  without them; add them to enable AI wording and live flight tracking.
+
+To deploy: Render → **New + → Blueprint** → select this repo and the
+`claude/holto-app-improvements-8cefxv` branch → **Apply**. Health check is
+`/api/healthz`. (Render only auto-detects a blueprint at the repo root, so it lives
+there rather than under `holto/`. EchoDeck's blueprint lives on its own branch.)
 
 For the mobile app, build with EAS (`eas build`) and point it at the deployed API
 base URL (the app configures this via `setBaseUrl` in `lib/api-client-react`).

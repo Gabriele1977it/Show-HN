@@ -281,9 +281,10 @@ repo's Node process:
 - **Worker** — a background poller that checks monitored flights and sends push
   (Expo) + email alerts on material status changes.
 
-See [`holto/README.md`](holto/README.md) for how to run and deploy it (Postgres,
-env vars, and the `holto/render.yaml` Blueprint that stands up the web API,
-worker, and database).
+See [`holto/README.md`](holto/README.md) for how to run and deploy it, and
+[`holto/DEPLOY.md`](holto/DEPLOY.md) for a non-technical walkthrough. On this
+branch the repo-root `render.yaml` is HOLTO's Render Blueprint (web API + worker +
+managed Postgres); EchoDeck's blueprint lives on its own branch.
 
 ## Deploying to production
 
