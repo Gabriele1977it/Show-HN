@@ -1,10 +1,26 @@
-// Minimal service worker: makes HOLTO installable and gives the app shell a
-// stale-while-revalidate cache. It deliberately ignores cross-origin requests,
-// so API calls to the backend are never cached or intercepted.
-const CACHE = "holto-shell-v1";
+// Service worker for the HOLTO PWA.
+//
+// Strategy:
+//  • Navigations / HTML (index.html) → NETWORK-FIRST, so a new deploy shows up
+//    immediately instead of being pinned to a stale cached shell. Falls back to
+//    cache only when offline.
+//  • Hashed static assets (/_expo/.../entry-<hash>.js, images, fonts) → cache-
+//    first, since their URLs change on every build.
+//  • Cross-origin requests (the API) are never touched.
+const CACHE = "holto-shell-v2";
 
 self.addEventListener("install", () => self.skipWaiting());
-self.addEventListener("activate", (event) => event.waitUntil(self.clients.claim()));
+
+self.addEventListener("activate", (event) => {
+  event.waitUntil(
+    (async () => {
+      await self.clients.claim();
+      // Drop caches from older versions so stale shells can't linger.
+      const keys = await caches.keys();
+      await Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)));
+    })(),
+  );
+});
 
 self.addEventListener("fetch", (event) => {
   const req = event.request;
@@ -13,16 +29,35 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return; // leave the API alone
 
-  event.respondWith(
-    caches.open(CACHE).then(async (cache) => {
-      const cached = await cache.match(req);
-      const network = fetch(req)
+  const isNavigation =
+    req.mode === "navigate" || url.pathname === "/" || url.pathname.endsWith(".html");
+
+  if (isNavigation) {
+    // Network-first: always try to fetch the latest shell.
+    event.respondWith(
+      fetch(req)
         .then((res) => {
-          if (res && res.status === 200) cache.put(req, res.clone());
+          const copy = res.clone();
+          caches.open(CACHE).then((c) => c.put(req, copy));
           return res;
         })
-        .catch(() => cached || caches.match("/"));
-      return cached || network;
-    }),
+        .catch(async () => (await caches.match(req)) || (await caches.match("/"))),
+    );
+    return;
+  }
+
+  // Cache-first for immutable, content-hashed assets.
+  event.respondWith(
+    caches.match(req).then(
+      (cached) =>
+        cached ||
+        fetch(req).then((res) => {
+          if (res && res.status === 200) {
+            const copy = res.clone();
+            caches.open(CACHE).then((c) => c.put(req, copy));
+          }
+          return res;
+        }),
+    ),
   );
 });
