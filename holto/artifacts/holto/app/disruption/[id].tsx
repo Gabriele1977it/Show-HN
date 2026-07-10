@@ -31,6 +31,7 @@ import { RetryError } from "@/components/RetryError";
 import { StarterPackCard } from "@/components/StarterPackCard";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
+import { useCreateClaim } from "@/hooks/useClaims";
 import { calcEU261, getAirportDistance, type DisruptionKind } from "@/utils/eu261";
 
 interface ChecklistItem {
@@ -86,9 +87,19 @@ export default function DisruptionResultScreen() {
 
   const { mutateAsync: updateDisruption } = useUpdateDisruption();
   const { mutateAsync: subscribeStarterPack } = useSubscribeStarterPack();
+  const { mutateAsync: createClaim, isPending: claimPending } = useCreateClaim();
 
   const [checklist, setChecklist] = useState<ChecklistItem[]>([]);
   const [letterVisible, setLetterVisible] = useState(false);
+
+  const startClaim = async () => {
+    try {
+      const claim = await createClaim(disruptionId);
+      router.push(`/claim/${claim.id}`);
+    } catch {
+      // stay on page; the button remains available to retry
+    }
+  };
 
   useEffect(() => {
     if (disruption?.checklist) {
@@ -451,6 +462,45 @@ export default function DisruptionResultScreen() {
 
       <Animated.View entering={FadeInDown.delay(450).duration(500)} style={{ gap: 10 }}>
         <Pressable
+          disabled={claimPending}
+          style={({ pressed }) => [
+            styles.shareBtn,
+            styles.letterBtn,
+            {
+              backgroundColor: colors.primary,
+              borderColor: colors.primary,
+              borderRadius: colors.radius,
+              opacity: pressed || claimPending ? 0.85 : 1,
+            },
+          ]}
+          onPress={startClaim}
+        >
+          {claimPending ? (
+            <ActivityIndicator color="#fff" size="small" />
+          ) : (
+            <Icon name="briefcase" size={15} color="#fff" />
+          )}
+          <Text style={styles.letterBtnText}>
+            {claimPending ? "Preparing your claim…" : "Start your compensation claim"}
+          </Text>
+        </Pressable>
+        <Pressable
+          style={({ pressed }) => [
+            styles.shareBtn,
+            {
+              borderColor: colors.border,
+              borderRadius: colors.radius,
+              opacity: pressed ? 0.7 : 1,
+            },
+          ]}
+          onPress={() => setLetterVisible(true)}
+        >
+          <Icon name="file-text" size={15} color={colors.primary} />
+          <Text style={[styles.shareBtnText, { color: colors.primary }]}>
+            Quick complaint letter
+          </Text>
+        </Pressable>
+        <Pressable
           style={({ pressed }) => [
             styles.shareBtn,
             {
@@ -465,22 +515,6 @@ export default function DisruptionResultScreen() {
           <Text style={[styles.shareBtnText, { color: colors.primary }]}>
             Share summary
           </Text>
-        </Pressable>
-        <Pressable
-          style={({ pressed }) => [
-            styles.shareBtn,
-            styles.letterBtn,
-            {
-              backgroundColor: colors.primary,
-              borderColor: colors.primary,
-              borderRadius: colors.radius,
-              opacity: pressed ? 0.85 : 1,
-            },
-          ]}
-          onPress={() => setLetterVisible(true)}
-        >
-          <Icon name="file-text" size={15} color="#fff" />
-          <Text style={styles.letterBtnText}>Generate complaint letter</Text>
         </Pressable>
       </Animated.View>
 

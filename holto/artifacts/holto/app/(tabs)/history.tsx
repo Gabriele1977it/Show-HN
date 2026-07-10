@@ -22,11 +22,24 @@ import { DisruptionCard } from "@/components/DisruptionCard";
 import { RetryError } from "@/components/RetryError";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
+import { useClaims, type ClaimStatus } from "@/hooks/useClaims";
+
+const CLAIM_STATUS_LABEL: Record<ClaimStatus, string> = {
+  draft: "Draft",
+  submitted: "Submitted",
+  airline_responded: "Airline responded",
+  paid: "Paid",
+  rejected: "Rejected",
+  escalated: "Escalated",
+  closed: "Closed",
+};
 
 export default function HistoryScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { token } = useAuth();
+
+  const { data: claims } = useClaims();
 
   const topPad = Platform.OS === "web" ? 60 : insets.top;
   const bottomPad = Platform.OS === "web" ? 34 + 60 : insets.bottom + 60;
@@ -77,9 +90,53 @@ export default function HistoryScreen() {
           History
         </Text>
         <Text style={[styles.pageSubtitle, { color: colors.mutedForeground }]}>
-          Your reported flight disruptions
+          Your reported disruptions and compensation claims
         </Text>
       </Animated.View>
+
+      {claims && claims.length > 0 && (
+        <Animated.View entering={FadeInDown.delay(60).duration(500)} style={styles.claimsSection}>
+          <Text style={[styles.claimsHeading, { color: colors.foreground }]}>Your claims</Text>
+          {claims.map((c) => {
+            const sc =
+              c.status === "paid"
+                ? "#2E7D52"
+                : c.status === "rejected" || c.status === "escalated"
+                  ? colors.destructive
+                  : c.status === "closed"
+                    ? colors.mutedForeground
+                    : colors.primary;
+            return (
+              <Pressable
+                key={c.id}
+                onPress={() => router.push(`/claim/${c.id}`)}
+                style={({ pressed }) => [
+                  styles.claimRow,
+                  {
+                    backgroundColor: colors.card,
+                    borderColor: colors.border,
+                    borderRadius: colors.radius,
+                    opacity: pressed ? 0.85 : 1,
+                  },
+                ]}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.claimFlight, { color: colors.foreground }]}>
+                    {c.airline} {c.flightNumber}
+                  </Text>
+                  <Text style={[styles.claimMeta, { color: colors.mutedForeground }]}>
+                    {c.amount != null ? `Claiming €${c.amount}` : "EU261 / UK261 claim"}
+                  </Text>
+                </View>
+                <View style={[styles.claimBadge, { backgroundColor: sc + "1A" }]}>
+                  <Text style={[styles.claimBadgeText, { color: sc }]}>{CLAIM_STATUS_LABEL[c.status]}</Text>
+                </View>
+                <Icon name="chevron-right" size={18} color={colors.mutedForeground} />
+              </Pressable>
+            );
+          })}
+        </Animated.View>
+      )}
 
       {isLoading && (
         <View style={styles.loadingWrap}>
@@ -178,6 +235,20 @@ const styles = StyleSheet.create({
     fontSize: 13,
     marginBottom: 12,
   },
+  claimsSection: { marginBottom: 24 },
+  claimsHeading: { fontFamily: "Inter_600SemiBold", fontSize: 16, marginBottom: 10 },
+  claimRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    borderWidth: 1,
+    padding: 14,
+    marginBottom: 8,
+  },
+  claimFlight: { fontFamily: "Inter_600SemiBold", fontSize: 15 },
+  claimMeta: { fontFamily: "Inter_400Regular", fontSize: 12, marginTop: 2 },
+  claimBadge: { borderRadius: 40, paddingHorizontal: 10, paddingVertical: 4 },
+  claimBadgeText: { fontFamily: "Inter_600SemiBold", fontSize: 11 },
   emptyWrap: {
     borderWidth: 1,
     borderStyle: "dashed",

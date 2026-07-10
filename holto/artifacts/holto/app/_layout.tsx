@@ -70,6 +70,21 @@ function RootLayoutNav() {
           },
         }}
       />
+      <Stack.Screen
+        name="claim/[id]"
+        options={{
+          headerShown: true,
+          headerTitle: "Your Claim",
+          headerBackTitle: "Back",
+          headerStyle: { backgroundColor: "#F4F7F8" },
+          headerTintColor: "#0A2E38",
+          headerTitleStyle: {
+            fontFamily: "Inter_600SemiBold",
+            fontSize: 17,
+            color: "#0A2E38",
+          },
+        }}
+      />
     </Stack>
   );
 }

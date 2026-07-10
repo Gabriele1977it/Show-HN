@@ -86,6 +86,26 @@ Copy `.env.example` to `.env`. Required unless noted.
    deep-linking the traveller into the Disruption Rescue flow. Alerts are throttled
    per flight so the same state is never announced twice.
 
+## Compensation claims
+
+HOLTO doesn't stop at explaining rights — it helps travellers **recover** the money
+and track the claim to payment:
+
+1. From a disruption, `POST /api/claims` generates an authoritative claim (letter +
+   amount, both computed deterministically via `lib/eu261.ts` — never invented) and
+   stores it. Idempotent per disruption.
+2. The claim moves through a validated lifecycle: `draft → submitted →
+   airline_responded → paid | rejected → escalated → closed`, with an append-only
+   timeline. `PATCH /api/claims/:id` advances status / records a reference or the
+   amount received.
+3. `GET /api/claims/:id/letter` returns the ready-to-send letter plus **factual**
+   escalation guidance (UK CAA / EU National Enforcement Body / ADR / small claims —
+   no fabricated airline contacts).
+
+In the app: the disruption screen has a **Start your compensation claim** action, and
+the History tab lists every claim with its live status → a claim tracker
+(`app/claim/[id].tsx`) that shows the letter, status stepper, timeline, and escalation.
+
 ## Deploy
 
 `holto/render.yaml` is a Render **Blueprint** standing up three linked services —

@@ -53,6 +53,9 @@ alert the moment its status changes.
 - **Disruption Rescue** — guided report of a delay/cancellation → AI companion
   returns likely rights, ordered actions, and a tickable checklist.
 - **Rights / EU261 calculator** — deterministic distance-based compensation tiers.
+- **Compensation claims** — generate an authoritative claim letter from a disruption,
+  then track it through submitted → paid/rejected → escalated, with factual regulator
+  guidance. Server engine in `lib/claim.ts`; tracker at `app/claim/[id].tsx`.
 - **My Flight** — track a flight; the worker watches it and pushes status changes.
 - **Living** — cost-of-living comparison, the entry point to the wider "live abroad"
   journey.
