@@ -10,9 +10,11 @@ export type Tier = "free" | "trip_pass" | "pro";
 // sensibly-named products ("Trip Pass", "Holto Pro") work with no config.
 function buildProductMap(): Record<string, Tier> {
   const map: Record<string, Tier> = {};
-  const tripPass = process.env.STRIPE_PRODUCT_TRIP_PASS?.trim();
-  const proMonthly = process.env.STRIPE_PRODUCT_PRO_MONTHLY?.trim();
-  const proAnnual = process.env.STRIPE_PRODUCT_PRO_ANNUAL?.trim();
+  // Accept either naming — the HOLTO_* names configured in Render, or the
+  // STRIPE_PRODUCT_* names from the blueprint.
+  const tripPass = process.env.HOLTO_TRIP_PASS?.trim() || process.env.STRIPE_PRODUCT_TRIP_PASS?.trim();
+  const proMonthly = process.env.HOLTO_PRO_MONTH?.trim() || process.env.STRIPE_PRODUCT_PRO_MONTHLY?.trim();
+  const proAnnual = process.env.HOLTO_PRO_YEARLY?.trim() || process.env.STRIPE_PRODUCT_PRO_ANNUAL?.trim();
   if (tripPass) map[tripPass] = "trip_pass";
   if (proMonthly) map[proMonthly] = "pro";
   if (proAnnual) map[proAnnual] = "pro";
