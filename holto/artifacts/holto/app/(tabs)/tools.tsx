@@ -11,11 +11,12 @@ interface Tool {
   emoji: string;
   title: string;
   desc: string;
-  route: "/trips" | "/expenses" | "/residency" | "/airport-timing" | "/today" | "/loyalty";
+  route: "/trips" | "/expenses" | "/residency" | "/airport-timing" | "/today" | "/loyalty" | "/import";
 }
 
 const TOOLS: Tool[] = [
   { emoji: "🗓️", title: "Your travel day", desc: "Your next flight, hour by hour — when to leave, your gate, and live status.", route: "/today" },
+  { emoji: "✨", title: "Add from a booking", desc: "Paste or share a confirmation email — HOLTO builds the whole trip for you.", route: "/import" },
   { emoji: "🧳", title: "Trips", desc: "Every flight, hotel and plan in one timeline. Paste a booking to auto-fill it.", route: "/trips" },
   { emoji: "⏱️", title: "Airport timing", desc: "When to leave for the airport, using live traffic and your flight time.", route: "/airport-timing" },
   { emoji: "🏆", title: "Loyalty & points", desc: "Every membership in one wallet, with a nudge before your points expire.", route: "/loyalty" },
