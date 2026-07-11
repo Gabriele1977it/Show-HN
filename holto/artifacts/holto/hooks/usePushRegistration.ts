@@ -78,6 +78,10 @@ export function usePushRegistration(): void {
       const data = response.notification.request.content.data as { type?: string } | undefined;
       if (data?.type === "flight_alert") {
         router.push("/(tabs)/monitor");
+      } else if (data?.type === "residency") {
+        router.push("/residency");
+      } else if (data?.type === "flight_departure") {
+        router.push("/trips");
       }
     });
     return () => sub.remove();

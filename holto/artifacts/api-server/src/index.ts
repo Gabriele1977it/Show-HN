@@ -3,6 +3,7 @@ import { runMigrations } from "stripe-replit-sync";
 import app from "./app";
 import { logger } from "./lib/logger";
 import { pollOnce } from "./lib/monitor";
+import { runProactiveReminders } from "./lib/reminders";
 import { getStripeSync } from "./stripeClient";
 
 // Optional in-process flight monitor. Set ENABLE_MONITOR=1 to run the poll loop
@@ -17,6 +18,8 @@ function startInProcessMonitor(): void {
     running = true;
     try {
       await pollOnce();
+      // Proactive reminders (183-day residency, upcoming flight departures).
+      await runProactiveReminders();
     } catch (err) {
       logger.error({ err }, "In-process monitor tick failed");
     } finally {
