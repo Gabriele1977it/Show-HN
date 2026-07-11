@@ -8,3 +8,4 @@ export * from "./trips";
 export * from "./expenses";
 export * from "./usage";
 export * from "./sent-reminders";
+export * from "./loyalty";

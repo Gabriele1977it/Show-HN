@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { buildResidencyReminders, buildFlightReminder } from "../src/lib/reminder-messages.ts";
+import { buildResidencyReminders, buildFlightReminder, buildLoyaltyReminder } from "../src/lib/reminder-messages.ts";
 import type { CountryResidency } from "../src/lib/residency.ts";
 
 function country(partial: Partial<CountryResidency>): CountryResidency {
@@ -57,4 +57,42 @@ test("flight reminder tolerates a missing time", () => {
   const msg = buildFlightReminder({ id: 7, title: "Some flight", startAt: null });
   assert.equal(msg.refKey, "flight:7");
   assert.doesNotMatch(msg.body, /departs at/);
+});
+
+test("loyalty reminder fires inside the window and names the tier", () => {
+  const msg = buildLoyaltyReminder(
+    { id: 3, programName: "BA Executive Club", tier: "Gold", expiresAt: "2026-08-01" },
+    "2026-07-11",
+  );
+  assert.ok(msg);
+  assert.equal(msg!.refKey, "loyalty:3:2026-08-01");
+  assert.match(msg!.body, /Gold status and points/);
+  assert.match(msg!.body, /in 21 days/);
+});
+
+test("loyalty reminder is silent well before the window", () => {
+  assert.equal(
+    buildLoyaltyReminder({ id: 3, programName: "X", tier: null, expiresAt: "2026-12-01" }, "2026-07-11"),
+    null,
+  );
+});
+
+test("loyalty reminder is silent once expired", () => {
+  assert.equal(
+    buildLoyaltyReminder({ id: 3, programName: "X", tier: null, expiresAt: "2026-07-01" }, "2026-07-11"),
+    null,
+  );
+});
+
+test("loyalty reminder needs an expiry date", () => {
+  assert.equal(
+    buildLoyaltyReminder({ id: 3, programName: "X", tier: null, expiresAt: null }, "2026-07-11"),
+    null,
+  );
+});
+
+test("loyalty reminder says 'today' on the expiry day", () => {
+  const msg = buildLoyaltyReminder({ id: 9, programName: "Hilton Honors", tier: null, expiresAt: "2026-07-11" }, "2026-07-11");
+  assert.ok(msg);
+  assert.match(msg!.body, /expire today/);
 });

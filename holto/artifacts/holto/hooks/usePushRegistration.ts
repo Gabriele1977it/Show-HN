@@ -82,6 +82,8 @@ export function usePushRegistration(): void {
         router.push("/residency");
       } else if (data?.type === "flight_departure") {
         router.push("/trips");
+      } else if (data?.type === "loyalty_expiry") {
+        router.push("/loyalty" as never);
       }
     });
     return () => sub.remove();

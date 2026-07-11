@@ -1,15 +1,16 @@
 import {
   countryStaysTable,
   db,
+  loyaltyProgramsTable,
   pushTokensTable,
   sentRemindersTable,
   tripItemsTable,
   usersTable,
 } from "@workspace/db";
-import { and, eq, gte, lte } from "drizzle-orm";
+import { and, eq, gte, isNotNull, lte } from "drizzle-orm";
 
 import { computeResidency, type Stay } from "./residency";
-import { buildFlightReminder, buildResidencyReminders, type ReminderMsg } from "./reminder-messages";
+import { buildFlightReminder, buildLoyaltyReminder, buildResidencyReminders, type ReminderMsg } from "./reminder-messages";
 import { sendEmail } from "./email";
 import { sendPush } from "./push";
 import { logger } from "./logger";
@@ -101,10 +102,35 @@ async function runFlightReminders(): Promise<number> {
   return sent;
 }
 
+async function runLoyaltyReminders(): Promise<number> {
+  const today = new Date().toISOString().slice(0, 10);
+  const programs = await db
+    .select({
+      id: loyaltyProgramsTable.id,
+      userId: loyaltyProgramsTable.userId,
+      programName: loyaltyProgramsTable.programName,
+      tier: loyaltyProgramsTable.tier,
+      expiresAt: loyaltyProgramsTable.expiresAt,
+    })
+    .from(loyaltyProgramsTable)
+    .where(isNotNull(loyaltyProgramsTable.expiresAt));
+
+  let sent = 0;
+  for (const p of programs) {
+    const msg = buildLoyaltyReminder(p, today);
+    if (msg && (await claim(p.userId, msg))) {
+      await deliver(p.userId, msg);
+      sent += 1;
+    }
+  }
+  return sent;
+}
+
 // One pass over all proactive reminders. Best-effort; never throws.
-export async function runProactiveReminders(): Promise<{ residency: number; flights: number }> {
+export async function runProactiveReminders(): Promise<{ residency: number; flights: number; loyalty: number }> {
   let residency = 0;
   let flights = 0;
+  let loyalty = 0;
   try {
     residency = await runResidencyReminders();
   } catch (err) {
@@ -115,6 +141,11 @@ export async function runProactiveReminders(): Promise<{ residency: number; flig
   } catch (err) {
     logger.error({ err }, "flight reminders failed");
   }
-  if (residency || flights) logger.info({ residency, flights }, "Proactive reminders sent");
-  return { residency, flights };
+  try {
+    loyalty = await runLoyaltyReminders();
+  } catch (err) {
+    logger.error({ err }, "loyalty reminders failed");
+  }
+  if (residency || flights || loyalty) logger.info({ residency, flights, loyalty }, "Proactive reminders sent");
+  return { residency, flights, loyalty };
 }

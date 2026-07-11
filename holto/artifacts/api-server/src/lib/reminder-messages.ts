@@ -37,6 +37,39 @@ export function buildResidencyReminders(countries: CountryResidency[], year: num
   return out;
 }
 
+// How far ahead of a points/status expiry we start nudging.
+export const LOYALTY_WINDOW_DAYS = 45;
+
+// Whole days from `today` (YYYY-MM-DD) to `expiresAt` (YYYY-MM-DD). Negative if
+// the expiry is already in the past. Returns null for unparseable input.
+function daysBetween(today: string, expiresAt: string): number | null {
+  const a = Date.parse(`${today}T00:00:00Z`);
+  const b = Date.parse(`${expiresAt}T00:00:00Z`);
+  if (Number.isNaN(a) || Number.isNaN(b)) return null;
+  return Math.round((b - a) / 86_400_000);
+}
+
+// Reminder for a loyalty programme whose points/status expire soon. Fires once
+// per expiry date, only inside the window and only while still in the future.
+export function buildLoyaltyReminder(
+  program: { id: number; programName: string; tier: string | null; expiresAt: string | null },
+  today: string,
+  windowDays = LOYALTY_WINDOW_DAYS,
+): ReminderMsg | null {
+  if (!program.expiresAt) return null;
+  const days = daysBetween(today, program.expiresAt);
+  if (days == null || days < 0 || days > windowDays) return null;
+  const whose = program.tier ? `${program.tier} status and points` : "points";
+  const when = days === 0 ? "today" : days === 1 ? "tomorrow" : `in ${days} days`;
+  return {
+    refKey: `loyalty:${program.id}:${program.expiresAt}`,
+    kind: "loyalty_expiry",
+    title: "Points expiring soon",
+    body: `Your ${program.programName} ${whose} expire ${when}. A little activity usually resets the clock.`,
+    data: { type: "loyalty_expiry", programId: program.id },
+  };
+}
+
 // Reminder for an upcoming flight timeline item.
 export function buildFlightReminder(item: { id: number; title: string; startAt: Date | string | null }): ReminderMsg {
   let time = "";

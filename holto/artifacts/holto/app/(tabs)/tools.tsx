@@ -11,12 +11,14 @@ interface Tool {
   emoji: string;
   title: string;
   desc: string;
-  route: "/trips" | "/expenses" | "/residency" | "/airport-timing";
+  route: "/trips" | "/expenses" | "/residency" | "/airport-timing" | "/today" | "/loyalty";
 }
 
 const TOOLS: Tool[] = [
+  { emoji: "🗓️", title: "Your travel day", desc: "Your next flight, hour by hour — when to leave, your gate, and live status.", route: "/today" },
   { emoji: "🧳", title: "Trips", desc: "Every flight, hotel and plan in one timeline. Paste a booking to auto-fill it.", route: "/trips" },
   { emoji: "⏱️", title: "Airport timing", desc: "When to leave for the airport, using live traffic and your flight time.", route: "/airport-timing" },
+  { emoji: "🏆", title: "Loyalty & points", desc: "Every membership in one wallet, with a nudge before your points expire.", route: "/loyalty" },
   { emoji: "🧾", title: "Expenses", desc: "Log spend in any currency, total in GBP, export a report in one tap.", route: "/expenses" },
   { emoji: "🌍", title: "Residency & tax days", desc: "Count your days per country and stay ahead of the 183-day rule.", route: "/residency" },
 ];
@@ -24,7 +26,7 @@ const TOOLS: Tool[] = [
 const SOON: { emoji: string; title: string }[] = [
   { emoji: "📶", title: "eSIM data plans" },
   { emoji: "🛂", title: "Visa & entry checker" },
-  { emoji: "🏆", title: "Loyalty & points" },
+  { emoji: "💱", title: "Live currency rates" },
 ];
 
 export default function ToolsScreen() {
@@ -50,7 +52,7 @@ export default function ToolsScreen() {
         {TOOLS.map((t, i) => (
           <Animated.View key={t.route} entering={FadeInDown.delay(60 + i * 50).duration(400)}>
             <Pressable
-              onPress={() => router.push(t.route)}
+              onPress={() => router.push(t.route as never)}
               style={({ pressed }) => [
                 styles.card,
                 colors.shadow,
