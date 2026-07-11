@@ -125,8 +125,8 @@ export default function RegisterScreen() {
             style={[
               styles.errorBox,
               {
-                backgroundColor: "#FDF0F0",
-                borderColor: "#EAACAC",
+                backgroundColor: colors.destructive + "18",
+                borderColor: colors.destructive + "55",
                 borderRadius: colors.radius / 2,
               },
             ]}

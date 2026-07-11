@@ -16,6 +16,7 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AuthProvider } from "@/context/AuthContext";
 import { WizardProvider } from "@/context/WizardContext";
 import { usePushRegistration } from "@/hooks/usePushRegistration";
+import { useColors } from "@/hooks/useColors";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -31,6 +32,20 @@ const queryClient = new QueryClient({
 function RootLayoutNav() {
   // Register for push + handle notification taps once the user is signed in.
   usePushRegistration();
+  const colors = useColors();
+
+  // Theme-aware header styling shared by every stack screen with a header.
+  const headerOptions = {
+    headerBackTitle: "Back",
+    headerShadowVisible: false,
+    headerStyle: { backgroundColor: colors.background },
+    headerTintColor: colors.foreground,
+    headerTitleStyle: {
+      fontFamily: "Inter_600SemiBold",
+      fontSize: 17,
+      color: colors.foreground,
+    },
+  } as const;
 
   return (
     <Stack>
@@ -38,53 +53,19 @@ function RootLayoutNav() {
       <Stack.Screen name="(auth)" options={{ headerShown: false }} />
       <Stack.Screen name="onboarding" options={{ headerShown: false, gestureEnabled: false }} />
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-      <Stack.Screen name="legal/terms" options={{ headerShown: true, headerTitle: "Terms of Service", headerBackTitle: "Back", headerStyle: { backgroundColor: "#F4F7F8" }, headerTintColor: "#0A2E38", headerTitleStyle: { fontFamily: "Inter_600SemiBold", fontSize: 17, color: "#0A2E38" } }} />
-      <Stack.Screen name="legal/privacy" options={{ headerShown: true, headerTitle: "Privacy Policy", headerBackTitle: "Back", headerStyle: { backgroundColor: "#F4F7F8" }, headerTintColor: "#0A2E38", headerTitleStyle: { fontFamily: "Inter_600SemiBold", fontSize: 17, color: "#0A2E38" } }} />
+      <Stack.Screen name="legal/terms" options={{ headerShown: true, headerTitle: "Terms of Service", ...headerOptions }} />
+      <Stack.Screen name="legal/privacy" options={{ headerShown: true, headerTitle: "Privacy Policy", ...headerOptions }} />
       <Stack.Screen
         name="disruption/wizard"
-        options={{
-          headerShown: true,
-          headerTitle: "Report a Problem",
-          headerBackTitle: "Back",
-          headerStyle: { backgroundColor: "#F4F7F8" },
-          headerTintColor: "#0A2E38",
-          headerTitleStyle: {
-            fontFamily: "Inter_600SemiBold",
-            fontSize: 17,
-            color: "#0A2E38",
-          },
-          presentation: "modal",
-        }}
+        options={{ headerShown: true, headerTitle: "Report a Problem", presentation: "modal", ...headerOptions }}
       />
       <Stack.Screen
         name="disruption/[id]"
-        options={{
-          headerShown: true,
-          headerTitle: "Your Rights",
-          headerBackTitle: "Back",
-          headerStyle: { backgroundColor: "#F4F7F8" },
-          headerTintColor: "#0A2E38",
-          headerTitleStyle: {
-            fontFamily: "Inter_600SemiBold",
-            fontSize: 17,
-            color: "#0A2E38",
-          },
-        }}
+        options={{ headerShown: true, headerTitle: "Your Rights", ...headerOptions }}
       />
       <Stack.Screen
         name="claim/[id]"
-        options={{
-          headerShown: true,
-          headerTitle: "Your Claim",
-          headerBackTitle: "Back",
-          headerStyle: { backgroundColor: "#F4F7F8" },
-          headerTintColor: "#0A2E38",
-          headerTitleStyle: {
-            fontFamily: "Inter_600SemiBold",
-            fontSize: 17,
-            color: "#0A2E38",
-          },
-        }}
+        options={{ headerShown: true, headerTitle: "Your Claim", ...headerOptions }}
       />
     </Stack>
   );

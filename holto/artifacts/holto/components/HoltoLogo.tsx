@@ -1,5 +1,5 @@
 import React from "react";
-import { Image, StyleSheet, Text, View } from "react-native";
+import { Image, StyleSheet, Text, useColorScheme, View } from "react-native";
 
 import { useColors } from "@/hooks/useColors";
 
@@ -18,9 +18,11 @@ const SIZES = {
 
 export function HoltoLogo({ size = "medium", inverted = false }: Props) {
   const colors = useColors();
+  const scheme = useColorScheme();
   const s = SIZES[size];
 
-  if (inverted) {
+  // The logo PNG is dark; on dark backgrounds render the light wordmark instead.
+  if (inverted || scheme === "dark") {
     return (
       <View style={styles.container}>
         <Text
