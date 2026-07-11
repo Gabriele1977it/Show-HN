@@ -27,6 +27,16 @@ import { TIER_DISPLAY, PRODUCT_IDS, type Tier } from "@/constants/tiers";
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
+// Cross-platform notice. Alert.alert isn't interactive on web, so use the
+// browser dialog there.
+function notify(title: string, message?: string): void {
+  if (Platform.OS === "web") {
+    if (typeof window !== "undefined") window.alert(message ? `${title}\n\n${message}` : title);
+    return;
+  }
+  Alert.alert(title, message);
+}
+
 function getInitials(name: string): string {
   return name
     .split(" ")
@@ -294,14 +304,29 @@ export default function AccountScreen() {
         body: JSON.stringify({ priceId }),
       });
       if (!data.url) throw new Error("No checkout URL");
-      await Linking.openURL(data.url);
+      openUrl(data.url);
       refresh();
     } catch (err: unknown) {
       const body = (err as { data?: { error?: string } }).data;
-      Alert.alert("Unable to start checkout", body?.error ?? "Something went wrong. Please try again.");
+      notify("Unable to start checkout", body?.error ?? "Something went wrong. Please try again.");
     } finally {
       setLoadingPriceId(null);
     }
+  };
+
+  // On web, Alert.alert action sheets don't work — go straight to the right
+  // place: free users see the plans, paid users open the Stripe billing portal
+  // (where they can downgrade or cancel).
+  const handleManage = () => {
+    if (Platform.OS === "web") {
+      if (currentTier === "free") {
+        router.push("/(tabs)/plans" as never);
+      } else {
+        void handlePortal();
+      }
+      return;
+    }
+    openManageSheet();
   };
 
   const openManageSheet = () => {
@@ -338,21 +363,17 @@ export default function AccountScreen() {
         method: "POST",
       });
       if (!data.url) throw new Error("No portal URL");
-      await Linking.openURL(data.url);
+      openUrl(data.url);
       refresh();
     } catch (err: unknown) {
       const body = (err as { data?: { error?: string } }).data;
       const message = body?.error ?? "Something went wrong.";
-      Alert.alert(
-        "Billing Portal",
-        message.includes("customer")
-          ? "No billing record found. Please purchase a plan first to access the billing portal."
-          : message,
-        [
-          { text: "View Plans", onPress: () => router.push("/(tabs)/plans" as never) },
-          { text: "OK", style: "cancel" },
-        ],
-      );
+      if (message.toLowerCase().includes("customer")) {
+        // No billing record yet — send them to the plans instead.
+        router.push("/(tabs)/plans" as never);
+      } else {
+        notify("Billing Portal", message);
+      }
     } finally {
       setLoadingPriceId(null);
     }
@@ -373,6 +394,10 @@ export default function AccountScreen() {
   };
 
   const handleSignOut = () => {
+    if (Platform.OS === "web") {
+      if (typeof window === "undefined" || window.confirm("Sign out of HOLTO?")) void logout();
+      return;
+    }
     Alert.alert("Sign out", "Are you sure you want to sign out?", [
       { text: "Cancel", style: "cancel" },
       { text: "Sign out", style: "destructive", onPress: () => void logout() },
@@ -533,7 +558,7 @@ export default function AccountScreen() {
             </View>
             {currentTier !== "free" && (
               <Pressable
-                onPress={openManageSheet}
+                onPress={handleManage}
                 disabled={!!loadingPriceId}
                 style={({ pressed }) => [
                   styles.manageBtn,

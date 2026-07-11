@@ -311,7 +311,7 @@ export default function HomeScreen() {
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.header}>
-          <HoltoLogo size="medium" />
+          <HoltoLogo size="large" />
           <Pressable
             onPress={logout}
             style={({ pressed }) => [styles.logoutBtn, { opacity: pressed ? 0.55 : 1 }]}

@@ -59,7 +59,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="monitor"
         options={{
-          title: "My Flight",
+          title: "Flight",
           tabBarIcon: ({ color }) => (
             <TabSvgIcon name="airplane" color={color} />
           ),
@@ -93,6 +93,15 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="plans"
+        options={{
+          title: "Plans",
+          tabBarIcon: ({ color }) => (
+            <TabSvgIcon name="star" color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="account"
         options={{
           title: "Account",
@@ -103,10 +112,6 @@ export default function TabLayout() {
       />
       <Tabs.Screen
         name="history"
-        options={{ href: null }}
-      />
-      <Tabs.Screen
-        name="plans"
         options={{ href: null }}
       />
     </Tabs>
