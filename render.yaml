@@ -84,6 +84,16 @@ services:
         sync: false
       - key: STRIPE_WEBHOOK_SECRET
         sync: false
+      # Map your Stripe products to tiers (optional — tiers are also inferred
+      # from the product name, so well-named products work without these).
+      - key: STRIPE_PRODUCT_TRIP_PASS   # prod_… id of your Trip Pass product
+        sync: false
+      - key: STRIPE_PRODUCT_PRO_MONTHLY # prod_… id of your Pro monthly product
+        sync: false
+      - key: STRIPE_PRODUCT_PRO_ANNUAL  # prod_… id of your Pro annual product
+        sync: false
+      - key: OWNER_EMAILS        # comma-separated emails that always get Pro (optional)
+        sync: false
 
   # ── HOLTO web (installable PWA) ───────────────────────────────────────────
   # Static export of the Expo app, pointed at the API. Free static hosting.
