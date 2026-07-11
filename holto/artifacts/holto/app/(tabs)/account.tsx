@@ -608,6 +608,18 @@ export default function AccountScreen() {
         </Animated.View>
       )}
 
+      {/* ── Tools ── */}
+      <Animated.View entering={FadeInDown.delay(220).duration(400)}>
+        <Text style={[styles.sectionTitle, { color: colors.mutedForeground }]}>TOOLS</Text>
+        <View style={[styles.settingsCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <SettingsRow icon="map" label="Your trips" onPress={() => router.push("/trips")} colors={colors} />
+          <View style={[styles.rowDivider, { backgroundColor: colors.border }]} />
+          <SettingsRow icon="file-text" label="Expenses" onPress={() => router.push("/expenses")} colors={colors} />
+          <View style={[styles.rowDivider, { backgroundColor: colors.border }]} />
+          <SettingsRow icon="globe" label="Residency & tax days" onPress={() => router.push("/residency")} colors={colors} />
+        </View>
+      </Animated.View>
+
       {/* ── Settings ── */}
       <Animated.View entering={FadeInDown.delay(240).duration(400)}>
         <Text style={[styles.sectionTitle, { color: colors.mutedForeground }]}>

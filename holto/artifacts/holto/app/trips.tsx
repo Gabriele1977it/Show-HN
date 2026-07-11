@@ -350,7 +350,10 @@ export default function TripsScreen() {
         </Pressable>
       </Modal>
 
-      <Pressable onPress={() => router.push("/residency")} style={{ marginTop: 22 }}>
+      <Pressable onPress={() => router.push("/expenses")} style={{ marginTop: 22 }}>
+        <Text style={[styles.footLink, { color: colors.mutedForeground }]}>Logging spend on this trip? Open Expenses →</Text>
+      </Pressable>
+      <Pressable onPress={() => router.push("/residency")} style={{ marginTop: 12 }}>
         <Text style={[styles.footLink, { color: colors.mutedForeground }]}>Tracking days per country? Open Residency & Tax Days →</Text>
       </Pressable>
     </ScrollView>
