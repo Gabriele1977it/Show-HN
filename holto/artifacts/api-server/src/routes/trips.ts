@@ -3,6 +3,7 @@ import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { Router, type IRouter } from "express";
 
 import { requireAuth } from "../middlewares/auth";
+import { parseTripFromText } from "../lib/trip-parse";
 
 const router: IRouter = Router();
 
@@ -77,6 +78,49 @@ router.post("/trips", requireAuth, async (req, res): Promise<void> => {
     .returning();
 
   res.status(201).json({ ...trip, items: [] });
+});
+
+// Paste a booking confirmation → parse it into a trip with items (uses the
+// existing OpenAI key; no third-party email service needed).
+router.post("/trips/parse", requireAuth, async (req, res): Promise<void> => {
+  const { text } = req.body as { text?: string };
+  if (!text?.trim() || text.trim().length < 15) {
+    res.status(400).json({ error: "Paste the full booking confirmation text." });
+    return;
+  }
+
+  const parsed = await parseTripFromText(text);
+  if (!parsed) {
+    res.status(422).json({ error: "Couldn't find a booking in that text. Try adding it manually." });
+    return;
+  }
+
+  const [trip] = await db
+    .insert(tripsTable)
+    .values({
+      userId: req.auth!.userId,
+      title: parsed.title,
+      destination: parsed.destination,
+      startDate: parsed.startDate,
+      endDate: parsed.endDate,
+    })
+    .returning();
+
+  const itemsToInsert = parsed.items.map((it) => ({
+    tripId: trip.id,
+    userId: req.auth!.userId,
+    type: it.type,
+    title: it.title,
+    startAt: it.startAt ? new Date(it.startAt) : null,
+    endAt: it.endAt ? new Date(it.endAt) : null,
+    location: it.location,
+    reference: it.reference,
+  }));
+  const items = itemsToInsert.length
+    ? await db.insert(tripItemsTable).values(itemsToInsert).returning()
+    : [];
+
+  res.status(201).json({ ...trip, items });
 });
 
 router.delete("/trips/:id", requireAuth, async (req, res): Promise<void> => {

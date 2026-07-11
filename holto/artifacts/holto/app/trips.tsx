@@ -80,6 +80,10 @@ export default function TripsScreen() {
   const [tEnd, setTEnd] = useState("");
   const [tripError, setTripError] = useState<string | null>(null);
 
+  const [showPaste, setShowPaste] = useState(false);
+  const [pasteText, setPasteText] = useState("");
+  const [pasteError, setPasteError] = useState<string | null>(null);
+
   const [itemFor, setItemFor] = useState<number | null>(null);
   const [iType, setIType] = useState<ItemType>("flight");
   const [iTitle, setITitle] = useState("");
@@ -117,6 +121,20 @@ export default function TripsScreen() {
   const deleteTrip = useMutation({
     mutationFn: (id: number) => customFetch(`/api/trips/${id}`, { method: "DELETE" }),
     onSuccess: () => void invalidate(),
+  });
+
+  const parseTrip = useMutation({
+    mutationFn: (text: string) => customFetch("/api/trips/parse", { method: "POST", body: JSON.stringify({ text }) }),
+    onSuccess: () => {
+      setShowPaste(false);
+      setPasteText("");
+      setPasteError(null);
+      void invalidate();
+    },
+    onError: (err: unknown) => {
+      const msg = (err as { data?: { error?: string } }).data?.error;
+      setPasteError(msg ?? "Couldn't read that booking. Try adding it manually.");
+    },
   });
 
   const addItem = useMutation({
@@ -183,13 +201,21 @@ export default function TripsScreen() {
       {/* New trip */}
       <Animated.View entering={FadeInDown.delay(60).duration(400)} style={{ marginTop: 16 }}>
         {!showNewTrip ? (
-          <Pressable
-            onPress={() => setShowNewTrip(true)}
-            style={({ pressed }) => [styles.newBtn, { borderColor: colors.primary, opacity: pressed ? 0.8 : 1 }]}
-          >
-            <Icon name="arrow-right" size={16} color={colors.primary} />
-            <Text style={[styles.newBtnText, { color: colors.primary }]}>New trip</Text>
-          </Pressable>
+          <View style={{ gap: 10 }}>
+            <Pressable
+              onPress={() => { setPasteError(null); setShowPaste(true); }}
+              style={({ pressed }) => [styles.pasteBtn, { backgroundColor: colors.primary, opacity: pressed ? 0.88 : 1 }]}
+            >
+              <Text style={{ fontSize: 15 }}>✨</Text>
+              <Text style={[styles.pasteBtnText, { color: colors.primaryForeground }]}>Paste a booking confirmation</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => setShowNewTrip(true)}
+              style={({ pressed }) => [styles.newBtn, { borderColor: colors.border, opacity: pressed ? 0.8 : 1 }]}
+            >
+              <Text style={[styles.newBtnText, { color: colors.mutedForeground }]}>or add a trip manually</Text>
+            </Pressable>
+          </View>
         ) : (
           <View style={[styles.formCard, { backgroundColor: colors.card, borderColor: colors.border, borderRadius: colors.radius }]}>
             <TextInput value={tTitle} onChangeText={setTTitle} placeholder="Trip name (e.g. Lisbon sprint)" placeholderTextColor={colors.mutedForeground} style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.foreground }]} />
@@ -261,6 +287,38 @@ export default function TripsScreen() {
         </Animated.View>
       ))}
 
+      {/* Paste-a-booking modal */}
+      <Modal visible={showPaste} animationType="slide" transparent onRequestClose={() => setShowPaste(false)}>
+        <Pressable style={styles.backdrop} onPress={() => setShowPaste(false)}>
+          <Pressable style={[styles.sheet, { backgroundColor: colors.background }]} onPress={(e) => e.stopPropagation()}>
+            <View style={styles.sheetHeader}>
+              <Text style={[styles.sheetTitle, { color: colors.foreground }]}>Paste a booking</Text>
+              <Pressable onPress={() => setShowPaste(false)} hitSlop={10}><Icon name="x" size={22} color={colors.mutedForeground} /></Pressable>
+            </View>
+            <Text style={[styles.pasteHint, { color: colors.mutedForeground }]}>
+              Paste the text of a flight, hotel or train confirmation and HOLTO will build the trip for you.
+            </Text>
+            <TextInput
+              value={pasteText}
+              onChangeText={setPasteText}
+              placeholder="Paste your confirmation email here…"
+              placeholderTextColor={colors.mutedForeground}
+              multiline
+              textAlignVertical="top"
+              style={[styles.pasteArea, { backgroundColor: colors.card, borderColor: colors.border, color: colors.foreground }]}
+            />
+            {pasteError && <Text style={[styles.err, { color: colors.destructive }]}>{pasteError}</Text>}
+            <Pressable
+              onPress={() => { if (pasteText.trim().length >= 15) { setPasteError(null); parseTrip.mutate(pasteText); } else setPasteError("Paste a bit more of the confirmation."); }}
+              disabled={parseTrip.isPending}
+              style={[styles.solidBtn, { backgroundColor: colors.primary, marginTop: 14, opacity: parseTrip.isPending ? 0.8 : 1 }]}
+            >
+              {parseTrip.isPending ? <ActivityIndicator color={colors.primaryForeground} size="small" /> : <Text style={[styles.solidBtnText, { color: colors.primaryForeground }]}>Build my trip</Text>}
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
       {/* Add-item modal */}
       <Modal visible={itemFor != null} animationType="slide" transparent onRequestClose={closeItemForm}>
         <Pressable style={styles.backdrop} onPress={closeItemForm}>
@@ -302,8 +360,12 @@ export default function TripsScreen() {
 const styles = StyleSheet.create({
   h1: { fontFamily: "Inter_700Bold", fontSize: 26, letterSpacing: -0.3 },
   sub: { fontFamily: "Inter_400Regular", fontSize: 14, lineHeight: 21, marginTop: 6 },
-  newBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderWidth: 1.5, borderRadius: 12, height: 50, borderStyle: "dashed" },
-  newBtnText: { fontFamily: "Inter_600SemiBold", fontSize: 15 },
+  pasteBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderRadius: 12, height: 52 },
+  pasteBtnText: { fontFamily: "Inter_600SemiBold", fontSize: 15 },
+  pasteHint: { fontFamily: "Inter_400Regular", fontSize: 13, lineHeight: 19, marginBottom: 12 },
+  pasteArea: { borderWidth: 1, borderRadius: 12, padding: 14, minHeight: 160, fontFamily: "Inter_400Regular", fontSize: 14, lineHeight: 20 },
+  newBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderWidth: 1, borderRadius: 12, height: 44 },
+  newBtnText: { fontFamily: "Inter_500Medium", fontSize: 14 },
   formCard: { borderWidth: 1, padding: 16 },
   input: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, height: 46, fontFamily: "Inter_500Medium", fontSize: 15, justifyContent: "center" },
   err: { fontFamily: "Inter_500Medium", fontSize: 13, marginTop: 10 },
