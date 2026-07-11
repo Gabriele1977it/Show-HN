@@ -12,6 +12,11 @@ import React, {
 const TOKEN_KEY = "holto_auth_token";
 const USER_KEY = "holto_auth_user";
 
+// Point the API client at the server at module load — before any screen's
+// queries can fire — so a cold tab refresh never sends a relative /api call to
+// the static web host (which would return HTML and crash list screens).
+setBaseUrl(`https://${process.env.EXPO_PUBLIC_DOMAIN}`);
+
 export interface AuthUser {
   id: number;
   email: string;

@@ -248,7 +248,11 @@ export default function HomeScreen() {
     [refetch],
   );
 
-  const recent = disruptions?.slice(0, 3) ?? [];
+  // Coerce to arrays: a non-array payload (e.g. a stray HTML 200 before the
+  // API base URL is set) must never crash Home with `.map`/`.slice`.
+  const disruptionList = Array.isArray(disruptions) ? disruptions : [];
+  const monitoredList = Array.isArray(monitored) ? monitored : [];
+  const recent = disruptionList.slice(0, 3);
 
   const handleSearch = async () => {
     const fn = flightInput.trim().toUpperCase();
@@ -388,7 +392,7 @@ export default function HomeScreen() {
           </View>
         )}
 
-        {monitored.length > 0 && (
+        {monitoredList.length > 0 && (
           <Animated.View entering={FadeInDown.delay(120).duration(450)} style={styles.section}>
             <View style={styles.sectionHeader}>
               <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Your flights</Text>
@@ -396,7 +400,7 @@ export default function HomeScreen() {
                 <Text style={[styles.seeAll, { color: colors.primary }]}>Manage</Text>
               </Pressable>
             </View>
-            {monitored.slice(0, 3).map((m) => {
+            {monitoredList.slice(0, 3).map((m) => {
               const st = (m.lastStatus as FlightStatus | null) ?? "unknown";
               const known = !!m.lastStatus;
               return (
@@ -486,7 +490,7 @@ export default function HomeScreen() {
           <Animated.View entering={FadeInDown.delay(320).duration(450)} style={styles.section}>
             <View style={styles.sectionHeader}>
               <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Recent disruptions</Text>
-              {(disruptions?.length ?? 0) > 3 && (
+              {disruptionList.length > 3 && (
                 <Pressable onPress={() => router.push("/(tabs)/history")}>
                   <Text style={[styles.seeAll, { color: colors.primary }]}>See all</Text>
                 </Pressable>

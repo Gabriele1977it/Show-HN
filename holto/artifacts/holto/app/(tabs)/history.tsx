@@ -94,7 +94,7 @@ export default function HistoryScreen() {
         </Text>
       </Animated.View>
 
-      {claims && claims.length > 0 && (
+      {Array.isArray(claims) && claims.length > 0 && (
         <Animated.View entering={FadeInDown.delay(60).duration(500)} style={styles.claimsSection}>
           <Text style={[styles.claimsHeading, { color: colors.foreground }]}>Your claims</Text>
           {claims.map((c) => {
@@ -192,7 +192,7 @@ export default function HistoryScreen() {
         </Animated.View>
       )}
 
-      {!isLoading && !isError && disruptions && disruptions.length > 0 && (
+      {!isLoading && !isError && Array.isArray(disruptions) && disruptions.length > 0 && (
         <Animated.View entering={FadeInDown.delay(100).duration(500)}>
           <Text style={[styles.countNote, { color: colors.mutedForeground }]}>
             {disruptions.length} disruption{disruptions.length !== 1 ? "s" : ""} on record

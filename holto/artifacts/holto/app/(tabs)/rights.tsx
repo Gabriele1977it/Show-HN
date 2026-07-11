@@ -420,7 +420,7 @@ export default function RightsScreen() {
           </View>
         )}
 
-        {!isLoading && !isError && disruptions && disruptions.length > 0 && (
+        {!isLoading && !isError && Array.isArray(disruptions) && disruptions.length > 0 && (
           <View style={{ marginTop: 12, gap: 0 }}>
             <Text style={[styles.countNote, { color: colors.mutedForeground }]}>
               {disruptions.length} disruption{disruptions.length !== 1 ? "s" : ""} on record
