@@ -53,7 +53,13 @@ export default function ToolsScreen() {
               onPress={() => router.push(t.route)}
               style={({ pressed }) => [
                 styles.card,
-                { backgroundColor: colors.card, borderColor: colors.border, borderRadius: colors.radius, opacity: pressed ? 0.9 : 1 },
+                colors.shadow,
+                {
+                  backgroundColor: colors.card,
+                  borderColor: colors.border,
+                  borderRadius: colors.radius,
+                  transform: [{ scale: pressed ? 0.98 : 1 }],
+                },
               ]}
             >
               <View style={[styles.emojiWrap, { backgroundColor: colors.muted }]}>

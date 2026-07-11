@@ -124,7 +124,7 @@ function FlightResultCard({
 
   return (
     <Animated.View entering={FadeInDown.duration(400)}>
-      <View style={[styles.flightCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+      <View style={[styles.flightCard, colors.shadow, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <View style={styles.flightCardTop}>
           <View style={{ flex: 1 }}>
             <Text style={[styles.flightNum, { color: colors.foreground }]}>
@@ -438,7 +438,8 @@ export default function HomeScreen() {
             <Pressable
               style={({ pressed }) => [
                 styles.disruptionCta,
-                { backgroundColor: colors.card, borderColor: colors.border, borderRadius: colors.radius, opacity: pressed ? 0.88 : 1 },
+                colors.shadow,
+                { backgroundColor: colors.card, borderColor: colors.border, borderRadius: colors.radius, transform: [{ scale: pressed ? 0.985 : 1 }] },
               ]}
               onPress={() => router.push("/trips")}
               accessibilityRole="button"
@@ -474,7 +475,8 @@ export default function HomeScreen() {
                   onPress={() => router.push("/(tabs)/monitor")}
                   style={({ pressed }) => [
                     styles.flightRow,
-                    { backgroundColor: colors.card, borderColor: colors.border, borderRadius: colors.radius, opacity: pressed ? 0.9 : 1 },
+                    colors.shadow,
+                    { backgroundColor: colors.card, borderColor: colors.border, borderRadius: colors.radius, transform: [{ scale: pressed ? 0.99 : 1 }] },
                   ]}
                 >
                   <View style={{ flex: 1 }}>
@@ -500,7 +502,8 @@ export default function HomeScreen() {
             <Pressable
               style={({ pressed }) => [
                 styles.disruptionCta,
-                { backgroundColor: colors.card, borderColor: colors.border, borderRadius: colors.radius, opacity: pressed ? 0.88 : 1 },
+                colors.shadow,
+                { backgroundColor: colors.card, borderColor: colors.border, borderRadius: colors.radius, transform: [{ scale: pressed ? 0.985 : 1 }] },
               ]}
               onPress={() => router.push("/disruption/wizard")}
               accessibilityRole="button"

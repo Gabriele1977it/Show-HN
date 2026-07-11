@@ -257,7 +257,7 @@ export default function TripsScreen() {
       )}
 
       {trips.map((trip, idx) => (
-        <Animated.View key={trip.id} entering={FadeInDown.delay(120 + idx * 40).duration(400)} style={[styles.tripCard, { backgroundColor: colors.card, borderColor: colors.border, borderRadius: colors.radius }]}>
+        <Animated.View key={trip.id} entering={FadeInDown.delay(120 + idx * 40).duration(400)} style={[styles.tripCard, colors.shadow, { backgroundColor: colors.card, borderColor: colors.border, borderRadius: colors.radius }]}>
           <View style={styles.tripHeader}>
             <View style={{ flex: 1 }}>
               <Text style={[styles.tripTitle, { color: colors.foreground }]}>{trip.title}</Text>

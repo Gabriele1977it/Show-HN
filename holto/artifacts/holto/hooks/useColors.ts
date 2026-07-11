@@ -17,5 +17,15 @@ import colors from "@/constants/colors";
 export function useColors() {
   const scheme = useColorScheme();
   const palette = scheme === "dark" ? colors.dark : colors.light;
-  return { ...palette, radius: colors.radius };
+  // A themed, soft card elevation. On web this maps to box-shadow; on native
+  // to iOS shadow / Android elevation. Kept subtle so it reads premium, not
+  // heavy — and near-invisible in dark mode where borders do the lifting.
+  const shadow = {
+    shadowColor: palette.shadowColor,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: palette.shadowOpacity,
+    shadowRadius: 10,
+    elevation: 3,
+  } as const;
+  return { ...palette, radius: colors.radius, shadow };
 }

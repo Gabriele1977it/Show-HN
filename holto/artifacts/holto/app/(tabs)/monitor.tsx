@@ -304,7 +304,7 @@ export default function MonitorScreen() {
             })}
 
             {activeFlightNumber && (
-              <View style={[styles.statusCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <View style={[styles.statusCard, colors.shadow, { backgroundColor: colors.card, borderColor: colors.border }]}>
                 <View style={styles.statusCardHeader}>
                   <Text style={[styles.statusFlight, { color: colors.foreground }]}>{activeFlightNumber}</Text>
                   {status && (

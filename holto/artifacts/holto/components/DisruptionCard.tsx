@@ -71,11 +71,12 @@ export function DisruptionCard({ disruption, onDelete }: Props) {
     <Pressable
       style={({ pressed }) => [
         styles.card,
+        colors.shadow,
         {
           backgroundColor: colors.card,
           borderColor: colors.border,
           borderRadius: colors.radius,
-          opacity: pressed ? 0.88 : 1,
+          transform: [{ scale: pressed ? 0.985 : 1 }],
         },
       ]}
       onPress={() => router.push(`/disruption/${disruption.id}`)}
