@@ -13,6 +13,13 @@ export interface DriveEstimate {
   minutes: number;
   distanceText: string;
   durationText: string;
+  provider: "mapbox" | "google";
+}
+
+export type Destination = string | { lat: number; lon: number };
+
+export function configuredProviders(): { mapbox: boolean; google: boolean } {
+  return { mapbox: Boolean(MAPBOX_TOKEN), google: Boolean(GOOGLE_KEY) };
 }
 
 function fmtDuration(minutes: number): string {
@@ -34,8 +41,9 @@ async function geocodeMapbox(query: string): Promise<[number, number] | null> {
   return center && center.length === 2 ? center : null;
 }
 
-async function mapboxDrive(origin: string, destination: string): Promise<DriveEstimate | null> {
-  const [a, b] = await Promise.all([geocodeMapbox(origin), geocodeMapbox(destination)]);
+async function mapboxDrive(origin: string, destination: Destination): Promise<DriveEstimate | null> {
+  const a = await geocodeMapbox(origin);
+  const b = typeof destination === "string" ? await geocodeMapbox(destination) : ([destination.lon, destination.lat] as [number, number]);
   if (!a || !b) return null;
   const url = `https://api.mapbox.com/directions/v5/mapbox/driving-traffic/${a[0]},${a[1]};${b[0]},${b[1]}?access_token=${MAPBOX_TOKEN}&overview=false`;
   const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
@@ -44,14 +52,15 @@ async function mapboxDrive(origin: string, destination: string): Promise<DriveEs
   const route = json.routes?.[0];
   if (!route?.duration) return null;
   const minutes = Math.round(route.duration / 60);
-  return { minutes, durationText: fmtDuration(minutes), distanceText: route.distance ? fmtDistanceKm(route.distance) : "" };
+  return { minutes, durationText: fmtDuration(minutes), distanceText: route.distance ? fmtDistanceKm(route.distance) : "", provider: "mapbox" };
 }
 
 // ── Google (fallback) ───────────────────────────────────────────────────────
-async function googleDrive(origin: string, destination: string): Promise<DriveEstimate | null> {
+async function googleDrive(origin: string, destination: Destination): Promise<DriveEstimate | null> {
+  const dest = typeof destination === "string" ? destination : `${destination.lat},${destination.lon}`;
   const url = new URL("https://maps.googleapis.com/maps/api/directions/json");
   url.searchParams.set("origin", origin);
-  url.searchParams.set("destination", destination);
+  url.searchParams.set("destination", dest);
   url.searchParams.set("mode", "driving");
   url.searchParams.set("departure_time", "now");
   url.searchParams.set("traffic_model", "best_guess");
@@ -66,10 +75,10 @@ async function googleDrive(origin: string, destination: string): Promise<DriveEs
   const leg = json.routes[0]?.legs?.[0];
   const dur = leg?.duration_in_traffic ?? leg?.duration;
   if (!dur) return null;
-  return { minutes: Math.round(dur.value / 60), distanceText: leg?.distance?.text ?? "", durationText: dur.text };
+  return { minutes: Math.round(dur.value / 60), distanceText: leg?.distance?.text ?? "", durationText: dur.text, provider: "google" };
 }
 
-export async function getDriveEstimate(origin: string, destination: string): Promise<DriveEstimate | null> {
+export async function getDriveEstimate(origin: string, destination: Destination): Promise<DriveEstimate | null> {
   try {
     if (MAPBOX_TOKEN) return await mapboxDrive(origin, destination);
     if (GOOGLE_KEY) return await googleDrive(origin, destination);

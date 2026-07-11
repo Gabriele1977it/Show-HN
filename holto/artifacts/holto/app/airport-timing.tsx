@@ -82,7 +82,11 @@ export default function AirportTimingScreen() {
     });
   }
 
-  const needsManual = result && result.ok === false && result.reason === "no_drive_time";
+  const needsManual = result != null && result.ok === false;
+  const manualMessage =
+    result?.reason === "no_provider"
+      ? "Live traffic isn't switched on yet. Enter your estimated drive time and we'll do the rest."
+      : "We couldn't fetch live traffic for that route. Enter your estimated drive time and we'll do the rest.";
 
   return (
     <ScrollView
@@ -125,9 +129,7 @@ export default function AirportTimingScreen() {
       {/* Manual drive fallback when Maps can't route */}
       {needsManual && (
         <Animated.View entering={FadeInDown.duration(300)} style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, borderRadius: colors.radius, marginTop: 18 }]}>
-          <Text style={[styles.cardNote, { color: colors.mutedForeground }]}>
-            We couldn't fetch live traffic for that route. Enter your estimated drive time and we'll do the rest.
-          </Text>
+          <Text style={[styles.cardNote, { color: colors.mutedForeground }]}>{manualMessage}</Text>
           <View style={{ flexDirection: "row", gap: 8, marginTop: 10, alignItems: "center" }}>
             <TextInput value={manualDrive} onChangeText={setManualDrive} placeholder="45" keyboardType="number-pad" placeholderTextColor={colors.mutedForeground} style={[styles.input, { flex: 1, backgroundColor: colors.background, borderColor: colors.border, color: colors.foreground }]} />
             <Text style={{ color: colors.mutedForeground, fontFamily: "Inter_500Medium" }}>minutes</Text>
