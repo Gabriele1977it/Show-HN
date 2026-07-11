@@ -15,6 +15,7 @@ import {
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { DateField } from "@/components/DateField";
 import { Icon } from "@/components/Icon";
 import { COUNTRIES, COUNTRY_BY_CODE, type Country } from "@/constants/countries";
 import { useColors } from "@/hooks/useColors";
@@ -265,25 +266,11 @@ export default function ResidencyScreen() {
         <View style={{ flexDirection: "row", gap: 10, marginTop: 10 }}>
           <View style={{ flex: 1 }}>
             <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>Arrived</Text>
-            <TextInput
-              value={arrival}
-              onChangeText={setArrival}
-              placeholder="YYYY-MM-DD"
-              placeholderTextColor={colors.mutedForeground}
-              autoCapitalize="none"
-              style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.foreground }]}
-            />
+            <DateField value={arrival} onChange={setArrival} mode="date" />
           </View>
           <View style={{ flex: 1 }}>
             <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>Left (optional)</Text>
-            <TextInput
-              value={departure}
-              onChangeText={setDeparture}
-              placeholder="Still here"
-              placeholderTextColor={colors.mutedForeground}
-              autoCapitalize="none"
-              style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.foreground }]}
-            />
+            <DateField value={departure} onChange={setDeparture} mode="date" />
           </View>
         </View>
         {formError && <Text style={[styles.formError, { color: colors.destructive }]}>{formError}</Text>}

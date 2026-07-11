@@ -16,6 +16,7 @@ import {
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { DateField } from "@/components/DateField";
 import { Icon } from "@/components/Icon";
 import { useColors } from "@/hooks/useColors";
 
@@ -221,8 +222,14 @@ export default function TripsScreen() {
             <TextInput value={tTitle} onChangeText={setTTitle} placeholder="Trip name (e.g. Lisbon sprint)" placeholderTextColor={colors.mutedForeground} style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.foreground }]} />
             <TextInput value={tDest} onChangeText={setTDest} placeholder="Destination (optional)" placeholderTextColor={colors.mutedForeground} style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.foreground, marginTop: 8 }]} />
             <View style={{ flexDirection: "row", gap: 8, marginTop: 8 }}>
-              <TextInput value={tStart} onChangeText={setTStart} placeholder="Start YYYY-MM-DD" placeholderTextColor={colors.mutedForeground} autoCapitalize="none" style={[styles.input, { flex: 1, backgroundColor: colors.background, borderColor: colors.border, color: colors.foreground }]} />
-              <TextInput value={tEnd} onChangeText={setTEnd} placeholder="End YYYY-MM-DD" placeholderTextColor={colors.mutedForeground} autoCapitalize="none" style={[styles.input, { flex: 1, backgroundColor: colors.background, borderColor: colors.border, color: colors.foreground }]} />
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>Start</Text>
+                <DateField value={tStart} onChange={setTStart} mode="date" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>End</Text>
+                <DateField value={tEnd} onChange={setTEnd} mode="date" />
+              </View>
             </View>
             {tripError && <Text style={[styles.err, { color: colors.destructive }]}>{tripError}</Text>}
             <View style={{ flexDirection: "row", gap: 10, marginTop: 12 }}>
@@ -337,8 +344,8 @@ export default function TripsScreen() {
             </View>
             <TextInput value={iTitle} onChangeText={setITitle} placeholder={iType === "flight" ? "e.g. BA503 LHR → LIS" : "Title"} placeholderTextColor={colors.mutedForeground} style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.foreground }]} />
             <View style={{ flexDirection: "row", gap: 8, marginTop: 8 }}>
-              <TextInput value={iDate} onChangeText={setIDate} placeholder="Date YYYY-MM-DD" placeholderTextColor={colors.mutedForeground} autoCapitalize="none" style={[styles.input, { flex: 2, backgroundColor: colors.card, borderColor: colors.border, color: colors.foreground }]} />
-              <TextInput value={iTime} onChangeText={setITime} placeholder="HH:MM" placeholderTextColor={colors.mutedForeground} autoCapitalize="none" style={[styles.input, { flex: 1, backgroundColor: colors.card, borderColor: colors.border, color: colors.foreground }]} />
+              <DateField value={iDate} onChange={setIDate} mode="date" flex={2} />
+              <DateField value={iTime} onChange={setITime} mode="time" flex={1} />
             </View>
             <TextInput value={iLoc} onChangeText={setILoc} placeholder="Location (optional)" placeholderTextColor={colors.mutedForeground} style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.foreground, marginTop: 8 }]} />
             <TextInput value={iRef} onChangeText={setIRef} placeholder="Booking reference (optional)" placeholderTextColor={colors.mutedForeground} autoCapitalize="characters" style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.foreground, marginTop: 8 }]} />
@@ -371,6 +378,7 @@ const styles = StyleSheet.create({
   newBtnText: { fontFamily: "Inter_500Medium", fontSize: 14 },
   formCard: { borderWidth: 1, padding: 16 },
   input: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, height: 46, fontFamily: "Inter_500Medium", fontSize: 15, justifyContent: "center" },
+  fieldLabel: { fontFamily: "Inter_500Medium", fontSize: 12, marginBottom: 6 },
   err: { fontFamily: "Inter_500Medium", fontSize: 13, marginTop: 10 },
   ghostBtn: { flex: 1, height: 46, borderWidth: 1, borderRadius: 10, alignItems: "center", justifyContent: "center" },
   ghostBtnText: { fontFamily: "Inter_600SemiBold", fontSize: 15 },

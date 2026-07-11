@@ -16,6 +16,7 @@ import {
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { DateField } from "@/components/DateField";
 import { Icon } from "@/components/Icon";
 import { CURRENCIES, CURRENCY_BY_CODE, type Currency } from "@/constants/currencies";
 import { useColors } from "@/hooks/useColors";
@@ -279,7 +280,8 @@ export default function ExpensesScreen() {
               ))}
             </View>
             <TextInput value={merchant} onChangeText={setMerchant} placeholder="Merchant (optional)" placeholderTextColor={colors.mutedForeground} style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.foreground }]} />
-            <TextInput value={spentOn} onChangeText={setSpentOn} placeholder="Date YYYY-MM-DD (blank = today)" placeholderTextColor={colors.mutedForeground} autoCapitalize="none" style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.foreground, marginTop: 8 }]} />
+            <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>Date (blank = today)</Text>
+            <DateField value={spentOn} onChange={setSpentOn} mode="date" />
             {formError && <Text style={[styles.err, { color: colors.destructive }]}>{formError}</Text>}
             <Pressable onPress={submit} disabled={addExpense.isPending} style={[styles.solidBtn, { backgroundColor: colors.primary, marginTop: 14, opacity: addExpense.isPending ? 0.8 : 1 }]}>
               {addExpense.isPending ? <ActivityIndicator color={colors.primaryForeground} size="small" /> : <Text style={[styles.solidBtnText, { color: colors.primaryForeground }]}>Save expense</Text>}
@@ -319,6 +321,7 @@ const styles = StyleSheet.create({
   expMeta: { fontFamily: "Inter_400Regular", fontSize: 12, marginTop: 1 },
   expAmt: { fontFamily: "Inter_600SemiBold", fontSize: 14 },
   input: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, height: 48, fontFamily: "Inter_500Medium", fontSize: 15, justifyContent: "center" },
+  fieldLabel: { fontFamily: "Inter_500Medium", fontSize: 12, marginTop: 10, marginBottom: 6 },
   err: { fontFamily: "Inter_500Medium", fontSize: 13, marginTop: 10 },
   catWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginVertical: 10 },
   catChip: { flexDirection: "row", alignItems: "center", gap: 5, borderWidth: 1, borderRadius: 20, paddingHorizontal: 11, paddingVertical: 7 },

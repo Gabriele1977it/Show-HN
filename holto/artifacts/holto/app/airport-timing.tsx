@@ -14,6 +14,7 @@ import {
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { DateField } from "@/components/DateField";
 import { Icon } from "@/components/Icon";
 import { useColors } from "@/hooks/useColors";
 
@@ -100,8 +101,8 @@ export default function AirportTimingScreen() {
         <TextInput value={origin} onChangeText={setOrigin} placeholder="Leaving from (address, hotel or postcode)" placeholderTextColor={colors.mutedForeground} style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.foreground }]} />
         <TextInput value={airport} onChangeText={setAirport} placeholder="Airport (e.g. LHR or Lisbon Airport)" placeholderTextColor={colors.mutedForeground} autoCapitalize="characters" style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.foreground }]} />
         <View style={{ flexDirection: "row", gap: 8 }}>
-          <TextInput value={date} onChangeText={setDate} placeholder="Date YYYY-MM-DD" placeholderTextColor={colors.mutedForeground} autoCapitalize="none" style={[styles.input, { flex: 2, backgroundColor: colors.card, borderColor: colors.border, color: colors.foreground }]} />
-          <TextInput value={time} onChangeText={setTime} placeholder="HH:MM" placeholderTextColor={colors.mutedForeground} autoCapitalize="none" style={[styles.input, { flex: 1, backgroundColor: colors.card, borderColor: colors.border, color: colors.foreground }]} />
+          <DateField value={date} onChange={setDate} mode="date" flex={2} />
+          <DateField value={time} onChange={setTime} mode="time" flex={1} />
         </View>
         <View style={styles.toggleRow}>
           {(["domestic", "international"] as const).map((t) => {
