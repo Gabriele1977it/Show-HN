@@ -7,6 +7,7 @@ import {
   useListDisruptions,
   useListMonitoredFlights,
 } from "@workspace/api-client-react";
+import { useQuery } from "@tanstack/react-query";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 import React, { useCallback, useState } from "react";
@@ -51,6 +52,23 @@ interface FlightResult {
   depGate: string | null;
   depTerminal: string | null;
   companionMessage: string | null;
+}
+
+interface JourneyFlight {
+  flightNumber: string | null;
+  title: string;
+  depAirport: string | null;
+  arrAirport: string | null;
+  scheduledDep: string | null;
+  estimatedDep: string | null;
+  status: FlightStatus;
+  depGate: string | null;
+  depTerminal: string | null;
+  depDelay: number | null;
+}
+interface JourneyResponse {
+  hasFlight: boolean;
+  flight?: JourneyFlight;
 }
 
 function statusLabel(s: FlightStatus) {
@@ -271,6 +289,13 @@ export default function HomeScreen() {
     query: { queryKey: getListMonitoredFlightsQueryKey() },
   });
 
+  // The next upcoming flight from the user's trips, for the "travel day" hero.
+  const { data: journey } = useQuery({
+    queryKey: ["journey-next"],
+    queryFn: () => customFetch<JourneyResponse>("/api/journey/next"),
+    staleTime: 60_000,
+  });
+
   const handleDeleteDisruption = useCallback(
     async (id: number) => {
       try {
@@ -288,6 +313,18 @@ export default function HomeScreen() {
   const disruptionList = Array.isArray(disruptions) ? disruptions : [];
   const monitoredList = Array.isArray(monitored) ? monitored : [];
   const recent = disruptionList.slice(0, 3);
+
+  // Surface the "travel day" hero only when a flight is close (within 24h) and
+  // still ahead of the traveller — otherwise it's just noise on Home.
+  const journeyFlight = journey?.hasFlight ? journey.flight : undefined;
+  const showTravelDay = (() => {
+    if (!journeyFlight?.scheduledDep) return false;
+    if (journeyFlight.status === "landed") return false;
+    const dep = new Date(journeyFlight.scheduledDep).getTime();
+    if (isNaN(dep)) return false;
+    const hoursAway = (dep - Date.now()) / 3_600_000;
+    return hoursAway <= 24;
+  })();
 
   const handleSearch = async () => {
     const fn = flightInput.trim().toUpperCase();
@@ -366,6 +403,54 @@ export default function HomeScreen() {
             Your travel companion. Let's check your flight.
           </Text>
         </Animated.View>
+
+        {showTravelDay && journeyFlight && (
+          <Animated.View entering={FadeInDown.delay(40).duration(450)}>
+            <Pressable
+              onPress={() => router.push("/today" as never)}
+              style={({ pressed }) => [
+                styles.travelDayCard,
+                colors.shadow,
+                { backgroundColor: colors.midnight, borderRadius: colors.radius, transform: [{ scale: pressed ? 0.99 : 1 }] },
+              ]}
+              accessibilityRole="button"
+            >
+              <View style={styles.travelDayHead}>
+                <View style={[styles.travelDayDot, { backgroundColor: colors.gold }]} />
+                <Text style={styles.travelDayEyebrow}>TODAY'S JOURNEY</Text>
+              </View>
+              <View style={styles.travelDayBody}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.travelDayFlight}>
+                    {journeyFlight.flightNumber ?? journeyFlight.title}
+                  </Text>
+                  <Text style={styles.travelDayRoute}>
+                    {(journeyFlight.depAirport ?? "—")} → {(journeyFlight.arrAirport ?? "—")}
+                  </Text>
+                </View>
+                <View style={{ alignItems: "flex-end" }}>
+                  <Text style={styles.travelDayTimeLabel}>DEPARTS</Text>
+                  <Text style={styles.travelDayTime}>
+                    {formatFlightTime(journeyFlight.estimatedDep ?? journeyFlight.scheduledDep)}
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.travelDayFooter}>
+                <Text style={styles.travelDayNote}>
+                  {journeyFlight.depDelay && journeyFlight.depDelay >= 15
+                    ? `Delayed ~${journeyFlight.depDelay} min`
+                    : journeyFlight.depGate
+                      ? `Gate ${journeyFlight.depGate}${journeyFlight.depTerminal ? ` · T${journeyFlight.depTerminal}` : ""}`
+                      : "See your full travel-day plan"}
+                </Text>
+                <View style={styles.travelDayCta}>
+                  <Text style={styles.travelDayCtaText}>Open</Text>
+                  <Icon name="arrow-right" size={13} color={colors.gold} />
+                </View>
+              </View>
+            </Pressable>
+          </Animated.View>
+        )}
 
         <Animated.View entering={FadeInDown.delay(80).duration(450)}>
           <LinearGradient
@@ -625,6 +710,19 @@ const styles = StyleSheet.create({
   greetingBlock: { marginBottom: 20 },
   greeting: { fontFamily: "Inter_700Bold", fontSize: 26, letterSpacing: -0.3, marginBottom: 3 },
   greetingSub: { fontFamily: "Inter_400Regular", fontSize: 14, lineHeight: 20 },
+  travelDayCard: { padding: 18, marginBottom: 14 },
+  travelDayHead: { flexDirection: "row", alignItems: "center", gap: 7, marginBottom: 12 },
+  travelDayDot: { width: 7, height: 7, borderRadius: 4 },
+  travelDayEyebrow: { fontFamily: "Inter_600SemiBold", fontSize: 10, letterSpacing: 1.4, color: "rgba(255,255,255,0.55)" },
+  travelDayBody: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between" },
+  travelDayFlight: { fontFamily: "Inter_700Bold", fontSize: 22, color: "#fff", letterSpacing: 0.4 },
+  travelDayRoute: { fontFamily: "Inter_500Medium", fontSize: 13, color: "rgba(255,255,255,0.65)", marginTop: 2 },
+  travelDayTimeLabel: { fontFamily: "Inter_600SemiBold", fontSize: 9, letterSpacing: 1, color: "rgba(255,255,255,0.45)" },
+  travelDayTime: { fontFamily: "Inter_700Bold", fontSize: 24, color: "#fff", letterSpacing: -0.5, marginTop: 1 },
+  travelDayFooter: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 14, borderTopWidth: 1, borderTopColor: "rgba(255,255,255,0.1)", paddingTop: 12 },
+  travelDayNote: { fontFamily: "Inter_500Medium", fontSize: 13, color: "rgba(255,255,255,0.75)", flex: 1 },
+  travelDayCta: { flexDirection: "row", alignItems: "center", gap: 4 },
+  travelDayCtaText: { fontFamily: "Inter_600SemiBold", fontSize: 13, color: "#C9A24B" },
   trackerCard: { padding: 20, marginBottom: 14 },
   trackerLabel: { fontFamily: "Inter_700Bold", fontSize: 20, color: "#fff", marginBottom: 4 },
   trackerSub: { fontFamily: "Inter_400Regular", fontSize: 13, color: "rgba(255,255,255,0.55)", marginBottom: 16 },
