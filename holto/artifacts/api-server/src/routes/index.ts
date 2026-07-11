@@ -10,6 +10,7 @@ import pushRouter from "./push";
 import claimsRouter from "./claims";
 import askRouter from "./ask";
 import residencyRouter from "./residency";
+import tripsRouter from "./trips";
 import stripeRouter from "./stripe";
 
 const router: IRouter = Router();
@@ -27,6 +28,7 @@ router.use(claimsRouter);
 router.use(askRouter);
 router.use(costOfLivingRouter);
 router.use(residencyRouter);
+router.use(tripsRouter);
 router.use(stripeRouter);
 
 export default router;

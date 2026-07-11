@@ -392,6 +392,30 @@ export default function HomeScreen() {
           </View>
         )}
 
+        {!flightResult && (
+          <Animated.View entering={FadeInDown.delay(100).duration(450)}>
+            <Pressable
+              style={({ pressed }) => [
+                styles.disruptionCta,
+                { backgroundColor: colors.card, borderColor: colors.border, borderRadius: colors.radius, opacity: pressed ? 0.88 : 1 },
+              ]}
+              onPress={() => router.push("/trips")}
+              accessibilityRole="button"
+            >
+              <View style={[styles.ctaIcon, { backgroundColor: colors.gold + "22", borderRadius: 10 }]}>
+                <Text style={{ fontSize: 18 }}>🧳</Text>
+              </View>
+              <View style={styles.ctaText}>
+                <Text style={[styles.ctaTitle, { color: colors.foreground }]}>Your trips</Text>
+                <Text style={[styles.ctaDesc, { color: colors.mutedForeground }]}>
+                  Flights, hotels and plans in one timeline
+                </Text>
+              </View>
+              <Icon name="chevron-right" size={17} color={colors.mutedForeground} />
+            </Pressable>
+          </Animated.View>
+        )}
+
         {monitoredList.length > 0 && (
           <Animated.View entering={FadeInDown.delay(120).duration(450)} style={styles.section}>
             <View style={styles.sectionHeader}>

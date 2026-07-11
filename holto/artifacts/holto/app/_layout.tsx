@@ -54,6 +54,7 @@ function RootLayoutNav() {
       <Stack.Screen name="onboarding" options={{ headerShown: false, gestureEnabled: false }} />
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="residency" options={{ headerShown: true, headerTitle: "Residency & Tax Days", ...headerOptions }} />
+      <Stack.Screen name="trips" options={{ headerShown: true, headerTitle: "Your Trips", ...headerOptions }} />
       <Stack.Screen name="legal/terms" options={{ headerShown: true, headerTitle: "Terms of Service", ...headerOptions }} />
       <Stack.Screen name="legal/privacy" options={{ headerShown: true, headerTitle: "Privacy Policy", ...headerOptions }} />
       <Stack.Screen
