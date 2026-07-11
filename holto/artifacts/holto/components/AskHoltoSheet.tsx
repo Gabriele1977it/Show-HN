@@ -146,12 +146,12 @@ function PlaceRow({
 }
 
 const QUICK_PROMPTS = [
+  "What's my next flight?",
+  "How many days can I still spend in Portugal?",
+  "What's on my next trip?",
   "Where can I eat nearby?",
   "Is there a pharmacy?",
-  "Nearest ATM",
-  "Where to charge my phone?",
-  "Find a coffee shop",
-  "Nearest hotel",
+  "What should I pack for Egypt?",
 ];
 
 export default function AskHoltoSheet({ visible, onClose }: Props) {

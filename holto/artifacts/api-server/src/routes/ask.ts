@@ -1,12 +1,12 @@
 import { Router, type IRouter } from "express";
-import OpenAI from "openai";
 
 import { requireAuth } from "../middlewares/auth";
 import { logger } from "../lib/logger";
 import { getUserTier } from "../lib/tier";
+import { generateText } from "../lib/llm";
+import { buildUserContext } from "../lib/ask-context";
 
 const router: IRouter = Router();
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY ?? "no-key" });
 
 interface GooglePlace {
   name: string;
@@ -116,25 +116,23 @@ router.post("/ask", requireAuth, async (req, res): Promise<void> => {
           .join("\n")}`
       : "";
 
-  const prompt = `You are HOLTO, a warm, knowledgeable travel companion helping British travellers — especially those travelling to and around Egypt (Hurghada, Sharm el-Sheikh, Cairo, etc). You answer both practical on-the-ground questions ("Where can I eat?") and general travel planning questions ("Best months to visit Hurghada", "What should I pack?", "Is it safe to travel alone?").
+  // What HOLTO knows about this traveller (their trips, flights, residency days)
+  // so it can answer personal questions accurately.
+  const userContext = await buildUserContext(req.auth!.userId);
+
+  const prompt = `You are HOLTO, a warm, knowledgeable travel companion helping British travellers — especially those travelling to and around Egypt (Hurghada, Sharm el-Sheikh, Cairo, etc). You answer practical on-the-ground questions ("Where can I eat?"), general travel-planning questions ("Best months to visit Hurghada", "What should I pack?"), and personal questions about the traveller's own plans.
 
 ${locationNote}
 
-Their question: "${question.trim()}"
+${userContext ? `What you know about this traveller (use these facts for personal questions about their flights, trips or days in a country — quote the specific numbers/dates):\n${userContext}\n\n` : ""}Their question: "${question.trim()}"
 
-${placesContext ? placesContext + "\n\n" : ""}Give a short, natural, helpful answer (3-5 sentences max). ${places.length > 0 ? "If relevant, mention the most helpful nearby option by name with practical context." : "Give clear, accurate travel advice."} Be warm and direct like a knowledgeable friend — never robotic, never vague.`;
+${placesContext ? placesContext + "\n\n" : ""}Give a short, natural, helpful answer (3-5 sentences max). ${places.length > 0 ? "If relevant, mention the most helpful nearby option by name with practical context." : "Give clear, accurate travel advice."} If they ask about their own flights, trips or days in a country, answer from the facts above; if a fact isn't listed, say you don't have it rather than guessing. Be warm and direct like a knowledgeable friend — never robotic, never vague.`;
 
-  let answer = "I wasn't able to get a response right now — try asking airport staff for directions.";
-  try {
-    const aiRes = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [{ role: "user", content: prompt }],
-      max_tokens: 200,
-      temperature: 0.4,
-    });
-    answer = aiRes.choices[0]?.message?.content?.trim() ?? answer;
-  } catch (e) {
-    logger.warn({ err: e }, "OpenAI ask response failed");
+  const answer =
+    (await generateText(prompt, { maxTokens: 260, temperature: 0.4 })) ??
+    "I couldn't get a response right now — try again in a moment.";
+  if (answer.startsWith("I couldn't get")) {
+    logger.warn("ask: LLM returned no answer");
   }
 
   res.json({ answer, places });

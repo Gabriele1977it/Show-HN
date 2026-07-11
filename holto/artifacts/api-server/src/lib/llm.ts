@@ -15,6 +15,55 @@ export function llmConfigured(): boolean {
   return Boolean(GEMINI_KEY || OPENAI_KEY);
 }
 
+// Free-first plain-text generation (prefers Gemini). Returns null on failure.
+export async function generateText(
+  prompt: string,
+  opts: { maxTokens?: number; temperature?: number } = {},
+): Promise<string | null> {
+  const maxTokens = opts.maxTokens ?? 300;
+  const temperature = opts.temperature ?? 0.4;
+
+  if (GEMINI_KEY) {
+    try {
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_KEY}`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: { temperature, maxOutputTokens: maxTokens },
+          }),
+          signal: AbortSignal.timeout(15000),
+        },
+      );
+      if (!res.ok) throw new Error(`Gemini HTTP ${res.status}`);
+      const json = (await res.json()) as {
+        candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+      };
+      const text = json.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (typeof text === "string" && text.trim()) return text.trim();
+    } catch (err) {
+      logger.warn({ err }, "Gemini generateText failed");
+    }
+  }
+
+  if (openai) {
+    try {
+      const r = await openai.chat.completions.create(
+        { model: "gpt-4o-mini", messages: [{ role: "user", content: prompt }], temperature, max_tokens: maxTokens },
+        { timeout: 15000, maxRetries: 1 },
+      );
+      const content = r.choices[0]?.message?.content;
+      if (content) return content.trim();
+    } catch (err) {
+      logger.warn({ err }, "OpenAI generateText failed");
+    }
+  }
+
+  return null;
+}
+
 export async function generateJson(
   prompt: string,
   opts: { maxTokens?: number; temperature?: number } = {},
