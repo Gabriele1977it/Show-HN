@@ -106,7 +106,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       ]);
       setToken(data.token);
       setUser(data.user);
-      router.replace("/(tabs)");
+      // New accounts get a one-time intro to the three pillars.
+      router.replace("/onboarding");
     },
     [],
   );

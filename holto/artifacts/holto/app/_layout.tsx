@@ -36,6 +36,7 @@ function RootLayoutNav() {
     <Stack>
       <Stack.Screen name="index" options={{ headerShown: false }} />
       <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+      <Stack.Screen name="onboarding" options={{ headerShown: false, gestureEnabled: false }} />
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="legal/terms" options={{ headerShown: true, headerTitle: "Terms of Service", headerBackTitle: "Back", headerStyle: { backgroundColor: "#F4F7F8" }, headerTintColor: "#0A2E38", headerTitleStyle: { fontFamily: "Inter_600SemiBold", fontSize: 17, color: "#0A2E38" } }} />
       <Stack.Screen name="legal/privacy" options={{ headerShown: true, headerTitle: "Privacy Policy", headerBackTitle: "Back", headerStyle: { backgroundColor: "#F4F7F8" }, headerTintColor: "#0A2E38", headerTitleStyle: { fontFamily: "Inter_600SemiBold", fontSize: 17, color: "#0A2E38" } }} />
