@@ -107,7 +107,15 @@ export default function ExpensesScreen() {
   const [category, setCategory] = useState<Category>("meals");
   const [merchant, setMerchant] = useState("");
   const [spentOn, setSpentOn] = useState("");
+  const [tripId, setTripId] = useState<number | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+
+  const { data: tripsData } = useQuery<Array<{ id: number; title: string }>>({
+    queryKey: ["trips"],
+    queryFn: () => customFetch<Array<{ id: number; title: string }>>("/api/trips", { responseType: "json" }),
+    retry: false,
+  });
+  const trips = Array.isArray(tripsData) ? tripsData : [];
 
   const topPad = Platform.OS === "web" ? 20 : insets.top;
   const bottomPad = Platform.OS === "web" ? 40 : insets.bottom + 24;
@@ -149,6 +157,7 @@ export default function ExpensesScreen() {
       currency: currency.code,
       merchant: merchant || undefined,
       spentOn: spentOn || new Date().toISOString().slice(0, 10),
+      tripId: tripId ?? undefined,
     });
   }
 
@@ -282,6 +291,21 @@ export default function ExpensesScreen() {
             <TextInput value={merchant} onChangeText={setMerchant} placeholder="Merchant (optional)" placeholderTextColor={colors.mutedForeground} style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.foreground }]} />
             <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>Date (blank = today)</Text>
             <DateField value={spentOn} onChange={setSpentOn} mode="date" />
+            {trips.length > 0 && (
+              <>
+                <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>Trip (optional)</Text>
+                <View style={styles.catWrap}>
+                  <Pressable onPress={() => setTripId(null)} style={[styles.catChip, { backgroundColor: tripId === null ? colors.primary : colors.card, borderColor: tripId === null ? colors.primary : colors.border }]}>
+                    <Text style={[styles.catChipText, { color: tripId === null ? colors.primaryForeground : colors.foreground }]}>None</Text>
+                  </Pressable>
+                  {trips.map((t) => (
+                    <Pressable key={t.id} onPress={() => setTripId(t.id)} style={[styles.catChip, { backgroundColor: tripId === t.id ? colors.primary : colors.card, borderColor: tripId === t.id ? colors.primary : colors.border }]}>
+                      <Text style={[styles.catChipText, { color: tripId === t.id ? colors.primaryForeground : colors.foreground }]} numberOfLines={1}>{t.title}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </>
+            )}
             {formError && <Text style={[styles.err, { color: colors.destructive }]}>{formError}</Text>}
             <Pressable onPress={submit} disabled={addExpense.isPending} style={[styles.solidBtn, { backgroundColor: colors.primary, marginTop: 14, opacity: addExpense.isPending ? 0.8 : 1 }]}>
               {addExpense.isPending ? <ActivityIndicator color={colors.primaryForeground} size="small" /> : <Text style={[styles.solidBtnText, { color: colors.primaryForeground }]}>Save expense</Text>}

@@ -47,6 +47,7 @@ interface Trip {
   startDate: string | null;
   endDate: string | null;
   items: TripItem[];
+  expenseTotalGBP?: number;
 }
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -264,7 +265,12 @@ export default function TripsScreen() {
                 {fmtRange(trip.startDate, trip.endDate)}{trip.destination ? ` · ${trip.destination}` : ""}
               </Text>
             </View>
-            <Pressable onPress={() => deleteTrip.mutate(trip.id)} hitSlop={8} style={{ padding: 4 }}>
+            {(trip.expenseTotalGBP ?? 0) > 0 && (
+              <Pressable onPress={() => router.push("/expenses")} style={[styles.spendPill, { backgroundColor: colors.muted }]} hitSlop={6}>
+                <Text style={[styles.spendText, { color: colors.foreground }]}>£{Math.round(trip.expenseTotalGBP!).toLocaleString("en-GB")}</Text>
+              </Pressable>
+            )}
+            <Pressable onPress={() => deleteTrip.mutate(trip.id)} hitSlop={8} style={{ padding: 4, marginLeft: 8 }}>
               <Icon name="trash-2" size={16} color={colors.mutedForeground} />
             </Pressable>
           </View>
@@ -390,6 +396,8 @@ const styles = StyleSheet.create({
   tripHeader: { flexDirection: "row", alignItems: "flex-start" },
   tripTitle: { fontFamily: "Inter_700Bold", fontSize: 17 },
   tripMeta: { fontFamily: "Inter_400Regular", fontSize: 13, marginTop: 2 },
+  spendPill: { borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5, alignSelf: "flex-start" },
+  spendText: { fontFamily: "Inter_600SemiBold", fontSize: 13 },
   itemRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 8 },
   itemEmoji: { fontSize: 18, width: 24, textAlign: "center" },
   itemTitle: { fontFamily: "Inter_600SemiBold", fontSize: 14 },

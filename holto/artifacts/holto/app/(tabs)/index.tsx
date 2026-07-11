@@ -32,6 +32,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 import { openUrl } from "@/utils/openUrl";
 import { UpgradeSheet } from "@/components/UpgradeSheet";
+import { AddToTripSheet } from "@/components/AddToTripSheet";
 
 type FlightStatus = "scheduled" | "active" | "landed" | "cancelled" | "incident" | "diverted" | "unknown";
 
@@ -105,12 +106,16 @@ function FlightResultCard({
   tracked,
   tracking,
   colors,
+  onWhenToLeave,
+  onAddToTrip,
 }: {
   result: FlightResult;
   onTrack: () => void;
   tracked: boolean;
   tracking: boolean;
   colors: ReturnType<typeof useColors>;
+  onWhenToLeave: () => void;
+  onAddToTrip: () => void;
 }) {
   const depDate = formatFlightDate(result.scheduledDep);
   const depTime = formatFlightTime(result.scheduledDep);
@@ -204,6 +209,18 @@ function FlightResultCard({
             </Pressable>
           </View>
         )}
+
+        <View style={[styles.linkRow, { borderTopColor: colors.border }]}>
+          <Pressable onPress={onWhenToLeave} style={styles.linkBtn} hitSlop={6}>
+            <Text style={{ fontSize: 13 }}>⏱️</Text>
+            <Text style={[styles.linkText, { color: colors.primary }]}>When to leave?</Text>
+          </Pressable>
+          <View style={[styles.linkDivider, { backgroundColor: colors.border }]} />
+          <Pressable onPress={onAddToTrip} style={styles.linkBtn} hitSlop={6}>
+            <Text style={{ fontSize: 13 }}>🧳</Text>
+            <Text style={[styles.linkText, { color: colors.primary }]}>Add to trip</Text>
+          </Pressable>
+        </View>
       </View>
     </Animated.View>
   );
@@ -220,6 +237,22 @@ export default function HomeScreen() {
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [upgrade, setUpgrade] = useState<string | null>(null);
+  const [addTripOpen, setAddTripOpen] = useState(false);
+
+  const handleWhenToLeave = useCallback(() => {
+    if (!flightResult) return;
+    let date = "";
+    let time = "";
+    if (flightResult.scheduledDep) {
+      const d = new Date(flightResult.scheduledDep);
+      if (!isNaN(d.getTime())) {
+        date = d.toISOString().slice(0, 10);
+        time = d.toISOString().slice(11, 16);
+      }
+    }
+    const airport = flightResult.depAirport ?? "";
+    router.push(`/airport-timing?airport=${encodeURIComponent(airport)}&date=${date}&time=${time}` as never);
+  }, [flightResult]);
   const [tracked, setTracked] = useState(false);
   const [tracking, setTracking] = useState(false);
 
@@ -394,6 +427,8 @@ export default function HomeScreen() {
               tracked={tracked}
               tracking={tracking}
               colors={colors}
+              onWhenToLeave={handleWhenToLeave}
+              onAddToTrip={() => setAddTripOpen(true)}
             />
           </View>
         )}
@@ -564,6 +599,11 @@ export default function HomeScreen() {
         title="Unlimited flight tracking"
         onClose={() => setUpgrade(null)}
       />
+      <AddToTripSheet
+        visible={addTripOpen}
+        flight={flightResult}
+        onClose={() => setAddTripOpen(false)}
+      />
     </View>
   );
 }
@@ -634,6 +674,10 @@ const styles = StyleSheet.create({
   aiBox: { borderRadius: 10, padding: 12, marginBottom: 12 },
   aiText: { fontFamily: "Inter_400Regular", fontSize: 13, lineHeight: 19 },
   flightActions: { flexDirection: "row", gap: 10 },
+  linkRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", borderTopWidth: 1, marginTop: 14, paddingTop: 12 },
+  linkBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, paddingVertical: 4 },
+  linkText: { fontFamily: "Inter_600SemiBold", fontSize: 13 },
+  linkDivider: { width: 1, height: 18 },
   trackBtn: {
     flex: 2,
     flexDirection: "row",

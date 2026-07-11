@@ -1,5 +1,6 @@
 import { customFetch } from "@workspace/api-client-react";
 import { useMutation } from "@tanstack/react-query";
+import { useLocalSearchParams } from "expo-router";
 import React, { useState } from "react";
 import {
   ActivityIndicator,
@@ -47,11 +48,13 @@ export default function AirportTimingScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
 
+  // Pre-fill from a flight when navigated to with params.
+  const params = useLocalSearchParams<{ airport?: string; date?: string; time?: string; trip?: string }>();
   const [origin, setOrigin] = useState("");
-  const [airport, setAirport] = useState("");
-  const [date, setDate] = useState("");
-  const [time, setTime] = useState("");
-  const [intl, setIntl] = useState(true);
+  const [airport, setAirport] = useState(typeof params.airport === "string" ? params.airport : "");
+  const [date, setDate] = useState(typeof params.date === "string" ? params.date : "");
+  const [time, setTime] = useState(typeof params.time === "string" ? params.time : "");
+  const [intl, setIntl] = useState(params.trip !== "domestic");
   const [manualDrive, setManualDrive] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<LeaveResult | null>(null);

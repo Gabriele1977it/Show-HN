@@ -1,9 +1,10 @@
-import { db, tripItemsTable, tripsTable } from "@workspace/db";
+import { db, expensesTable, tripItemsTable, tripsTable } from "@workspace/db";
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { Router, type IRouter } from "express";
 
 import { requireAuth } from "../middlewares/auth";
 import { parseTripFromText } from "../lib/trip-parse";
+import { getRatesPerGBP, toGBP } from "../lib/fx";
 
 const router: IRouter = Router();
 
@@ -39,7 +40,31 @@ router.get("/trips", requireAuth, async (req, res): Promise<void> => {
     byTrip.set(it.tripId, list);
   }
 
-  res.json(trips.map((t) => ({ ...t, items: byTrip.get(t.id) ?? [] })));
+  // Per-trip expense totals in GBP (live FX), so the timeline shows spend.
+  const expenseTotals = new Map<number, number>();
+  if (tripIds.length) {
+    const rows = await db
+      .select({ tripId: expensesTable.tripId, amount: expensesTable.amount, currency: expensesTable.currency })
+      .from(expensesTable)
+      .where(and(eq(expensesTable.userId, req.auth!.userId), inArray(expensesTable.tripId, tripIds)));
+    if (rows.length) {
+      const rates = await getRatesPerGBP();
+      for (const r of rows) {
+        if (r.tripId == null) continue;
+        const gbp = toGBP(parseFloat(r.amount), r.currency, rates);
+        if (gbp == null) continue;
+        expenseTotals.set(r.tripId, (expenseTotals.get(r.tripId) ?? 0) + gbp);
+      }
+    }
+  }
+
+  res.json(
+    trips.map((t) => ({
+      ...t,
+      items: byTrip.get(t.id) ?? [],
+      expenseTotalGBP: Math.round((expenseTotals.get(t.id) ?? 0) * 100) / 100,
+    })),
+  );
 });
 
 router.post("/trips", requireAuth, async (req, res): Promise<void> => {
