@@ -2,6 +2,7 @@ import { Icon } from "@/components/Icon";
 import { customFetch } from "@workspace/api-client-react";
 import { useQuery } from "@tanstack/react-query";
 import { LinearGradient } from "expo-linear-gradient";
+import { router } from "expo-router";
 import React, { useMemo, useState } from "react";
 import {
   Modal,
@@ -430,6 +431,28 @@ export default function LivingScreen() {
           </Text>
         </Animated.View>
 
+        {/* ── Residency & tax-days tracker ──────────────────────────────── */}
+        <Animated.View entering={FadeInDown.delay(110).duration(400)} style={{ marginTop: 20 }}>
+          <Pressable
+            onPress={() => router.push("/residency")}
+            style={({ pressed }) => [
+              styles.residencyCard,
+              { backgroundColor: colors.card, borderColor: colors.border, borderRadius: colors.radius, opacity: pressed ? 0.9 : 1 },
+            ]}
+          >
+            <View style={[styles.residencyIcon, { backgroundColor: ACCENT + "18" }]}>
+              <Icon name="globe" size={20} color={ACCENT} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.residencyTitle, { color: colors.foreground }]}>Residency & tax days</Text>
+              <Text style={[styles.residencyDesc, { color: colors.mutedForeground }]}>
+                Count your days per country and stay ahead of the 183-day rule.
+              </Text>
+            </View>
+            <Icon name="chevron-right" size={18} color={colors.mutedForeground} />
+          </Pressable>
+        </Animated.View>
+
         {/* ── Destination showcase ──────────────────────────────────────── */}
         <Animated.View entering={FadeInDown.delay(140).duration(400)} style={{ marginTop: 28 }}>
           <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Popular with the HOLTO community</Text>
@@ -627,6 +650,10 @@ const styles = StyleSheet.create({
   vsBadge: { borderRadius: 14, width: 28, height: 28, alignItems: "center", justifyContent: "center" },
   vsText: { fontFamily: "Inter_700Bold", fontSize: 11 },
   disclaimer: { fontFamily: "Inter_400Regular", fontSize: 11, marginTop: 8, lineHeight: 15 },
+  residencyCard: { flexDirection: "row", alignItems: "center", gap: 12, borderWidth: 1, padding: 16 },
+  residencyIcon: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", flexShrink: 0 },
+  residencyTitle: { fontFamily: "Inter_600SemiBold", fontSize: 15 },
+  residencyDesc: { fontFamily: "Inter_400Regular", fontSize: 13, marginTop: 2, lineHeight: 18 },
   destPicker: { flexDirection: "row", gap: 8, marginTop: 14, marginBottom: 14 },
   destTab: {
     flex: 1,
