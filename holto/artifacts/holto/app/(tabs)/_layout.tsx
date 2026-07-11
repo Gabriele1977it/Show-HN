@@ -66,11 +66,11 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="plans"
+        name="tools"
         options={{
-          title: "Plans",
+          title: "Tools",
           tabBarIcon: ({ color }) => (
-            <TabSvgIcon name="star" color={color} />
+            <TabSvgIcon name="tools" color={color} />
           ),
         }}
       />
@@ -103,6 +103,10 @@ export default function TabLayout() {
       />
       <Tabs.Screen
         name="history"
+        options={{ href: null }}
+      />
+      <Tabs.Screen
+        name="plans"
         options={{ href: null }}
       />
     </Tabs>

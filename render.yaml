@@ -68,6 +68,8 @@ services:
         sync: false
       - key: ZYLA_API_KEY        # cost-of-living data for the Living tab (off if blank)
         sync: false
+      - key: GOOGLE_MAPS_API_KEY # live-traffic drive times for Airport Timing (off if blank)
+        sync: false
       - key: EXPO_ACCESS_TOKEN   # higher push throughput (optional)
         sync: false
       - key: EMAIL_WEBHOOK_URL   # email fallback for alerts (optional)
