@@ -83,6 +83,37 @@ async function fetchCity(def: CityDef): Promise<RawCity> {
   return data;
 }
 
+// ── Live foreign-exchange rates ─────────────────────────────────────────────
+// Rates are fetched (base GBP) from a free, key-less endpoint and cached for a
+// day. Each city's hardcoded `perGBP` is the fallback if the feed is missing a
+// currency or unreachable, so conversion always works.
+const FX_URL = "https://open.er-api.com/v6/latest/GBP";
+let fxCache: { rates: Record<string, number>; ts: number } | null = null;
+
+async function fetchFxRates(): Promise<Record<string, number>> {
+  if (fxCache && Date.now() - fxCache.ts < CACHE_TTL_MS) return fxCache.rates;
+  try {
+    const res = await fetch(FX_URL);
+    if (!res.ok) throw new Error(`FX HTTP ${res.status}`);
+    const json = (await res.json()) as { result?: string; rates?: Record<string, number> };
+    if (json.result !== "success" || !json.rates || typeof json.rates !== "object") {
+      throw new Error("FX malformed response");
+    }
+    fxCache = { rates: json.rates, ts: Date.now() };
+    return json.rates;
+  } catch (err) {
+    logger.warn({ err }, "FX rate fetch failed; using fallback rates");
+    return {};
+  }
+}
+
+// Units of the city's local currency per 1 GBP: live rate when available and
+// sane, otherwise the curated fallback baked into the city definition.
+export function resolvePerGBP(def: CityDef, rates: Record<string, number>): number {
+  const live = rates[def.currency];
+  return typeof live === "number" && live > 0 ? live : def.perGBP;
+}
+
 function parseNum(val: string | undefined): number {
   if (!val) return 0;
   return parseFloat(val.replace(/[^\d,.]/g, "").replace(/,/g, "")) || 0;
@@ -208,10 +239,17 @@ router.get("/cost-of-living", async (req, res) => {
   }
 
   try {
-    const [aRaw, bRaw] = await Promise.all([fetchCity(aDef), fetchCity(bDef)]);
+    const [aRaw, bRaw, fxRates] = await Promise.all([
+      fetchCity(aDef),
+      fetchCity(bDef),
+      fetchFxRates(),
+    ]);
+    // Apply live FX (with per-city fallback) to each city definition.
+    const aLive: CityDef = { ...aDef, perGBP: resolvePerGBP(aDef, fxRates) };
+    const bLive: CityDef = { ...bDef, perGBP: resolvePerGBP(bDef, fxRates) };
     const result: CostOfLivingResponse = {
-      a: { code: aDef.code, label: aDef.label, currency: aDef.currency, budget: computeBudget(aRaw, aDef) },
-      b: { code: bDef.code, label: bDef.label, currency: bDef.currency, budget: computeBudget(bRaw, bDef) },
+      a: { code: aDef.code, label: aDef.label, currency: aDef.currency, budget: computeBudget(aRaw, aLive) },
+      b: { code: bDef.code, label: bDef.label, currency: bDef.currency, budget: computeBudget(bRaw, bLive) },
       cachedUntil: new Date(Date.now() + CACHE_TTL_MS).toISOString(),
     };
     res.json(result);

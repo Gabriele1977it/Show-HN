@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { CITIES, computeBudget, type CityDef } from "../src/routes/cost-of-living.ts";
+import { CITIES, computeBudget, resolvePerGBP, type CityDef } from "../src/routes/cost-of-living.ts";
 
 const london = CITIES.find((c) => c.code === "LON")!;
 const hurghada = CITIES.find((c) => c.code === "HRG")!;
@@ -63,6 +63,16 @@ test("missing optional fields fall back to a scale of the meal price (never cras
   assert.equal(b.transport, 70); // dining * 7
   assert.equal(b.gym, 25); // dining * 2.5
   assert.equal(b.groceries, 160); // dining * 16 (no staples present)
+});
+
+test("resolvePerGBP prefers a valid live rate over the fallback", () => {
+  assert.equal(resolvePerGBP(hurghada, { EGP: 63 }), 63);
+});
+
+test("resolvePerGBP falls back when the rate is missing or invalid", () => {
+  assert.equal(resolvePerGBP(hurghada, {}), hurghada.perGBP);
+  assert.equal(resolvePerGBP(hurghada, { EGP: 0 }), hurghada.perGBP);
+  assert.equal(resolvePerGBP(hurghada, { EGP: -5 }), hurghada.perGBP);
 });
 
 test("every curated city has unique code and sane FX", () => {

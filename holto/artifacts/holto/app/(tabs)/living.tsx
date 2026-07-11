@@ -426,7 +426,7 @@ export default function LivingScreen() {
             )}
           </View>
           <Text style={[styles.disclaimer, { color: colors.mutedForeground }]}>
-            Figures are approximate monthly estimates converted to GBP, for one person.
+            Approximate monthly estimates for one person, converted to GBP at today's exchange rates.
           </Text>
         </Animated.View>
 
