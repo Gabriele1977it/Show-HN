@@ -62,13 +62,17 @@ services:
       - key: MONITOR_POLL_MS
         value: "900000"
       # ── Optional — leave blank to start; add later in the dashboard ──
-      - key: OPENAI_API_KEY      # warmer AI wording (deterministic copy is used if blank)
+      - key: GEMINI_API_KEY      # FREE tier — powers "paste a booking" trip parsing (aistudio.google.com, no card)
+        sync: false
+      - key: OPENAI_API_KEY      # optional paid fallback for AI wording/parsing (deterministic copy used if blank)
         sync: false
       - key: AIRLABS_API_KEY     # live flight status + monitoring (off if blank)
         sync: false
       - key: ZYLA_API_KEY        # cost-of-living data for the Living tab (off if blank)
         sync: false
-      - key: GOOGLE_MAPS_API_KEY # live-traffic drive times for Airport Timing (off if blank)
+      - key: MAPBOX_TOKEN        # FREE tier — live-traffic drive times for Airport Timing (mapbox.com, no card)
+        sync: false
+      - key: GOOGLE_MAPS_API_KEY # optional alternative for Airport Timing (needs a Google billing account)
         sync: false
       - key: EXPO_ACCESS_TOKEN   # higher push throughput (optional)
         sync: false

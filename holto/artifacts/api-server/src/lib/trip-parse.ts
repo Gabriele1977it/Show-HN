@@ -1,13 +1,9 @@
-import OpenAI from "openai";
-
-import { logger } from "./logger";
+import { generateJson } from "./llm";
 
 // Turn a pasted booking confirmation (flight, hotel, train, car…) into a
-// structured trip. Uses the model purely as a parser — it extracts what's in
-// the text and never invents bookings. Returns null on any failure so the
-// caller can fall back to manual entry; this function never throws.
-
-const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY ?? "no-key" });
+// structured trip. Uses an LLM purely as a parser — it extracts what's in the
+// text and never invents bookings. Prefers the free Gemini tier (see lib/llm).
+// Returns null on any failure so the caller can fall back to manual entry.
 
 const ITEM_TYPES = new Set(["flight", "hotel", "train", "car", "activity", "other"]);
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -80,52 +76,36 @@ Respond ONLY with valid JSON, no markdown:
 }
 If there are no real bookings in the text, return {"title":"","destination":null,"startDate":null,"endDate":null,"items":[]}.`;
 
-  try {
-    const response = await client.chat.completions.create(
-      {
-        model: "gpt-4o-mini",
-        messages: [{ role: "user", content: prompt }],
-        response_format: { type: "json_object" },
-        temperature: 0,
-        max_tokens: 900,
-      },
-      { timeout: 15000, maxRetries: 1 },
-    );
-    const content = response.choices[0]?.message?.content;
-    if (!content) return null;
+  const parsed = await generateJson(prompt, { maxTokens: 900, temperature: 0 });
+  if (!parsed || typeof parsed !== "object") return null;
+  const raw = parsed as Record<string, unknown>;
+  const rawItems = Array.isArray(raw.items) ? raw.items : [];
 
-    const raw = JSON.parse(content) as Record<string, unknown>;
-    const rawItems = Array.isArray(raw.items) ? raw.items : [];
-
-    const items: ParsedItem[] = [];
-    for (const r of rawItems) {
-      if (!r || typeof r !== "object") continue;
-      const o = r as Record<string, unknown>;
-      const title = str(o.title);
-      if (!title) continue;
-      const type = typeof o.type === "string" && ITEM_TYPES.has(o.type) ? o.type : "other";
-      items.push({
-        type,
-        title,
-        startAt: cleanDateTime(o.startAt),
-        endAt: cleanDateTime(o.endAt),
-        location: str(o.location),
-        reference: str(o.reference, 60),
-      });
-    }
-
-    if (items.length === 0) return null;
-
-    const title = str(raw.title) ?? str(raw.destination) ?? "New trip";
-    return {
+  const items: ParsedItem[] = [];
+  for (const r of rawItems) {
+    if (!r || typeof r !== "object") continue;
+    const o = r as Record<string, unknown>;
+    const title = str(o.title);
+    if (!title) continue;
+    const type = typeof o.type === "string" && ITEM_TYPES.has(o.type) ? o.type : "other";
+    items.push({
+      type,
       title,
-      destination: str(raw.destination),
-      startDate: cleanDate(raw.startDate),
-      endDate: cleanDate(raw.endDate),
-      items,
-    };
-  } catch (e) {
-    logger.warn({ err: e }, "trip parse failed");
-    return null;
+      startAt: cleanDateTime(o.startAt),
+      endAt: cleanDateTime(o.endAt),
+      location: str(o.location),
+      reference: str(o.reference, 60),
+    });
   }
+
+  if (items.length === 0) return null;
+
+  const title = str(raw.title) ?? str(raw.destination) ?? "New trip";
+  return {
+    title,
+    destination: str(raw.destination),
+    startDate: cleanDate(raw.startDate),
+    endDate: cleanDate(raw.endDate),
+    items,
+  };
 }
