@@ -4,6 +4,8 @@ import { Router, type IRouter } from "express";
 
 import { requireAuth } from "../middlewares/auth";
 import { buildFlightResponse, fetchFlightData, generateStatusMessage } from "../lib/flights";
+import { allowFlightSearch } from "../lib/usage";
+import { getUserTier, TIER_FEATURES } from "../lib/tier";
 
 const router: IRouter = Router();
 
@@ -11,6 +13,16 @@ router.get("/flights/status", requireAuth, async (req, res): Promise<void> => {
   const flightNumber = (req.query.flightNumber as string)?.trim().toUpperCase();
   if (!flightNumber) {
     res.status(400).json({ error: "Flight number is required (e.g. EZY8743)." });
+    return;
+  }
+
+  // Free tier: limited daily flight searches; paid tiers are unlimited.
+  const allowance = await allowFlightSearch(req.auth!.userId);
+  if (!allowance.allowed) {
+    res.status(429).json({
+      error: `You've used your ${allowance.limit} free flight searches today. Upgrade for unlimited tracking.`,
+      requiresUpgrade: true,
+    });
     return;
   }
 
@@ -55,6 +67,16 @@ router.get("/flights/monitor", requireAuth, async (req, res): Promise<void> => {
 });
 
 router.post("/flights/monitor", requireAuth, async (req, res): Promise<void> => {
+  // Background flight monitoring is a paid feature.
+  const tier = await getUserTier(req.auth!.userId);
+  if (!TIER_FEATURES[tier].myFlightMonitor) {
+    res.status(403).json({
+      error: "Live flight monitoring is a Trip Pass or Holto Pro feature.",
+      requiresUpgrade: true,
+    });
+    return;
+  }
+
   const { flightNumber, destination } = req.body as { flightNumber?: string; destination?: string };
 
   if (!flightNumber?.trim() || !destination?.trim()) {

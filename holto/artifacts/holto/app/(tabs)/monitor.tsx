@@ -1,5 +1,6 @@
 import { getListMonitoredFlightsQueryKey, useAddMonitoredFlight, useListMonitoredFlights, useRemoveMonitoredFlight } from "@workspace/api-client-react";
 import { Icon } from "@/components/Icon";
+import { UpgradeSheet } from "@/components/UpgradeSheet";
 import * as Haptics from "expo-haptics";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -88,6 +89,8 @@ export default function MonitorScreen() {
 
   const [flightInput, setFlightInput] = useState("");
   const [destInput, setDestInput] = useState("");
+  const [formError, setFormError] = useState<string | null>(null);
+  const [upgrade, setUpgrade] = useState<string | null>(null);
   const [activeFlightId, setActiveFlightId] = useState<number | null>(null);
   const [activeFlightNumber, setActiveFlightNumber] = useState<string | null>(null);
   const [liveStatus, setLiveStatus] = useState<Record<string, unknown> | null>(null);
@@ -162,9 +165,10 @@ export default function MonitorScreen() {
     const fn = flightInput.trim().toUpperCase();
     const dest = destInput.trim().toUpperCase();
     if (!fn || !dest) {
-      Alert.alert("Fill in both fields", "Enter a flight number and destination airport code.");
+      setFormError("Enter a flight number and destination airport code.");
       return;
     }
+    setFormError(null);
     try {
       const result = await addFlight({ data: { flightNumber: fn, destination: dest } });
       await refetchList();
@@ -173,8 +177,13 @@ export default function MonitorScreen() {
       setActiveFlightId(result.id);
       setActiveFlightNumber(result.flightNumber);
       setLiveStatus(null);
-    } catch {
-      Alert.alert("Error", "Could not add this flight. Please try again.");
+    } catch (err: unknown) {
+      const body = (err as { data?: { error?: string; requiresUpgrade?: boolean } }).data;
+      if (body?.requiresUpgrade) {
+        setUpgrade(body.error ?? "Live flight monitoring is a paid feature.");
+      } else {
+        setFormError(body?.error ?? "Could not add this flight. Please try again.");
+      }
     }
   };
 
@@ -432,10 +441,21 @@ export default function MonitorScreen() {
               <Text style={styles.addBtnText}>Start tracking</Text>
             )}
           </Pressable>
+          {formError && (
+            <Text style={{ color: colors.destructive, fontFamily: "Inter_500Medium", fontSize: 13, marginTop: 10 }}>
+              {formError}
+            </Text>
+          )}
         </View>
 
         <View style={{ height: 100 }} />
       </ScrollView>
+      <UpgradeSheet
+        visible={!!upgrade}
+        message={upgrade ?? undefined}
+        title="Live flight monitoring"
+        onClose={() => setUpgrade(null)}
+      />
     </KeyboardAvoidingView>
   );
 }

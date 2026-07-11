@@ -31,6 +31,7 @@ import { RetryError } from "@/components/RetryError";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 import { openUrl } from "@/utils/openUrl";
+import { UpgradeSheet } from "@/components/UpgradeSheet";
 
 type FlightStatus = "scheduled" | "active" | "landed" | "cancelled" | "incident" | "diverted" | "unknown";
 
@@ -218,6 +219,7 @@ export default function HomeScreen() {
   const [flightResult, setFlightResult] = useState<FlightResult | null>(null);
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
+  const [upgrade, setUpgrade] = useState<string | null>(null);
   const [tracked, setTracked] = useState(false);
   const [tracking, setTracking] = useState(false);
 
@@ -267,8 +269,12 @@ export default function HomeScreen() {
       );
       setFlightResult(data);
     } catch (err: unknown) {
-      const body = (err as { data?: { error?: string } }).data;
-      setSearchError(body?.error ?? "Flight not found. Check the number and try again.");
+      const body = (err as { data?: { error?: string; requiresUpgrade?: boolean } }).data;
+      if (body?.requiresUpgrade) {
+        setUpgrade(body.error ?? "Upgrade for unlimited flight tracking.");
+      } else {
+        setSearchError(body?.error ?? "Flight not found. Check the number and try again.");
+      }
     } finally {
       setSearching(false);
     }
@@ -552,6 +558,12 @@ export default function HomeScreen() {
       </Pressable>
 
       <AskHoltoSheet visible={askVisible} onClose={() => setAskVisible(false)} />
+      <UpgradeSheet
+        visible={!!upgrade}
+        message={upgrade ?? undefined}
+        title="Unlimited flight tracking"
+        onClose={() => setUpgrade(null)}
+      />
     </View>
   );
 }

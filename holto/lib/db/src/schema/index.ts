@@ -6,3 +6,4 @@ export * from "./claims";
 export * from "./country-stays";
 export * from "./trips";
 export * from "./expenses";
+export * from "./usage";
