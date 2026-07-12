@@ -11,9 +11,15 @@ const GEMINI_KEY = process.env.GEMINI_API_KEY ?? "";
 const OPENAI_KEY = process.env.OPENAI_API_KEY ?? "";
 const openai = OPENAI_KEY ? new OpenAI({ apiKey: OPENAI_KEY }) : null;
 
-// Configurable so we can move off a deprecated model without a code change.
-// gemini-2.0-flash is current, free-tier, and supports text + vision (PDF/image).
-const GEMINI_MODEL = process.env.GEMINI_MODEL?.trim() || "gemini-2.0-flash";
+// Try a chain of known-good models rather than betting on one name: model
+// availability varies by key/project/region, and a single alias can 404. An
+// optional GEMINI_MODEL env is tried first, then current GA fallbacks. On a
+// 404 (model-not-found) we advance to the next; other errors stop the chain.
+const GEMINI_MODELS: string[] = (() => {
+  const fallbacks = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-flash-latest", "gemini-1.5-flash"];
+  const configured = process.env.GEMINI_MODEL?.trim();
+  return configured ? [configured, ...fallbacks.filter((m) => m !== configured)] : fallbacks;
+})();
 
 export function llmConfigured(): boolean {
   return Boolean(GEMINI_KEY || OPENAI_KEY);
@@ -44,45 +50,82 @@ function describeHttp(status: number, provider: string): string {
   }
 }
 
-async function geminiGenerate(
-  parts: unknown[],
-  opts: { json: boolean; maxTokens: number; temperature: number; timeoutMs?: number },
-): Promise<GenResult> {
-  if (!GEMINI_KEY) return { text: null, diag: "Gemini key not set" };
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+type Attempt =
+  | { kind: "ok"; text: string }
+  | { kind: "notfound"; diag: string } // 404 — try the next model
+  | { kind: "throttled"; diag: string } // 429/503 — retryable
+  | { kind: "fail"; diag: string }; // other error / empty — stop
+
+// A single Gemini generateContent call against one model.
+async function geminiCall(
+  model: string,
+  body: string,
+  timeoutMs: number,
+): Promise<Attempt> {
   try {
     const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_KEY}`,
-      {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts }],
-          generationConfig: {
-            ...(opts.json ? { responseMimeType: "application/json" } : {}),
-            temperature: opts.temperature,
-            maxOutputTokens: opts.maxTokens,
-          },
-        }),
-        signal: AbortSignal.timeout(opts.timeoutMs ?? 20000),
-      },
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_KEY}`,
+      { method: "POST", headers: { "content-type": "application/json" }, body, signal: AbortSignal.timeout(timeoutMs) },
     );
+    if (res.status === 404) {
+      logger.warn({ model }, "Gemini model not found — trying next");
+      return { kind: "notfound", diag: describeHttp(404, "Gemini") };
+    }
+    if (res.status === 429 || res.status === 503) {
+      logger.warn({ status: res.status, model }, "Gemini throttled");
+      return { kind: "throttled", diag: describeHttp(res.status, "Gemini") };
+    }
     if (!res.ok) {
-      const body = await res.text().catch(() => "");
-      logger.warn({ status: res.status, model: GEMINI_MODEL, body: body.slice(0, 600) }, "Gemini HTTP error");
-      return { text: null, diag: describeHttp(res.status, "Gemini") };
+      const errBody = await res.text().catch(() => "");
+      logger.warn({ status: res.status, model, body: errBody.slice(0, 600) }, "Gemini HTTP error");
+      return { kind: "fail", diag: describeHttp(res.status, "Gemini") };
     }
     const json = (await res.json()) as {
       candidates?: Array<{ content?: { parts?: Array<{ text?: string }> }; finishReason?: string }>;
     };
     const text = json.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (typeof text === "string" && text.trim()) return { text: text.trim(), diag: "" };
+    if (typeof text === "string" && text.trim()) return { kind: "ok", text: text.trim() };
     const finish = json.candidates?.[0]?.finishReason;
-    return { text: null, diag: `Gemini returned no text${finish ? ` (${finish})` : ""}` };
+    return { kind: "fail", diag: `Gemini returned no text${finish ? ` (${finish})` : ""}` };
   } catch (err) {
-    logger.warn({ err, model: GEMINI_MODEL }, "Gemini request failed");
+    logger.warn({ err, model }, "Gemini request failed");
     const name = err instanceof Error && err.name === "TimeoutError" ? "timed out" : "request failed";
-    return { text: null, diag: `Gemini ${name}` };
+    return { kind: "fail", diag: `Gemini ${name}` };
   }
+}
+
+async function geminiGenerate(
+  parts: unknown[],
+  opts: { json: boolean; maxTokens: number; temperature: number; timeoutMs?: number },
+): Promise<GenResult> {
+  if (!GEMINI_KEY) return { text: null, diag: "Gemini key not set" };
+
+  const body = JSON.stringify({
+    contents: [{ parts }],
+    generationConfig: {
+      ...(opts.json ? { responseMimeType: "application/json" } : {}),
+      temperature: opts.temperature,
+      maxOutputTokens: opts.maxTokens,
+    },
+  });
+  const timeoutMs = opts.timeoutMs ?? 20000;
+
+  let lastDiag = "Gemini unavailable";
+  for (const model of GEMINI_MODELS) {
+    let res = await geminiCall(model, body, timeoutMs);
+    // A transient throttle self-heals: pause and retry the same model once.
+    if (res.kind === "throttled") {
+      await sleep(2500);
+      res = await geminiCall(model, body, timeoutMs);
+    }
+    if (res.kind === "ok") return { text: res.text, diag: "" };
+    lastDiag = res.diag;
+    if (res.kind === "notfound") continue; // this model isn't available — try the next
+    return { text: null, diag: res.diag }; // throttled/fail — don't cycle models
+  }
+  return { text: null, diag: lastDiag };
 }
 
 // Parse JSON that may arrive wrapped in ```json fences despite our asking for a
