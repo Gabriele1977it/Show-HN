@@ -117,8 +117,9 @@ router.post("/ask", requireAuth, async (req, res): Promise<void> => {
       : "";
 
   // What HOLTO knows about this traveller (their trips, flights, residency days)
-  // so it can answer personal questions accurately.
-  const userContext = await buildUserContext(req.auth!.userId);
+  // so it can answer personal questions accurately. Capped to keep input tokens
+  // (and therefore cost) bounded per question.
+  const userContext = (await buildUserContext(req.auth!.userId)).slice(0, 900);
 
   const prompt = `You are HOLTO, a warm, knowledgeable travel companion helping British travellers — especially those travelling to and around Egypt (Hurghada, Sharm el-Sheikh, Cairo, etc). You answer practical on-the-ground questions ("Where can I eat?"), general travel-planning questions ("Best months to visit Hurghada", "What should I pack?"), and personal questions about the traveller's own plans.
 

@@ -1,5 +1,4 @@
-import OpenAI from "openai";
-
+import { generateJson } from "./llm";
 import { logger } from "./logger";
 import {
   buildDeterministicAnalysis,
@@ -16,8 +15,6 @@ import {
 // language, and may add a gentle "HOLTO Living" hint. If the model is
 // unavailable (bad airport wifi, no key, timeout), the deterministic copy is
 // used unchanged — so a stranded traveller always gets full, honest guidance.
-
-const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY ?? "no-key" });
 
 export type { DisruptionInput, ActionItem, ChecklistItem, ProactiveAction } from "./rights";
 
@@ -69,23 +66,10 @@ Respond ONLY with valid JSON, no markdown:
 Set proactiveHint to a single gentle sentence about HOLTO Living ONLY if this is a cancellation or a very long delay leaving them stranded for hours, and it feels genuinely helpful; otherwise null. Never be pushy.`;
 
   try {
-    const response = await client.chat.completions.create(
-      {
-        model: "gpt-4o-mini",
-        messages: [{ role: "user", content: prompt }],
-        response_format: { type: "json_object" },
-        temperature: 0.4,
-        max_tokens: 500,
-      },
-      // Fail fast on poor airport wifi — the deterministic copy is the fallback,
-      // so there's no reason to wait long or retry.
-      { timeout: 8000, maxRetries: 0 },
-    );
-    const content = response.choices[0]?.message?.content;
-    if (!content) return null;
-
-    const parsed = JSON.parse(content) as Partial<ToneResult>;
-    if (!parsed.companionMessage || !parsed.proactiveAction?.title || !parsed.proactiveAction?.description) {
+    // Free-first (Gemini) tone rewrite. Fail fast on poor airport wifi — the
+    // deterministic copy is the fallback, so there's no reason to wait long.
+    const parsed = (await generateJson(prompt, { maxTokens: 500, temperature: 0.4, timeoutMs: 8000 })) as Partial<ToneResult> | null;
+    if (!parsed || !parsed.companionMessage || !parsed.proactiveAction?.title || !parsed.proactiveAction?.description) {
       return null;
     }
     return {

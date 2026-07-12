@@ -191,12 +191,12 @@ function parseJsonLoose(text: string): unknown | null {
 // Free-first plain-text generation (prefers Gemini). Returns null on failure.
 export async function generateText(
   prompt: string,
-  opts: { maxTokens?: number; temperature?: number } = {},
+  opts: { maxTokens?: number; temperature?: number; timeoutMs?: number } = {},
 ): Promise<string | null> {
   const maxTokens = opts.maxTokens ?? 300;
   const temperature = opts.temperature ?? 0.4;
 
-  const g = await geminiGenerate([{ text: prompt }], { json: false, maxTokens, temperature, timeoutMs: 15000 });
+  const g = await geminiGenerate([{ text: prompt }], { json: false, maxTokens, temperature, timeoutMs: opts.timeoutMs ?? 15000 });
   if (g.text) return g.text;
 
   if (openai) {
@@ -279,12 +279,12 @@ export async function generateJsonFromDocument(
 
 export async function generateJson(
   prompt: string,
-  opts: { maxTokens?: number; temperature?: number } = {},
+  opts: { maxTokens?: number; temperature?: number; timeoutMs?: number } = {},
 ): Promise<unknown | null> {
   const maxTokens = opts.maxTokens ?? 900;
   const temperature = opts.temperature ?? 0;
 
-  const g = await geminiGenerate([{ text: prompt }], { json: true, maxTokens, temperature, timeoutMs: 20000 });
+  const g = await geminiGenerate([{ text: prompt }], { json: true, maxTokens, temperature, timeoutMs: opts.timeoutMs ?? 20000 });
   if (g.text) {
     const parsed = parseJsonLoose(g.text);
     if (parsed !== null) return parsed;

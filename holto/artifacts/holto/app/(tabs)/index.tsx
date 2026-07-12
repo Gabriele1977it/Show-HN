@@ -35,6 +35,17 @@ import { openUrl } from "@/utils/openUrl";
 import { UpgradeSheet } from "@/components/UpgradeSheet";
 import { AddToTripSheet } from "@/components/AddToTripSheet";
 
+const TOOLKIT: { emoji: string; label: string; route: string }[] = [
+  { emoji: "🗓️", label: "Travel day", route: "/today" },
+  { emoji: "🧭", label: "Destination", route: "/destination" },
+  { emoji: "🧾", label: "Expenses", route: "/expenses" },
+  { emoji: "⏱️", label: "Airport", route: "/airport-timing" },
+  { emoji: "💱", label: "Currency", route: "/currency" },
+  { emoji: "🌇", label: "Best light", route: "/shoot-times" },
+  { emoji: "🌍", label: "Residency", route: "/residency" },
+  { emoji: "💷", label: "Cost of living", route: "/cost-of-living" },
+];
+
 type FlightStatus = "scheduled" | "active" | "landed" | "cancelled" | "incident" | "diverted" | "unknown";
 
 interface FlightResult {
@@ -504,6 +515,32 @@ export default function HomeScreen() {
           </LinearGradient>
         </Animated.View>
 
+        {/* Toolkit quick-access — surfaces the tools so they're discoverable */}
+        <Animated.View entering={FadeInDown.delay(90).duration(450)} style={styles.toolkitWrap}>
+          <View style={styles.toolkitHeader}>
+            <Text style={[styles.toolkitTitle, { color: colors.foreground }]}>Your toolkit</Text>
+            <Pressable onPress={() => router.push("/(tabs)/tools")} hitSlop={6}>
+              <Text style={[styles.seeAll, { color: colors.primary }]}>All tools</Text>
+            </Pressable>
+          </View>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingRight: 8 }}>
+            {TOOLKIT.map((t) => (
+              <Pressable
+                key={t.route}
+                onPress={() => router.push(t.route as never)}
+                style={({ pressed }) => [
+                  styles.toolPill,
+                  colors.shadow,
+                  { backgroundColor: colors.card, borderColor: colors.border, borderRadius: colors.radius, transform: [{ scale: pressed ? 0.97 : 1 }] },
+                ]}
+              >
+                <Text style={{ fontSize: 22 }}>{t.emoji}</Text>
+                <Text style={[styles.toolPillText, { color: colors.foreground }]}>{t.label}</Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+        </Animated.View>
+
         {flightResult && (
           <View style={{ marginTop: 12 }}>
             <FlightResultCard
@@ -724,6 +761,11 @@ const styles = StyleSheet.create({
   travelDayCta: { flexDirection: "row", alignItems: "center", gap: 4 },
   travelDayCtaText: { fontFamily: "Inter_600SemiBold", fontSize: 13, color: "#C9A24B" },
   trackerCard: { padding: 20, marginBottom: 14 },
+  toolkitWrap: { marginTop: 6, marginBottom: 4 },
+  toolkitHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 },
+  toolkitTitle: { fontFamily: "Inter_700Bold", fontSize: 16 },
+  toolPill: { width: 96, alignItems: "center", gap: 8, borderWidth: 1, paddingVertical: 16, paddingHorizontal: 8 },
+  toolPillText: { fontFamily: "Inter_600SemiBold", fontSize: 12, textAlign: "center" },
   trackerLabel: { fontFamily: "Inter_700Bold", fontSize: 20, color: "#fff", marginBottom: 4 },
   trackerSub: { fontFamily: "Inter_400Regular", fontSize: 13, color: "rgba(255,255,255,0.55)", marginBottom: 16 },
   searchRow: { flexDirection: "row", gap: 10 },
