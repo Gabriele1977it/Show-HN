@@ -30,6 +30,7 @@ router.get("/journey/next", requireAuth, async (req, res): Promise<void> => {
       location: tripItemsTable.location,
       reference: tripItemsTable.reference,
       tripTitle: tripsTable.title,
+      tripDestination: tripsTable.destination,
     })
     .from(tripItemsTable)
     .innerJoin(tripsTable, eq(tripItemsTable.tripId, tripsTable.id))
@@ -70,6 +71,7 @@ router.get("/journey/next", requireAuth, async (req, res): Promise<void> => {
       tripItemId: item.id,
       tripId: item.tripId,
       tripTitle: item.tripTitle,
+      destination: item.tripDestination ?? item.location ?? null,
       title: item.title,
       flightNumber: flightNumber ?? live?.flightNumber ?? null,
       reference: item.reference,

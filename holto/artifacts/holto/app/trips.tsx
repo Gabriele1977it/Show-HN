@@ -19,6 +19,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { DateField } from "@/components/DateField";
 import { Icon } from "@/components/Icon";
 import { ShareRecapSheet } from "@/components/ShareRecapSheet";
+import { SkeletonCard } from "@/components/Skeleton";
 import { useColors } from "@/hooks/useColors";
 import { bookingUploadSupported, pickBookingFile } from "@/utils/pickBookingFile";
 
@@ -305,7 +306,13 @@ export default function TripsScreen() {
         )}
       </Animated.View>
 
-      {isLoading && <ActivityIndicator color={colors.primary} style={{ marginTop: 30 }} />}
+      {isLoading && (
+        <View style={{ marginTop: 20 }}>
+          <SkeletonCard />
+          <SkeletonCard />
+          <SkeletonCard />
+        </View>
+      )}
 
       {!isLoading && trips.length === 0 && !showNewTrip && (
         <Animated.View entering={FadeInDown.delay(120).duration(400)} style={[styles.empty, { borderColor: colors.border }]}>

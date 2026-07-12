@@ -17,6 +17,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { DateField } from "@/components/DateField";
 import { Icon, type IconName } from "@/components/Icon";
+import { SkeletonCard } from "@/components/Skeleton";
 import { useColors } from "@/hooks/useColors";
 
 type Category = "airline" | "hotel" | "rail" | "car" | "card" | "other";
@@ -200,7 +201,11 @@ export default function LoyaltyScreen() {
         </Pressable>
 
         {isLoading ? (
-          <ActivityIndicator color={colors.primary} style={{ marginTop: 40 }} />
+          <View style={{ marginTop: 24 }}>
+            <SkeletonCard />
+            <SkeletonCard />
+            <SkeletonCard />
+          </View>
         ) : programs.length === 0 ? (
           <View style={[styles.empty, { backgroundColor: colors.card, borderColor: colors.border, borderRadius: colors.radius }]}>
             <Text style={{ fontSize: 32 }}>🏆</Text>

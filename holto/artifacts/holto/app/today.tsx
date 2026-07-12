@@ -8,6 +8,7 @@ import Animated, { FadeInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Icon, type IconName } from "@/components/Icon";
+import { findEssentials } from "@/constants/countryEssentials";
 import { useColors } from "@/hooks/useColors";
 
 type FlightStatus = "scheduled" | "active" | "landed" | "cancelled" | "incident" | "diverted" | "unknown";
@@ -16,6 +17,7 @@ interface JourneyFlight {
   tripItemId: number;
   tripId: number;
   tripTitle: string;
+  destination: string | null;
   title: string;
   flightNumber: string | null;
   reference: string | null;
@@ -142,6 +144,12 @@ export default function TodayScreen() {
   const arrTime = clock(flight.scheduledArr);
   const delayed = !!flight.depDelay && flight.depDelay >= 15;
   const disrupted = flight.status === "cancelled" || flight.status === "diverted" || flight.status === "incident";
+
+  // Offline destination guide — resolve from the trip's destination (falls back
+  // to the arrival city). Only shown when we recognise the country, so the link
+  // never dead-ends.
+  const guideQuery = flight.destination ?? flight.arrAirport ?? "";
+  const guide = guideQuery ? findEssentials(guideQuery) : null;
 
   const steps: Step[] = [
     {
@@ -280,6 +288,28 @@ export default function TodayScreen() {
         ))}
       </View>
 
+      {guide ? (
+        <Animated.View entering={FadeInDown.delay(320).duration(400)}>
+          <Pressable
+            onPress={() => router.push(`/destination?country=${encodeURIComponent(guide.code)}` as never)}
+            style={({ pressed }) => [
+              styles.guideCard,
+              colors.shadow,
+              { backgroundColor: colors.card, borderColor: colors.border, borderRadius: colors.radius, transform: [{ scale: pressed ? 0.99 : 1 }] },
+            ]}
+          >
+            <Text style={{ fontSize: 26 }}>🧭</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.guideTitle, { color: colors.foreground }]}>Destination guide · {guide.flag} {guide.name}</Text>
+              <Text style={[styles.guideSub, { color: colors.mutedForeground }]}>
+                Emergency number, plugs, tap water, tipping and a local tip — all offline.
+              </Text>
+            </View>
+            <Icon name="chevron-right" size={18} color={colors.mutedForeground} />
+          </Pressable>
+        </Animated.View>
+      ) : null}
+
       <Text style={[styles.foot, { color: colors.mutedForeground }]}>
         Times shown in the airport's local clock. HOLTO keeps watching this flight and will alert you if anything changes.
       </Text>
@@ -321,5 +351,8 @@ const styles = StyleSheet.create({
   emptySub: { fontFamily: "Inter_400Regular", fontSize: 14, lineHeight: 21, textAlign: "center" },
   emptyBtn: { marginTop: 8, paddingHorizontal: 22, paddingVertical: 12, borderRadius: 12 },
   emptyBtnText: { fontFamily: "Inter_600SemiBold", fontSize: 15 },
+  guideCard: { flexDirection: "row", alignItems: "center", gap: 14, borderWidth: 1, padding: 16, marginTop: 6 },
+  guideTitle: { fontFamily: "Inter_600SemiBold", fontSize: 15 },
+  guideSub: { fontFamily: "Inter_400Regular", fontSize: 12, lineHeight: 17, marginTop: 3 },
   foot: { fontFamily: "Inter_400Regular", fontSize: 12, lineHeight: 18, marginTop: 20 },
 });

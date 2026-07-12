@@ -1,6 +1,7 @@
 import { getListMonitoredFlightsQueryKey, useAddMonitoredFlight, useListMonitoredFlights, useRemoveMonitoredFlight } from "@workspace/api-client-react";
 import { Icon } from "@/components/Icon";
 import { UpgradeSheet } from "@/components/UpgradeSheet";
+import { SkeletonCard } from "@/components/Skeleton";
 import * as Haptics from "expo-haptics";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -249,7 +250,10 @@ export default function MonitorScreen() {
         </View>
 
         {listLoading ? (
-          <ActivityIndicator color={colors.primary} style={{ marginTop: 40 }} />
+          <View style={{ marginTop: 24 }}>
+            <SkeletonCard />
+            <SkeletonCard />
+          </View>
         ) : !Array.isArray(monitored) || monitored.length === 0 ? (
           <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <Icon name="radio" size={32} color={colors.mutedForeground} style={{ marginBottom: 12 }} />
