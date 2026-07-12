@@ -16,6 +16,10 @@ export const usersTable = pgTable("users", {
   // Growth: each user's own share code, and who invited them (if anyone).
   referralCode: text("referral_code").unique(),
   referredBy: integer("referred_by"),
+  // Password reset: we store only a SHA-256 hash of the emailed token, plus its
+  // expiry. The raw token lives only in the reset link. Both cleared on use.
+  resetTokenHash: text("reset_token_hash"),
+  resetTokenExpiresAt: timestamp("reset_token_expires_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

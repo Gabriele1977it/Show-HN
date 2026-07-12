@@ -32,6 +32,8 @@ interface AuthContextValue {
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
   register: (name: string, email: string, password: string) => Promise<void>;
+  forgotPassword: (email: string) => Promise<string>;
+  resetPassword: (token: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -121,6 +123,43 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [],
   );
 
+  const forgotPassword = useCallback(async (email: string): Promise<string> => {
+    const res = await fetch(
+      `https://${process.env.EXPO_PUBLIC_DOMAIN}/api/auth/forgot-password`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      },
+    );
+    const body = (await res.json().catch(() => ({}))) as { message?: string; error?: string };
+    if (!res.ok) throw new Error(body.error ?? "Couldn't send the reset link. Please try again.");
+    return body.message ?? "If an account exists for that email, a reset link is on its way.";
+  }, []);
+
+  const resetPassword = useCallback(async (resetToken: string, password: string) => {
+    const res = await fetch(
+      `https://${process.env.EXPO_PUBLIC_DOMAIN}/api/auth/reset-password`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: resetToken, password }),
+      },
+    );
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error((body as { error?: string }).error ?? "Couldn't reset your password.");
+    }
+    const data = (await res.json()) as { user: AuthUser; token: string };
+    await Promise.all([
+      AsyncStorage.setItem(TOKEN_KEY, data.token),
+      AsyncStorage.setItem(USER_KEY, JSON.stringify(data.user)),
+    ]);
+    setToken(data.token);
+    setUser(data.user);
+    router.replace("/(tabs)");
+  }, []);
+
   const logout = useCallback(async () => {
     await Promise.all([
       AsyncStorage.removeItem(TOKEN_KEY),
@@ -132,7 +171,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, token, isLoading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, token, isLoading, login, register, forgotPassword, resetPassword, logout }}>
       {children}
     </AuthContext.Provider>
   );

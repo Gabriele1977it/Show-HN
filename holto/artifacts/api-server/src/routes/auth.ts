@@ -1,11 +1,26 @@
 import { db, usersTable } from "@workspace/db";
 import bcrypt from "bcryptjs";
-import { eq } from "drizzle-orm";
+import crypto from "node:crypto";
+import { and, eq, gt } from "drizzle-orm";
 import { Router, type IRouter } from "express";
 
 import { requireAuth, signToken } from "../middlewares/auth";
+import { sendEmail } from "../lib/email";
 import { getUserTier, isOwnerEmail, TIER_FEATURES } from "../lib/tier";
 import { makeSlug } from "../lib/slug";
+
+// Reset links point at the web app. Prefer an explicit base, then the shared
+// APP_ORIGIN/PUBLIC_URL, and finally HOLTO's production domain.
+const RESET_LINK_BASE = (
+  process.env.RESET_URL_BASE ??
+  process.env.APP_ORIGIN ??
+  process.env.PUBLIC_URL ??
+  "https://holtotravel.com"
+).replace(/\/+$/, "");
+
+function hashResetToken(token: string): string {
+  return crypto.createHash("sha256").update(token).digest("hex");
+}
 
 const router: IRouter = Router();
 
@@ -157,6 +172,85 @@ router.post("/auth/starter-pack", requireAuth, async (req, res): Promise<void> =
 
   req.log.info({ userId: user.id, starterPackEmail: email.trim() }, "Starter pack subscribed");
   res.json(safeUser(user));
+});
+
+// Step 1 of reset: email a one-time link. Always responds 200 with the same
+// message whether or not the account exists — so the endpoint can't be used to
+// discover which emails are registered.
+router.post("/auth/forgot-password", async (req, res): Promise<void> => {
+  const { email } = req.body as { email?: string };
+  const generic = { message: "If an account exists for that email, a reset link is on its way." };
+
+  if (!email?.trim()) {
+    res.status(400).json({ error: "Please enter your email address." });
+    return;
+  }
+  const normalized = email.trim().toLowerCase();
+
+  const [user] = await db.select().from(usersTable).where(eq(usersTable.email, normalized)).limit(1);
+  if (!user) {
+    res.json(generic);
+    return;
+  }
+
+  // 32 random bytes → the raw token goes in the link; only its hash is stored.
+  const rawToken = crypto.randomBytes(32).toString("hex");
+  const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+
+  await db
+    .update(usersTable)
+    .set({ resetTokenHash: hashResetToken(rawToken), resetTokenExpiresAt: expiresAt })
+    .where(eq(usersTable.id, user.id));
+
+  const link = `${RESET_LINK_BASE}/reset-password?token=${rawToken}`;
+  await sendEmail({
+    to: user.email,
+    subject: "Reset your HOLTO password",
+    text:
+      `Hi ${user.name || "there"},\n\n` +
+      `We got a request to reset your HOLTO password. Open the link below to choose a new one — it expires in 1 hour:\n\n` +
+      `${link}\n\n` +
+      `If you didn't ask for this, you can safely ignore this email; your password won't change.\n\n` +
+      `— HOLTO`,
+  });
+
+  req.log.info({ userId: user.id }, "Password reset requested");
+  res.json(generic);
+});
+
+// Step 2 of reset: exchange a valid, unexpired token for a new password.
+router.post("/auth/reset-password", async (req, res): Promise<void> => {
+  const { token, password } = req.body as { token?: string; password?: string };
+
+  if (!token?.trim() || !password) {
+    res.status(400).json({ error: "Reset link and a new password are both required." });
+    return;
+  }
+  if (password.length < 8) {
+    res.status(400).json({ error: "Password must be at least 8 characters." });
+    return;
+  }
+
+  const [user] = await db
+    .select()
+    .from(usersTable)
+    .where(and(eq(usersTable.resetTokenHash, hashResetToken(token.trim())), gt(usersTable.resetTokenExpiresAt, new Date())))
+    .limit(1);
+
+  if (!user) {
+    res.status(400).json({ error: "This reset link is invalid or has expired. Please request a new one." });
+    return;
+  }
+
+  const passwordHash = await bcrypt.hash(password, 12);
+  await db
+    .update(usersTable)
+    .set({ passwordHash, resetTokenHash: null, resetTokenExpiresAt: null })
+    .where(eq(usersTable.id, user.id));
+
+  const authToken = signToken({ userId: user.id, email: user.email });
+  req.log.info({ userId: user.id }, "Password reset completed");
+  res.json({ token: authToken, user: safeUser(user) });
 });
 
 export default router;
