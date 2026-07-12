@@ -1,5 +1,6 @@
 import { Router, type IRouter } from "express";
 
+import adminRouter from "./admin";
 import authRouter from "./auth";
 import costOfLivingRouter from "./cost-of-living";
 import disruptionsRouter from "./disruptions";
@@ -27,6 +28,7 @@ router.get("/", (_req, res) => res.json({ ok: true }));
 
 router.use(healthRouter);
 router.use(authRouter);
+router.use(adminRouter);
 router.use(disruptionsRouter);
 router.use(companionRouter);
 router.use(flightsRouter);

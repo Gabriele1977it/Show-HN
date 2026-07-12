@@ -10,6 +10,9 @@ export const usersTable = pgTable("users", {
   starterPackEmail: text("starter_pack_email"),
   stripeCustomerId: text("stripe_customer_id"),
   tripPassExpiresAt: timestamp("trip_pass_expires_at", { withTimezone: true }),
+  // Manually-granted tier ("trip_pass" | "pro"), set by an owner from the admin
+  // panel — used to comp influencers without going through Stripe. Null = none.
+  grantedTier: text("granted_tier"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

@@ -4,7 +4,7 @@ import { eq } from "drizzle-orm";
 import { Router, type IRouter } from "express";
 
 import { requireAuth, signToken } from "../middlewares/auth";
-import { getUserTier, TIER_FEATURES } from "../lib/tier";
+import { getUserTier, isOwnerEmail, TIER_FEATURES } from "../lib/tier";
 
 const router: IRouter = Router();
 
@@ -15,6 +15,7 @@ function safeUser(user: typeof usersTable.$inferSelect) {
     name: user.name,
     createdAt: user.createdAt,
     starterPackEmail: user.starterPackEmail ?? null,
+    isOwner: isOwnerEmail(user.email),
   };
 }
 

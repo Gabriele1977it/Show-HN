@@ -69,12 +69,26 @@ const OWNER_EMAILS = new Set(
     .filter(Boolean),
 );
 
+export const TIER_ORDER: Tier[] = ["free", "trip_pass", "pro"];
+
+export function isOwnerEmail(email: string | undefined | null): boolean {
+  return !!email && OWNER_EMAILS.has(email.trim().toLowerCase());
+}
+
+function asTier(v: unknown): Tier | null {
+  return v === "trip_pass" || v === "pro" || v === "free" ? v : null;
+}
+
 export async function getUserTier(userId: number): Promise<Tier> {
   try {
     const user = await stripeStorage.getUser(userId);
     if (!user) return "free";
 
     if (OWNER_EMAILS.has(user.email.toLowerCase())) return "pro";
+
+    // Owner-granted comp tier (influencers) — no Stripe involved.
+    const granted = asTier((user as { grantedTier?: unknown }).grantedTier);
+    if (granted && granted !== "free") return granted;
 
     // Check active Trip Pass (locally tracked 7-day expiry)
     if (user.tripPassExpiresAt && user.tripPassExpiresAt > new Date()) {

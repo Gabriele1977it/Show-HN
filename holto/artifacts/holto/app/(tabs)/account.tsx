@@ -633,6 +633,15 @@ export default function AccountScreen() {
         </Animated.View>
       )}
 
+      {user?.isOwner ? (
+        <Animated.View entering={FadeInDown.delay(230).duration(400)}>
+          <Text style={[styles.sectionTitle, { color: colors.mutedForeground }]}>OWNER</Text>
+          <View style={[styles.settingsCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <SettingsRow icon="sliders" label="Admin panel" onPress={() => router.push("/admin" as never)} colors={colors} />
+          </View>
+        </Animated.View>
+      ) : null}
+
       {/* ── Settings ── */}
       <Animated.View entering={FadeInDown.delay(240).duration(400)}>
         <Text style={[styles.sectionTitle, { color: colors.mutedForeground }]}>

@@ -23,6 +23,7 @@ export interface AuthUser {
   name: string;
   createdAt: string;
   starterPackEmail?: string | null;
+  isOwner?: boolean;
 }
 
 interface AuthContextValue {
