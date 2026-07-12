@@ -121,17 +121,24 @@ ${SCHEMA_INSTRUCTIONS}`;
   return finalizeParsedTrip(parsed);
 }
 
+export interface DocParseResult {
+  trip: ParsedTrip | null;
+  diag: string; // "" on success; a short reason on failure (surfaced to the user)
+}
+
 // Parse an uploaded booking document (PDF or a photo/screenshot of a
 // confirmation). The model reads the file directly — see generateJsonFromDocument.
-export async function parseTripFromDocument(file: { data: string; mimeType: string }): Promise<ParsedTrip | null> {
+export async function parseTripFromDocument(file: { data: string; mimeType: string }): Promise<DocParseResult> {
   const prompt = `This document is a travel booking confirmation (e.g. an airline, hotel, train or car-hire PDF or a photo of one).
 Extract ONLY the bookings that are explicitly present — never invent flights, hotels, dates, times or references.
 
 ${SCHEMA_INSTRUCTIONS}`;
 
-  const parsed = await generateJsonFromDocument(prompt, file, { maxTokens: 2048, temperature: 0 });
-  const fromVision = finalizeParsedTrip(parsed);
-  if (fromVision) return fromVision;
+  const { data, diag } = await generateJsonFromDocument(prompt, file, { maxTokens: 2048, temperature: 0 });
+  const fromVision = finalizeParsedTrip(data);
+  if (fromVision) return { trip: fromVision, diag: "" };
+  // The model replied but held no booking (vs. failing to read the file at all).
+  const visionDiag = diag || (data !== null ? "no booking found in the document" : "the model couldn't read the file");
 
   // Fallback: if the vision model couldn't read the PDF (unsupported model,
   // odd inline handling, etc.), extract the embedded text and run it through
@@ -145,12 +152,15 @@ ${SCHEMA_INSTRUCTIONS}`;
       const letters = (text.match(/[A-Za-z]/g) ?? []).length;
       if (letters >= 20) {
         logger.info({ chars: text.length, letters }, "PDF vision empty — retrying via extracted text");
-        return await parseTripFromText(text);
+        const fromText = await parseTripFromText(text);
+        if (fromText) return { trip: fromText, diag: "" };
+        return { trip: null, diag: `${visionDiag}; PDF text had no booking` };
       }
       logger.warn({ chars: text.length, letters }, "PDF text extraction yielded no readable words (custom font?)");
+      return { trip: null, diag: `${visionDiag}; PDF text isn't extractable (custom font)` };
     } catch (err) {
       logger.warn({ err }, "PDF text-extraction fallback failed");
     }
   }
-  return null;
+  return { trip: null, diag: visionDiag };
 }

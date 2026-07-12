@@ -186,13 +186,16 @@ router.post("/trips/parse-file", requireAuth, async (req, res): Promise<void> =>
     return;
   }
 
-  const parsed = await parseTripFromDocument({ data, mimeType });
-  if (!parsed) {
-    res.status(422).json({ error: "Couldn't read a booking from that file. Try a clearer copy, or paste the text instead." });
+  const { trip, diag } = await parseTripFromDocument({ data, mimeType });
+  if (!trip) {
+    req.log.warn({ diag, mimeType }, "Booking document parse failed");
+    res.status(422).json({
+      error: `Couldn't read a booking from that file. Reason: ${diag}. Try a clearer copy, or paste the text instead.`,
+    });
     return;
   }
 
-  res.status(201).json(await persistParsedTrip(req.auth!.userId, parsed));
+  res.status(201).json(await persistParsedTrip(req.auth!.userId, trip));
 });
 
 // Publish / unpublish a trip as a shareable public recap, and toggle whether the

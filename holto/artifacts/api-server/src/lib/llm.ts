@@ -22,11 +22,16 @@ export function llmConfigured(): boolean {
 // One place that talks to Gemini. `parts` may include text and inline_data
 // (for documents/images). Returns the raw model text or null, logging the HTTP
 // status + body on failure so problems (e.g. a retired model) are diagnosable.
+interface GenResult {
+  text: string | null;
+  diag: string; // "" on success; a short human-readable reason on failure
+}
+
 async function geminiGenerate(
   parts: unknown[],
   opts: { json: boolean; maxTokens: number; temperature: number; timeoutMs?: number },
-): Promise<string | null> {
-  if (!GEMINI_KEY) return null;
+): Promise<GenResult> {
+  if (!GEMINI_KEY) return { text: null, diag: "Gemini key not set" };
   try {
     const res = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_KEY}`,
@@ -47,16 +52,19 @@ async function geminiGenerate(
     if (!res.ok) {
       const body = await res.text().catch(() => "");
       logger.warn({ status: res.status, model: GEMINI_MODEL, body: body.slice(0, 600) }, "Gemini HTTP error");
-      return null;
+      return { text: null, diag: `Gemini HTTP ${res.status}` };
     }
     const json = (await res.json()) as {
-      candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+      candidates?: Array<{ content?: { parts?: Array<{ text?: string }> }; finishReason?: string }>;
     };
     const text = json.candidates?.[0]?.content?.parts?.[0]?.text;
-    return typeof text === "string" && text.trim() ? text.trim() : null;
+    if (typeof text === "string" && text.trim()) return { text: text.trim(), diag: "" };
+    const finish = json.candidates?.[0]?.finishReason;
+    return { text: null, diag: `Gemini returned no text${finish ? ` (${finish})` : ""}` };
   } catch (err) {
     logger.warn({ err, model: GEMINI_MODEL }, "Gemini request failed");
-    return null;
+    const name = err instanceof Error && err.name === "TimeoutError" ? "timed out" : "request failed";
+    return { text: null, diag: `Gemini ${name}` };
   }
 }
 
@@ -83,7 +91,7 @@ export async function generateText(
   const temperature = opts.temperature ?? 0.4;
 
   const g = await geminiGenerate([{ text: prompt }], { json: false, maxTokens, temperature, timeoutMs: 15000 });
-  if (g) return g;
+  if (g.text) return g.text;
 
   if (openai) {
     try {
@@ -100,41 +108,48 @@ export async function generateText(
   return null;
 }
 
+export interface DocResult {
+  data: unknown | null;
+  diag: string; // "" on success; a short human-readable reason on failure
+}
+
 // Free-first "read this document and give me JSON". Sends the file inline to
 // Gemini's multimodal model (handles text-based and scanned PDFs, plus photos of
-// a booking) with no PDF-parsing dependency. Falls back to OpenAI for images
-// only (chat.completions can't take a PDF). Returns null on failure.
+// a booking) with no PDF-parsing dependency; falls back to OpenAI (which now
+// accepts PDFs and images). Returns the parsed data plus a diagnostic string so
+// callers can tell the user *why* a read failed.
 export async function generateJsonFromDocument(
   prompt: string,
   file: { data: string; mimeType: string },
   opts: { maxTokens?: number; temperature?: number } = {},
-): Promise<unknown | null> {
+): Promise<DocResult> {
   const maxTokens = opts.maxTokens ?? 2048;
   const temperature = opts.temperature ?? 0;
+  const diags: string[] = [];
 
   const g = await geminiGenerate(
     [{ text: prompt }, { inline_data: { mime_type: file.mimeType, data: file.data } }],
     { json: true, maxTokens, temperature, timeoutMs: 40000 },
   );
-  if (g) {
-    const parsed = parseJsonLoose(g);
-    if (parsed !== null) return parsed;
+  if (g.text) {
+    const parsed = parseJsonLoose(g.text);
+    if (parsed !== null) return { data: parsed, diag: "" };
+    diags.push("Gemini reply wasn't valid JSON");
+  } else if (g.diag) {
+    diags.push(g.diag);
   }
 
-  if (openai && file.mimeType.startsWith("image/")) {
+  if (openai) {
     try {
+      const isImage = file.mimeType.startsWith("image/");
+      // OpenAI accepts images via image_url and PDFs via a file content part.
+      const filePart = isImage
+        ? { type: "image_url", image_url: { url: `data:${file.mimeType};base64,${file.data}` } }
+        : { type: "file", file: { filename: "booking.pdf", file_data: `data:${file.mimeType};base64,${file.data}` } };
       const r = await openai.chat.completions.create(
         {
           model: "gpt-4o-mini",
-          messages: [
-            {
-              role: "user",
-              content: [
-                { type: "text", text: prompt },
-                { type: "image_url", image_url: { url: `data:${file.mimeType};base64,${file.data}` } },
-              ],
-            },
-          ],
+          messages: [{ role: "user", content: [{ type: "text", text: prompt }, filePart] as never }],
           response_format: { type: "json_object" },
           temperature,
           max_tokens: maxTokens,
@@ -142,12 +157,18 @@ export async function generateJsonFromDocument(
         { timeout: 40000, maxRetries: 1 },
       );
       const content = r.choices[0]?.message?.content;
-      if (content) return parseJsonLoose(content);
+      if (content) {
+        const parsed = parseJsonLoose(content);
+        if (parsed !== null) return { data: parsed, diag: "" };
+      }
+      diags.push("OpenAI returned nothing usable");
     } catch (err) {
       logger.warn({ err }, "OpenAI generateJsonFromDocument failed");
+      diags.push(`OpenAI ${err instanceof Error ? err.message.slice(0, 60) : "error"}`);
     }
   }
-  return null;
+
+  return { data: null, diag: diags.join("; ") || "no AI provider configured" };
 }
 
 export async function generateJson(
@@ -158,8 +179,8 @@ export async function generateJson(
   const temperature = opts.temperature ?? 0;
 
   const g = await geminiGenerate([{ text: prompt }], { json: true, maxTokens, temperature, timeoutMs: 20000 });
-  if (g) {
-    const parsed = parseJsonLoose(g);
+  if (g.text) {
+    const parsed = parseJsonLoose(g.text);
     if (parsed !== null) return parsed;
   }
 
