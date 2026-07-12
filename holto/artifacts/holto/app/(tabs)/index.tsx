@@ -34,6 +34,7 @@ import { useColors } from "@/hooks/useColors";
 import { openUrl } from "@/utils/openUrl";
 import { UpgradeSheet } from "@/components/UpgradeSheet";
 import { AddToTripSheet } from "@/components/AddToTripSheet";
+import { InstallPrompt } from "@/components/InstallPrompt";
 
 const TOOLKIT: { emoji: string; label: string; route: string }[] = [
   { emoji: "🗓️", label: "Travel day", route: "/today" },
@@ -414,6 +415,8 @@ export default function HomeScreen() {
             Your travel companion. Let's check your flight.
           </Text>
         </Animated.View>
+
+        <InstallPrompt />
 
         {showTravelDay && journeyFlight && (
           <Animated.View entering={FadeInDown.delay(40).duration(450)}>
