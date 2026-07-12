@@ -91,12 +91,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const register = useCallback(
     async (name: string, email: string, password: string) => {
+      // Carry a referral code through from the invite link (?ref=…) on web.
+      const ref =
+        (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("ref")) || undefined;
       const res = await fetch(
         `https://${process.env.EXPO_PUBLIC_DOMAIN}/api/auth/register`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name, email, password }),
+          body: JSON.stringify({ name, email, password, ref }),
         },
       );
       if (!res.ok) {

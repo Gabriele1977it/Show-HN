@@ -5,6 +5,7 @@ import { Router, type IRouter } from "express";
 
 import { requireAuth, signToken } from "../middlewares/auth";
 import { getUserTier, isOwnerEmail, TIER_FEATURES } from "../lib/tier";
+import { makeSlug } from "../lib/slug";
 
 const router: IRouter = Router();
 
@@ -20,10 +21,11 @@ function safeUser(user: typeof usersTable.$inferSelect) {
 }
 
 router.post("/auth/register", async (req, res): Promise<void> => {
-  const { email, password, name } = req.body as {
+  const { email, password, name, ref } = req.body as {
     email?: string;
     password?: string;
     name?: string;
+    ref?: string;
   };
 
   if (!email?.trim() || !password || !name?.trim()) {
@@ -51,10 +53,27 @@ router.post("/auth/register", async (req, res): Promise<void> => {
     return;
   }
 
+  // Resolve a referral code to the inviter (best effort — never blocks signup).
+  let referredBy: number | null = null;
+  if (ref?.trim()) {
+    const [inviter] = await db
+      .select({ id: usersTable.id })
+      .from(usersTable)
+      .where(eq(usersTable.referralCode, ref.trim()))
+      .limit(1);
+    if (inviter) referredBy = inviter.id;
+  }
+
   const passwordHash = await bcrypt.hash(password, 12);
   const [user] = await db
     .insert(usersTable)
-    .values({ email: email.trim().toLowerCase(), name: name.trim(), passwordHash })
+    .values({
+      email: email.trim().toLowerCase(),
+      name: name.trim(),
+      passwordHash,
+      referralCode: makeSlug(8),
+      referredBy,
+    })
     .returning();
 
   const token = signToken({ userId: user.id, email: user.email });

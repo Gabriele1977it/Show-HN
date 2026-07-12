@@ -649,6 +649,13 @@ export default function AccountScreen() {
         </Text>
         <View style={[styles.settingsCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <SettingsRow
+            icon="gift"
+            label="Invite friends"
+            onPress={() => router.push("/invite" as never)}
+            colors={colors}
+          />
+          <View style={[styles.rowDivider, { backgroundColor: colors.border }]} />
+          <SettingsRow
             icon="help-circle"
             label="Help & Support"
             onPress={() => void handleEmail()}

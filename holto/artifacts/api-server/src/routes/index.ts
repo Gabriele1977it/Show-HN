@@ -19,6 +19,7 @@ import fxRouter from "./fx";
 import journeyRouter from "./journey";
 import loyaltyRouter from "./loyalty";
 import publicRouter from "./public";
+import referralRouter from "./referral";
 import shootRouter from "./shoot";
 import stripeRouter from "./stripe";
 
@@ -46,6 +47,7 @@ router.use(fxRouter);
 router.use(journeyRouter);
 router.use(loyaltyRouter);
 router.use(publicRouter);
+router.use(referralRouter);
 router.use(shootRouter);
 router.use(stripeRouter);
 
