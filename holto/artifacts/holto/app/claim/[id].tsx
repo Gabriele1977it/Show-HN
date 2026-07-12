@@ -132,6 +132,28 @@ export default function ClaimScreen() {
     }
   };
 
+  const shareWin = async () => {
+    const amt = claim.amountReceived ?? claim.amount;
+    const sym = claim.currency === "GBP" ? "£" : claim.currency === "EUR" ? "€" : claim.currency === "USD" ? "$" : `${claim.currency} `;
+    const money = amt != null ? `${sym}${amt}` : "compensation";
+    const msg = `I just claimed ${money} back from ${claim.airline} after a flight disruption — with HOLTO, my honest travel companion. Most people never claim what they're owed. Know your rights: https://holtotravel.com`;
+    try {
+      if (Platform.OS === "web") {
+        const nav = typeof navigator !== "undefined" ? (navigator as unknown as { share?: (d: object) => Promise<void> }) : undefined;
+        if (nav?.share) {
+          try { await nav.share({ title: "I won my claim with HOLTO", text: msg }); return; } catch { /* cancelled */ }
+        }
+        if (typeof window !== "undefined" && window.navigator?.clipboard) {
+          await window.navigator.clipboard.writeText(msg);
+          return;
+        }
+      }
+      await Share.share({ message: msg });
+    } catch {
+      /* silent */
+    }
+  };
+
   const statusColor =
     status === "paid"
       ? "#2E7D52"
@@ -176,6 +198,21 @@ export default function ClaimScreen() {
           <Text style={[styles.ref, { color: colors.mutedForeground }]}>Ref: {claim.referenceNumber}</Text>
         ) : null}
       </View>
+
+      {/* Share your win — celebratory growth moment on a paid claim */}
+      {status === "paid" ? (
+        <View style={[styles.winCard, { backgroundColor: "#2E7D52", borderRadius: colors.radius }]}>
+          <Text style={styles.winEmoji}>🎉</Text>
+          <Text style={styles.winTitle}>You won your claim!</Text>
+          <Text style={styles.winBody}>
+            HOLTO helped you get back what you were owed. Spread the word — most travellers never claim what's theirs.
+          </Text>
+          <Pressable onPress={shareWin} style={styles.winBtn}>
+            <Icon name="share-2" size={16} color="#2E7D52" />
+            <Text style={styles.winBtnText}>Share your win</Text>
+          </Pressable>
+        </View>
+      ) : null}
 
       {/* Progress stepper */}
       <View style={styles.stepper}>
@@ -314,6 +351,12 @@ const styles = StyleSheet.create({
   statusBadgeText: { fontFamily: "Inter_600SemiBold", fontSize: 12 },
   amountCard: { borderWidth: 1, padding: 18, marginBottom: 18 },
   amountLabel: { fontFamily: "Inter_500Medium", fontSize: 11, textTransform: "uppercase", letterSpacing: 0.8 },
+  winCard: { padding: 20, marginBottom: 18, alignItems: "center" },
+  winEmoji: { fontSize: 34 },
+  winTitle: { fontFamily: "Inter_700Bold", fontSize: 18, color: "#fff", marginTop: 6 },
+  winBody: { fontFamily: "Inter_400Regular", fontSize: 13, lineHeight: 19, color: "rgba(255,255,255,0.85)", textAlign: "center", marginTop: 6 },
+  winBtn: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: "#fff", borderRadius: 12, paddingHorizontal: 20, paddingVertical: 12, marginTop: 16 },
+  winBtnText: { fontFamily: "Inter_700Bold", fontSize: 14, color: "#2E7D52" },
   amount: { fontFamily: "Inter_700Bold", fontSize: 36, letterSpacing: -1, marginTop: 4 },
   ref: { fontFamily: "Inter_400Regular", fontSize: 12, marginTop: 4 },
   stepper: { flexDirection: "row", marginBottom: 22 },

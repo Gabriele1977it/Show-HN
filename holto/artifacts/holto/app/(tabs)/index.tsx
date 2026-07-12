@@ -35,6 +35,7 @@ import { openUrl } from "@/utils/openUrl";
 import { UpgradeSheet } from "@/components/UpgradeSheet";
 import { AddToTripSheet } from "@/components/AddToTripSheet";
 import { InstallPrompt } from "@/components/InstallPrompt";
+import { SkeletonCard } from "@/components/Skeleton";
 
 const TOOLKIT: { emoji: string; label: string; route: string }[] = [
   { emoji: "🗓️", label: "Travel day", route: "/today" },
@@ -670,8 +671,9 @@ export default function HomeScreen() {
         </Animated.View>
 
         {isLoading && (
-          <View style={styles.loadingWrap}>
-            <ActivityIndicator color={colors.primary} />
+          <View style={{ marginTop: 24 }}>
+            <SkeletonCard />
+            <SkeletonCard />
           </View>
         )}
 

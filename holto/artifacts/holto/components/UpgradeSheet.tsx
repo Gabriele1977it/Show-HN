@@ -10,11 +10,20 @@ interface Props {
   onClose: () => void;
   title?: string;
   message?: string;
+  benefits?: string[];
 }
 
-// A tasteful "this is a paid feature" prompt. Shown when the API returns
-// requiresUpgrade. Routes to the Plans tab.
-export function UpgradeSheet({ visible, onClose, title = "Unlock with HOLTO Pro", message }: Props) {
+const DEFAULT_BENEFITS = [
+  "Ask HOLTO anything, anytime",
+  "Live flight monitoring + instant alerts",
+  "Unlimited flight searches",
+  "EU261 / UK261 compensation calculator",
+];
+
+// A tasteful, value-framed "this is a paid feature" prompt. Shown when the API
+// returns requiresUpgrade — it sells the upgrade at the moment of intent by
+// listing exactly what unlocks. Routes to the Plans tab.
+export function UpgradeSheet({ visible, onClose, title = "Unlock the full HOLTO", message, benefits = DEFAULT_BENEFITS }: Props) {
   const colors = useColors();
 
   return (
@@ -26,6 +35,18 @@ export function UpgradeSheet({ visible, onClose, title = "Unlock with HOLTO Pro"
           </View>
           <Text style={[styles.title, { color: colors.foreground }]}>{title}</Text>
           {message ? <Text style={[styles.message, { color: colors.mutedForeground }]}>{message}</Text> : null}
+
+          <View style={styles.benefits}>
+            {benefits.map((b) => (
+              <View key={b} style={styles.benefitRow}>
+                <View style={[styles.tick, { backgroundColor: colors.primary + "1A" }]}>
+                  <Icon name="check" size={13} color={colors.primary} />
+                </View>
+                <Text style={[styles.benefitText, { color: colors.foreground }]}>{b}</Text>
+              </View>
+            ))}
+          </View>
+
           <Pressable
             onPress={() => {
               onClose();
@@ -50,6 +71,10 @@ const styles = StyleSheet.create({
   badge: { width: 60, height: 60, borderRadius: 30, alignItems: "center", justifyContent: "center", marginBottom: 16 },
   title: { fontFamily: "Inter_700Bold", fontSize: 20, textAlign: "center" },
   message: { fontFamily: "Inter_400Regular", fontSize: 14, lineHeight: 21, textAlign: "center", marginTop: 8, maxWidth: 320 },
+  benefits: { alignSelf: "stretch", gap: 12, marginTop: 20 },
+  benefitRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  tick: { width: 24, height: 24, borderRadius: 12, alignItems: "center", justifyContent: "center" },
+  benefitText: { fontFamily: "Inter_500Medium", fontSize: 14, flex: 1 },
   cta: { alignSelf: "stretch", height: 52, borderRadius: 12, alignItems: "center", justifyContent: "center", marginTop: 22 },
   ctaText: { fontFamily: "Inter_600SemiBold", fontSize: 16 },
   ghost: { height: 44, alignItems: "center", justifyContent: "center", marginTop: 4, alignSelf: "stretch" },
