@@ -27,6 +27,23 @@ interface GenResult {
   diag: string; // "" on success; a short human-readable reason on failure
 }
 
+// Turn an HTTP status from an AI provider into a plain-English, actionable reason.
+function describeHttp(status: number, provider: string): string {
+  switch (status) {
+    case 429:
+      return "the AI is rate-limited (free-tier quota reached) — wait a minute and try again, or enable billing on the API key for higher limits";
+    case 400:
+      return `${provider} rejected the request (check the API key is valid)`;
+    case 401:
+    case 403:
+      return `the ${provider} API key is invalid or not authorised for this model`;
+    case 404:
+      return `the AI model isn't available (check the model name / GEMINI_MODEL)`;
+    default:
+      return status >= 500 ? `the ${provider} service had an error — try again shortly` : `${provider} HTTP ${status}`;
+  }
+}
+
 async function geminiGenerate(
   parts: unknown[],
   opts: { json: boolean; maxTokens: number; temperature: number; timeoutMs?: number },
@@ -52,7 +69,7 @@ async function geminiGenerate(
     if (!res.ok) {
       const body = await res.text().catch(() => "");
       logger.warn({ status: res.status, model: GEMINI_MODEL, body: body.slice(0, 600) }, "Gemini HTTP error");
-      return { text: null, diag: `Gemini HTTP ${res.status}` };
+      return { text: null, diag: describeHttp(res.status, "Gemini") };
     }
     const json = (await res.json()) as {
       candidates?: Array<{ content?: { parts?: Array<{ text?: string }> }; finishReason?: string }>;

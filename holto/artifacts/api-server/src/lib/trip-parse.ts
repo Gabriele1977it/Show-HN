@@ -148,9 +148,11 @@ ${SCHEMA_INSTRUCTIONS}`;
       const text = extractPdfText(Buffer.from(file.data, "base64"));
       // Only worth a parse if we got real words, not glyph-index noise from a
       // custom-encoded font (common in airline/hotel PDFs, which then only the
-      // vision model can read).
+      // vision model can read). Require both a floor and a healthy letter ratio
+      // — a few dozen letters buried in 20k of glyph noise is not real text.
       const letters = (text.match(/[A-Za-z]/g) ?? []).length;
-      if (letters >= 20) {
+      const ratio = letters / Math.max(text.length, 1);
+      if (letters >= 40 && ratio >= 0.05) {
         logger.info({ chars: text.length, letters }, "PDF vision empty — retrying via extracted text");
         const fromText = await parseTripFromText(text);
         if (fromText) return { trip: fromText, diag: "" };
