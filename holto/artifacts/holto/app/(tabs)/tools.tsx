@@ -11,7 +11,7 @@ interface Tool {
   emoji: string;
   title: string;
   desc: string;
-  route: "/trips" | "/expenses" | "/residency" | "/airport-timing" | "/today" | "/loyalty" | "/import" | "/shoot-times";
+  route: "/trips" | "/expenses" | "/residency" | "/airport-timing" | "/today" | "/loyalty" | "/import" | "/shoot-times" | "/cost-of-living";
 }
 
 const TOOLS: Tool[] = [
@@ -22,7 +22,8 @@ const TOOLS: Tool[] = [
   { emoji: "🏆", title: "Loyalty & points", desc: "Every membership in one wallet, with a nudge before your points expire.", route: "/loyalty" },
   { emoji: "🌇", title: "Best light", desc: "Golden hour and blue hour for any place and date — never miss the shot.", route: "/shoot-times" },
   { emoji: "🧾", title: "Expenses", desc: "Log spend in any currency, total in GBP, export a report in one tap.", route: "/expenses" },
-  { emoji: "🌍", title: "Residency & tax days", desc: "Count your days per country and stay ahead of the 183-day rule.", route: "/residency" },
+  { emoji: "🌍", title: "Residency & tax days", desc: "Count your days per country, the Schengen 90/180 limit, and the 183-day rule.", route: "/residency" },
+  { emoji: "💷", title: "Cost of living", desc: "Compare a month's essentials between two cities, all in GBP.", route: "/cost-of-living" },
 ];
 
 const SOON: { emoji: string; title: string }[] = [
