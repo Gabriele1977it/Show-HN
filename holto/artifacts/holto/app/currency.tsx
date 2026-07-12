@@ -1,5 +1,6 @@
 import { customFetch } from "@workspace/api-client-react";
 import { useQuery } from "@tanstack/react-query";
+import { useLocalSearchParams } from "expo-router";
 import React, { useMemo, useState } from "react";
 import { Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import Animated, { FadeInDown } from "react-native-reanimated";
@@ -68,9 +69,15 @@ export default function CurrencyScreen() {
   const topPad = Platform.OS === "web" ? 20 : insets.top;
   const bottomPad = Platform.OS === "web" ? 40 : insets.bottom + 24;
 
+  const params = useLocalSearchParams<{ to?: string; from?: string }>();
+  const initialTo =
+    (typeof params.to === "string" && CURRENCY_BY_CODE[params.to.toUpperCase()]) || CURRENCY_BY_CODE.EUR!;
+  const initialFrom =
+    (typeof params.from === "string" && CURRENCY_BY_CODE[params.from.toUpperCase()]) || CURRENCY_BY_CODE.GBP!;
+
   const [amount, setAmount] = useState("100");
-  const [from, setFrom] = useState<Currency>(CURRENCY_BY_CODE.GBP!);
-  const [to, setTo] = useState<Currency>(CURRENCY_BY_CODE.EUR!);
+  const [from, setFrom] = useState<Currency>(initialFrom);
+  const [to, setTo] = useState<Currency>(initialTo);
   const [picking, setPicking] = useState<null | "from" | "to">(null);
 
   const { data, isLoading, isError } = useQuery<RatesResponse>({

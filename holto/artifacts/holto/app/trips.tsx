@@ -324,6 +324,11 @@ export default function TripsScreen() {
               <Text style={[styles.tripMeta, { color: colors.mutedForeground }]}>
                 {fmtRange(trip.startDate, trip.endDate)}{trip.destination ? ` · ${trip.destination}` : ""}
               </Text>
+              {trip.destination ? (
+                <Pressable onPress={() => router.push(`/destination?country=${encodeURIComponent(trip.destination!)}` as never)} hitSlop={6} style={{ marginTop: 4 }}>
+                  <Text style={[styles.bestLightLink, { color: colors.primary }]}>🧭 Destination guide</Text>
+                </Pressable>
+              ) : null}
             </View>
             {(trip.expenseTotalGBP ?? 0) > 0 && (
               <Pressable onPress={() => router.push("/expenses")} style={[styles.spendPill, { backgroundColor: colors.muted }]} hitSlop={6}>
