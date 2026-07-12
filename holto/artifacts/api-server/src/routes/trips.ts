@@ -4,6 +4,7 @@ import { Router, type IRouter } from "express";
 
 import { requireAuth } from "../middlewares/auth";
 import { parseTripFromText, parseTripFromDocument, type ParsedTrip } from "../lib/trip-parse";
+import { llmConfigured } from "../lib/llm";
 import { getRatesPerGBP, toGBP } from "../lib/fx";
 import { makeSlug } from "../lib/slug";
 
@@ -176,6 +177,12 @@ router.post("/trips/parse-file", requireAuth, async (req, res): Promise<void> =>
   // base64 → byte-length guard (4 chars ≈ 3 bytes).
   if (Math.floor((data.length * 3) / 4) > MAX_DOC_BYTES) {
     res.status(413).json({ error: "That file is a bit large. Please upload a booking under 10 MB." });
+    return;
+  }
+
+  // Reading documents needs an AI key — say so plainly rather than a vague "couldn't read".
+  if (!llmConfigured()) {
+    res.status(503).json({ error: "Document reading isn't switched on yet (it needs an AI key). You can paste the booking text instead." });
     return;
   }
 
