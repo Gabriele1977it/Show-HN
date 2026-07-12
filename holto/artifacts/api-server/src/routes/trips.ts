@@ -7,6 +7,7 @@ import { parseTripFromText, parseTripFromDocument, type ParsedTrip } from "../li
 import { llmConfigured } from "../lib/llm";
 import { getRatesPerGBP, toGBP } from "../lib/fx";
 import { makeSlug } from "../lib/slug";
+import { rateLimit } from "../lib/rate-limit";
 
 const router: IRouter = Router();
 
@@ -159,6 +160,10 @@ const ALLOWED_DOC_MIME = new Set(["application/pdf", "image/png", "image/jpeg", 
 const MAX_DOC_BYTES = 10 * 1024 * 1024; // 10 MB decoded
 
 router.post("/trips/parse-file", requireAuth, async (req, res): Promise<void> => {
+  if (!rateLimit(`docparse:${req.auth!.userId}`, 30, 60 * 60 * 1000)) {
+    res.status(429).json({ error: "You've imported a lot of documents just now. Please wait a little and try again." });
+    return;
+  }
   let { data } = req.body as { data?: string };
   const { mimeType } = req.body as { mimeType?: string };
 

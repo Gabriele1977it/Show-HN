@@ -1,7 +1,22 @@
+import { randomBytes } from "node:crypto";
+
 import type { NextFunction, Request, Response } from "express";
 import jwt from "jsonwebtoken";
 
-const JWT_SECRET = process.env.SESSION_SECRET ?? "holto-dev-secret";
+import { logger } from "../lib/logger";
+
+// Never fall back to a known, in-repo default — that would let anyone forge
+// tokens and impersonate any user. If SESSION_SECRET is unset we mint a strong
+// random secret for this process instead: still secure, though tokens won't
+// survive a restart, which is a loud signal to actually set SESSION_SECRET.
+const JWT_SECRET: string = (() => {
+  const configured = process.env.SESSION_SECRET?.trim();
+  if (configured && configured.length >= 16) return configured;
+  logger.error(
+    "SESSION_SECRET is not set (or too short). Using a random per-process secret — sessions will reset on restart. Set SESSION_SECRET in the environment.",
+  );
+  return randomBytes(48).toString("hex");
+})();
 
 export interface AuthPayload {
   userId: number;

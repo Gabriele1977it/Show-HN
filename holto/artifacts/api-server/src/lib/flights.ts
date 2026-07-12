@@ -1,7 +1,5 @@
-import OpenAI from "openai";
-
 import { logger } from "./logger";
-import { candidateFlightNumbers, mapStatus, type FlightStatus } from "./flight-format";
+import { candidateFlightNumbers, friendlyStatusMessage, mapStatus, type FlightStatus } from "./flight-format";
 
 // Shared flight-status logic used by both the `/flights/status` route and the
 // background monitor worker, so there is one implementation of AirLabs querying,
@@ -11,40 +9,16 @@ import { candidateFlightNumbers, mapStatus, type FlightStatus } from "./flight-f
 export { candidateFlightNumbers, mapStatus } from "./flight-format";
 export type { FlightStatus } from "./flight-format";
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY ?? "no-key" });
-
-export async function generateStatusMessage(flight: Record<string, unknown>): Promise<string | null> {
-  const status = mapStatus(flight.status as string);
-  const depDelay = typeof flight.dep_delay === "number" ? flight.dep_delay : null;
-
-  const context = [
-    `Flight: ${flight.flight_iata ?? "unknown"}`,
-    `Route: ${flight.dep_iata ?? "?"} → ${flight.arr_iata ?? "?"}`,
-    `Status: ${status}`,
-    flight.dep_time ? `Scheduled departure: ${flight.dep_time as string}` : null,
-    depDelay != null && depDelay > 0 ? `Departure delay: ${depDelay} minutes` : null,
-    flight.dep_gate ? `Gate: ${flight.dep_gate as string}` : null,
-    flight.dep_terminal ? `Terminal: ${flight.dep_terminal as string}` : null,
-  ]
-    .filter(Boolean)
-    .join(". ");
-
-  try {
-    const res = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [
-        {
-          role: "user",
-          content: `You are HOLTO, a calm and warm travel companion. Write ONE short, friendly sentence (max 22 words) about this flight status. Be specific, reassuring, and useful. Sound like a knowledgeable friend, not a robot. Context: ${context}`,
-        },
-      ],
-      max_tokens: 80,
-      temperature: 0.4,
-    });
-    return res.choices[0]?.message?.content?.trim() ?? null;
-  } catch {
-    return null;
-  }
+// The companion line is computed deterministically (see friendlyStatusMessage)
+// — no LLM call — so a flight lookup is free and instant. Kept async-compatible
+// for existing call sites.
+export function generateStatusMessage(flight: Record<string, unknown>): string {
+  return friendlyStatusMessage(
+    mapStatus(flight.status as string),
+    typeof flight.dep_delay === "number" ? flight.dep_delay : null,
+    (flight.dep_gate as string | null) ?? null,
+    (flight.dep_terminal as string | null) ?? null,
+  );
 }
 
 async function tryAirlabsEndpoint(url: string, label: string): Promise<Record<string, unknown> | null> {

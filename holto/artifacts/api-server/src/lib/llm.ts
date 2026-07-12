@@ -66,8 +66,14 @@ async function geminiCall(
 ): Promise<Attempt> {
   try {
     const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_KEY}`,
-      { method: "POST", headers: { "content-type": "application/json" }, body, signal: AbortSignal.timeout(timeoutMs) },
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+      {
+        method: "POST",
+        // Key in a header, not the URL query — query strings leak into logs.
+        headers: { "content-type": "application/json", "x-goog-api-key": GEMINI_KEY },
+        body,
+        signal: AbortSignal.timeout(timeoutMs),
+      },
     );
     if (res.status === 404) {
       logger.warn({ model }, "Gemini model not found — trying next");

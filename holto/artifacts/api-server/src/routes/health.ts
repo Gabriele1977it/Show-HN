@@ -18,7 +18,8 @@ router.get("/health/gemini", async (_req, res) => {
     return;
   }
   try {
-    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${key}`, {
+    const r = await fetch("https://generativelanguage.googleapis.com/v1beta/models", {
+      headers: { "x-goog-api-key": key },
       signal: AbortSignal.timeout(10000),
     });
     if (!r.ok) {

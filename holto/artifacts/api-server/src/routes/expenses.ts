@@ -7,6 +7,7 @@ import { getRatesPerGBP, toGBP } from "../lib/fx";
 import { summarizeExpenses } from "../lib/expense-summary";
 import { parseReceiptFromDocument } from "../lib/receipt-parse";
 import { llmConfigured } from "../lib/llm";
+import { rateLimit } from "../lib/rate-limit";
 
 const router: IRouter = Router();
 
@@ -90,6 +91,10 @@ router.post("/expenses", requireAuth, async (req, res): Promise<void> => {
 // Scan a receipt (photo or PDF) → extracted expense fields for the user to
 // review before saving. Never auto-saves. Token-frugal (small output budget).
 router.post("/expenses/scan", requireAuth, async (req, res): Promise<void> => {
+  if (!rateLimit(`receiptscan:${req.auth!.userId}`, 40, 60 * 60 * 1000)) {
+    res.status(429).json({ error: "You've scanned a lot of receipts just now. Please wait a little and try again." });
+    return;
+  }
   let { data } = req.body as { data?: string };
   const { mimeType } = req.body as { mimeType?: string };
   if (typeof data !== "string" || !data || typeof mimeType !== "string") {
