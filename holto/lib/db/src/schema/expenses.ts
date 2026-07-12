@@ -1,4 +1,4 @@
-import { date, integer, numeric, pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
+import { boolean, date, integer, numeric, pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -19,6 +19,10 @@ export const expensesTable = pgTable("expenses", {
   amount: numeric("amount", { precision: 12, scale: 2 }).notNull(), // stored as string by drizzle
   currency: text("currency").notNull(), // ISO-4217, e.g. "EUR"
   spentOn: date("spent_on").notNull(), // "YYYY-MM-DD"
+  // Company-reimbursable (business) vs personal — drives the reimbursement
+  // split and export. Defaults to reimbursable since most logged spend on a
+  // work trip is claimable.
+  reimbursable: boolean("reimbursable").notNull().default(true),
   note: text("note"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

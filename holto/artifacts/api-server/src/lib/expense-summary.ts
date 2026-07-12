@@ -9,20 +9,27 @@ export interface ExpenseInput {
   category: string;
   amount: string | number;
   currency: string;
+  reimbursable?: boolean;
 }
 
 export interface ExpenseSummary {
   totalGBP: number;
+  reimbursableGBP: number; // company-claimable
+  personalGBP: number;
   byCategory: Record<string, number>;
   unconvertedCount: number;
   count: number;
 }
+
+const round2 = (n: number) => Math.round(n * 100) / 100;
 
 export function summarizeExpenses(
   expenses: ExpenseInput[],
   rates: Record<string, number>,
 ): ExpenseSummary {
   let totalGBP = 0;
+  let reimbursableGBP = 0;
+  let personalGBP = 0;
   let unconvertedCount = 0;
   const byCategory: Record<string, number> = {};
 
@@ -35,14 +42,20 @@ export function summarizeExpenses(
       continue;
     }
     totalGBP += gbp;
+    // Default to reimbursable when the flag is absent (older rows).
+    if (e.reimbursable === false) personalGBP += gbp;
+    else reimbursableGBP += gbp;
     byCategory[e.category] = (byCategory[e.category] ?? 0) + gbp;
   }
 
-  // Round for presentation.
-  totalGBP = Math.round(totalGBP * 100) / 100;
-  for (const k of Object.keys(byCategory)) {
-    byCategory[k] = Math.round(byCategory[k]! * 100) / 100;
-  }
+  for (const k of Object.keys(byCategory)) byCategory[k] = round2(byCategory[k]!);
 
-  return { totalGBP, byCategory, unconvertedCount, count: expenses.length };
+  return {
+    totalGBP: round2(totalGBP),
+    reimbursableGBP: round2(reimbursableGBP),
+    personalGBP: round2(personalGBP),
+    byCategory,
+    unconvertedCount,
+    count: expenses.length,
+  };
 }

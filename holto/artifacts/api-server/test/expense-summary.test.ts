@@ -45,3 +45,17 @@ test("non-numeric amounts are skipped", () => {
   const s = summarizeExpenses([{ category: "meals", amount: "abc", currency: "GBP" }], {});
   assert.equal(s.totalGBP, 0);
 });
+
+test("splits company-reimbursable from personal spend", () => {
+  const s = summarizeExpenses(
+    [
+      { category: "lodging", amount: 100, currency: "GBP", reimbursable: true },
+      { category: "meals", amount: 30, currency: "GBP", reimbursable: false },
+      { category: "flights", amount: 200, currency: "GBP" }, // missing flag → reimbursable
+    ],
+    {},
+  );
+  assert.equal(s.totalGBP, 330);
+  assert.equal(s.reimbursableGBP, 300);
+  assert.equal(s.personalGBP, 30);
+});

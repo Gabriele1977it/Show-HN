@@ -3,13 +3,17 @@ import { and, desc, eq } from "drizzle-orm";
 import { Router, type IRouter } from "express";
 
 import { requireAuth } from "../middlewares/auth";
-import { getRatesPerGBP } from "../lib/fx";
+import { getRatesPerGBP, toGBP } from "../lib/fx";
 import { summarizeExpenses } from "../lib/expense-summary";
+import { parseReceiptFromDocument } from "../lib/receipt-parse";
+import { llmConfigured } from "../lib/llm";
 
 const router: IRouter = Router();
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const CATEGORIES = new Set(["flights", "lodging", "meals", "transport", "entertainment", "supplies", "other"]);
+const ALLOWED_DOC_MIME = new Set(["application/pdf", "image/png", "image/jpeg", "image/jpg", "image/webp", "image/heic"]);
+const MAX_DOC_BYTES = 10 * 1024 * 1024;
 
 function parseId(raw: string | string[] | undefined): number {
   const v = Array.isArray(raw) ? raw[0] : raw;
@@ -26,11 +30,17 @@ router.get("/expenses", requireAuth, async (req, res): Promise<void> => {
 
   const rates = await getRatesPerGBP();
   const summary = summarizeExpenses(rows, rates);
-  res.json({ expenses: rows, summary });
+  // Attach a per-row GBP figure so the client can build a complete reimbursement
+  // report without a second round-trip (zero extra AI cost — pure FX).
+  const expenses = rows.map((e) => {
+    const gbp = toGBP(parseFloat(e.amount), e.currency, rates);
+    return { ...e, amountGBP: gbp == null ? null : Math.round(gbp * 100) / 100 };
+  });
+  res.json({ expenses, summary });
 });
 
 router.post("/expenses", requireAuth, async (req, res): Promise<void> => {
-  const { category, merchant, amount, currency, spentOn, note, tripId } = req.body as {
+  const { category, merchant, amount, currency, spentOn, note, tripId, reimbursable } = req.body as {
     category?: string;
     merchant?: string;
     amount?: number | string;
@@ -38,6 +48,7 @@ router.post("/expenses", requireAuth, async (req, res): Promise<void> => {
     spentOn?: string;
     note?: string;
     tripId?: number | null;
+    reimbursable?: boolean;
   };
 
   if (!category || !CATEGORIES.has(category)) {
@@ -68,11 +79,45 @@ router.post("/expenses", requireAuth, async (req, res): Promise<void> => {
       amount: amt.toFixed(2),
       currency: currency.toUpperCase(),
       spentOn,
+      reimbursable: reimbursable !== false,
       note: note?.trim() || null,
     })
     .returning();
 
   res.status(201).json(expense);
+});
+
+// Scan a receipt (photo or PDF) → extracted expense fields for the user to
+// review before saving. Never auto-saves. Token-frugal (small output budget).
+router.post("/expenses/scan", requireAuth, async (req, res): Promise<void> => {
+  let { data } = req.body as { data?: string };
+  const { mimeType } = req.body as { mimeType?: string };
+  if (typeof data !== "string" || !data || typeof mimeType !== "string") {
+    res.status(400).json({ error: "Upload a receipt (photo or PDF)." });
+    return;
+  }
+  const comma = data.indexOf(",");
+  if (data.startsWith("data:") && comma !== -1) data = data.slice(comma + 1);
+  if (!ALLOWED_DOC_MIME.has(mimeType)) {
+    res.status(415).json({ error: "Upload a PDF, or a JPG/PNG photo of the receipt." });
+    return;
+  }
+  if (Math.floor((data.length * 3) / 4) > MAX_DOC_BYTES) {
+    res.status(413).json({ error: "That file is a bit large. Please keep it under 10 MB." });
+    return;
+  }
+  if (!llmConfigured()) {
+    res.status(503).json({ error: "Receipt scanning isn't switched on yet (it needs an AI key). Enter the expense manually instead." });
+    return;
+  }
+
+  const { receipt, diag } = await parseReceiptFromDocument({ data, mimeType });
+  if (!receipt) {
+    req.log.warn({ diag, mimeType }, "Receipt scan failed");
+    res.status(422).json({ error: `Couldn't read that receipt. Reason: ${diag}. Enter it manually instead.` });
+    return;
+  }
+  res.json(receipt);
 });
 
 router.delete("/expenses/:id", requireAuth, async (req, res): Promise<void> => {

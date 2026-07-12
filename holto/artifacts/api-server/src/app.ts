@@ -97,6 +97,7 @@ app.post(
 // global parser below then no-ops for it (body already parsed) and keeps the
 // tight default everywhere else.
 app.use("/api/trips/parse-file", express.json({ limit: "12mb" }));
+app.use("/api/expenses/scan", express.json({ limit: "12mb" }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 

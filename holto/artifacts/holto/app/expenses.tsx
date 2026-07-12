@@ -20,6 +20,7 @@ import { DateField } from "@/components/DateField";
 import { Icon } from "@/components/Icon";
 import { CURRENCIES, CURRENCY_BY_CODE, type Currency } from "@/constants/currencies";
 import { useColors } from "@/hooks/useColors";
+import { bookingUploadSupported, pickBookingFile } from "@/utils/pickBookingFile";
 
 type Category = "flights" | "lodging" | "meals" | "transport" | "entertainment" | "supplies" | "other";
 
@@ -41,10 +42,14 @@ interface Expense {
   amount: string;
   currency: string;
   spentOn: string;
+  reimbursable?: boolean;
+  amountGBP?: number | null;
   note: string | null;
 }
 interface Summary {
   totalGBP: number;
+  reimbursableGBP: number;
+  personalGBP: number;
   byCategory: Record<string, number>;
   unconvertedCount: number;
   count: number;
@@ -108,7 +113,10 @@ export default function ExpensesScreen() {
   const [merchant, setMerchant] = useState("");
   const [spentOn, setSpentOn] = useState("");
   const [tripId, setTripId] = useState<number | null>(null);
+  const [reimbursable, setReimbursable] = useState(true);
   const [formError, setFormError] = useState<string | null>(null);
+  const [scanning, setScanning] = useState(false);
+  const [scanNote, setScanNote] = useState<string | null>(null);
 
   const { data: tripsData } = useQuery<Array<{ id: number; title: string }>>({
     queryKey: ["trips"],
@@ -136,11 +144,51 @@ export default function ExpensesScreen() {
       setAmount("");
       setMerchant("");
       setSpentOn("");
+      setReimbursable(true);
+      setScanNote(null);
       setFormError(null);
       void invalidate();
     },
     onError: () => setFormError("Couldn't save that expense. Check the fields and try again."),
   });
+
+  interface ScannedReceipt {
+    merchant: string | null;
+    amount: number | null;
+    currency: string | null;
+    category: Category;
+    spentOn: string | null;
+    note: string | null;
+  }
+
+  // Scan a receipt → pre-fill the Add form for review (never auto-saves).
+  async function scanReceipt() {
+    const file = await pickBookingFile();
+    if (!file) return;
+    setScanning(true);
+    setFormError(null);
+    try {
+      const r = await customFetch<ScannedReceipt>("/api/expenses/scan", {
+        method: "POST",
+        body: JSON.stringify({ data: file.data, mimeType: file.mimeType }),
+        responseType: "json",
+      });
+      if (r.amount != null) setAmount(String(r.amount));
+      if (r.currency && CURRENCY_BY_CODE[r.currency]) setCurrency(CURRENCY_BY_CODE[r.currency]!);
+      if (r.category) setCategory(r.category);
+      if (r.merchant) setMerchant(r.merchant);
+      if (r.spentOn) setSpentOn(r.spentOn);
+      setScanNote("Scanned — check the details and save.");
+      setShowAdd(true);
+    } catch (err: unknown) {
+      const e = err as { status?: number; data?: { error?: string } };
+      setScanNote(null);
+      setFormError(e.data?.error ?? "Couldn't scan that receipt. Enter it manually.");
+      setShowAdd(true);
+    } finally {
+      setScanning(false);
+    }
+  }
   const deleteExpense = useMutation({
     mutationFn: (id: number) => customFetch(`/api/expenses/${id}`, { method: "DELETE" }),
     onSuccess: () => void invalidate(),
@@ -158,16 +206,40 @@ export default function ExpensesScreen() {
       merchant: merchant || undefined,
       spentOn: spentOn || new Date().toISOString().slice(0, 10),
       tripId: tripId ?? undefined,
+      reimbursable,
     });
   }
 
   async function exportCsv() {
     if (expenses.length === 0) return;
-    const header = "Date,Category,Merchant,Amount,Currency,Note";
+    const tripName = (id: number | null | undefined) => trips.find((t) => t.id === id)?.title ?? "";
+    const header = "Date,Category,Merchant,Amount,Currency,Amount (GBP),Reimbursable,Trip,Note";
     const lines = expenses.map((e) =>
-      [e.spentOn, e.category, e.merchant ?? "", e.amount, e.currency, e.note ?? ""].map((v) => csvCell(String(v))).join(","),
+      [
+        e.spentOn,
+        e.category,
+        e.merchant ?? "",
+        e.amount,
+        e.currency,
+        e.amountGBP != null ? String(e.amountGBP) : "",
+        e.reimbursable === false ? "Personal" : "Company",
+        tripName((e as { tripId?: number | null }).tripId),
+        e.note ?? "",
+      ]
+        .map((v) => csvCell(String(v)))
+        .join(","),
     );
-    const csv = [header, ...lines].join("\n");
+    // Totals footer (GBP), for reimbursement. The 5 leading commas line the
+    // figure up under the "Amount (GBP)" column.
+    const totals = summary
+      ? [
+          "",
+          `Total (GBP),,,,,${summary.totalGBP}`,
+          `Company / reimbursable (GBP),,,,,${summary.reimbursableGBP}`,
+          `Personal (GBP),,,,,${summary.personalGBP}`,
+        ]
+      : [];
+    const csv = [header, ...lines, ...totals].join("\n");
     if (Platform.OS === "web" && typeof document !== "undefined") {
       const blob = new Blob([csv], { type: "text/csv" });
       const url = URL.createObjectURL(blob);
@@ -204,6 +276,19 @@ export default function ExpensesScreen() {
           {summary ? `${summary.count} expense${summary.count === 1 ? "" : "s"}` : ""}
           {summary && summary.unconvertedCount > 0 ? ` · ${summary.unconvertedCount} in an unlisted currency` : ""}
         </Text>
+        {summary && summary.personalGBP > 0 ? (
+          <View style={styles.splitRow}>
+            <View style={styles.splitItem}>
+              <Text style={styles.splitLabel}>Company</Text>
+              <Text style={styles.splitValue}>{fmtGBP(summary.reimbursableGBP)}</Text>
+            </View>
+            <View style={styles.splitDivider} />
+            <View style={styles.splitItem}>
+              <Text style={styles.splitLabel}>Personal</Text>
+              <Text style={styles.splitValue}>{fmtGBP(summary.personalGBP)}</Text>
+            </View>
+          </View>
+        ) : null}
       </Animated.View>
 
       {/* Category breakdown */}
@@ -227,14 +312,32 @@ export default function ExpensesScreen() {
         </Animated.View>
       )}
 
-      <Animated.View entering={FadeInDown.delay(140).duration(400)} style={{ flexDirection: "row", gap: 10, marginTop: 20 }}>
-        <Pressable onPress={() => { setFormError(null); setShowAdd(true); }} style={[styles.solidBtn, { backgroundColor: colors.primary }]}>
-          <Text style={[styles.solidBtnText, { color: colors.primaryForeground }]}>＋ Add expense</Text>
-        </Pressable>
-        <Pressable onPress={exportCsv} disabled={expenses.length === 0} style={[styles.ghostBtn, { borderColor: colors.border, opacity: expenses.length === 0 ? 0.5 : 1 }]}>
-          <Icon name="file-text" size={16} color={colors.foreground} />
-          <Text style={[styles.ghostBtnText, { color: colors.foreground }]}>Export CSV</Text>
-        </Pressable>
+      <Animated.View entering={FadeInDown.delay(140).duration(400)} style={{ marginTop: 20, gap: 10 }}>
+        {bookingUploadSupported ? (
+          <Pressable onPress={scanReceipt} disabled={scanning} style={[styles.scanBtn, colors.shadow, { backgroundColor: colors.card, borderColor: colors.primary, borderRadius: colors.radius, opacity: scanning ? 0.7 : 1 }]}>
+            {scanning ? (
+              <>
+                <ActivityIndicator color={colors.primary} size="small" />
+                <Text style={[styles.scanBtnText, { color: colors.primary }]}>Reading receipt…</Text>
+              </>
+            ) : (
+              <>
+                <Text style={{ fontSize: 16 }}>📸</Text>
+                <Text style={[styles.scanBtnText, { color: colors.foreground }]}>Scan a receipt</Text>
+                <Text style={[styles.scanBtnHint, { color: colors.mutedForeground }]}>photo or PDF</Text>
+              </>
+            )}
+          </Pressable>
+        ) : null}
+        <View style={{ flexDirection: "row", gap: 10 }}>
+          <Pressable onPress={() => { setFormError(null); setScanNote(null); setShowAdd(true); }} style={[styles.solidBtn, { backgroundColor: colors.primary }]}>
+            <Text style={[styles.solidBtnText, { color: colors.primaryForeground }]}>＋ Add expense</Text>
+          </Pressable>
+          <Pressable onPress={exportCsv} disabled={expenses.length === 0} style={[styles.ghostBtn, { borderColor: colors.border, opacity: expenses.length === 0 ? 0.5 : 1 }]}>
+            <Icon name="file-text" size={16} color={colors.foreground} />
+            <Text style={[styles.ghostBtnText, { color: colors.foreground }]}>Export CSV</Text>
+          </Pressable>
+        </View>
       </Animated.View>
 
       {/* List */}
@@ -253,7 +356,14 @@ export default function ExpensesScreen() {
                 <Text style={styles.expEmoji}>{CAT_META[e.category]?.emoji ?? "📎"}</Text>
                 <View style={{ flex: 1 }}>
                   <Text style={[styles.expTitle, { color: colors.foreground }]}>{e.merchant || CAT_META[e.category]?.label || e.category}</Text>
-                  <Text style={[styles.expMeta, { color: colors.mutedForeground }]}>{fmtDate(e.spentOn)}</Text>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 1 }}>
+                    <Text style={[styles.expMeta, { color: colors.mutedForeground }]}>{fmtDate(e.spentOn)}</Text>
+                    {e.reimbursable === false ? (
+                      <View style={[styles.personalTag, { backgroundColor: colors.muted }]}>
+                        <Text style={[styles.personalTagText, { color: colors.mutedForeground }]}>Personal</Text>
+                      </View>
+                    ) : null}
+                  </View>
                 </View>
                 <Text style={[styles.expAmt, { color: colors.foreground }]}>{cur?.symbol ?? ""}{e.amount} {e.currency}</Text>
                 <Pressable onPress={() => deleteExpense.mutate(e.id)} hitSlop={8} style={{ paddingLeft: 8 }}>
@@ -288,7 +398,31 @@ export default function ExpensesScreen() {
                 </Pressable>
               ))}
             </View>
+            {scanNote ? (
+              <View style={[styles.scanNote, { backgroundColor: colors.primary + "14" }]}>
+                <Text style={{ fontSize: 13 }}>📸</Text>
+                <Text style={[styles.scanNoteText, { color: colors.primary }]}>{scanNote}</Text>
+              </View>
+            ) : null}
             <TextInput value={merchant} onChangeText={setMerchant} placeholder="Merchant (optional)" placeholderTextColor={colors.mutedForeground} style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.foreground }]} />
+            <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>Claim type</Text>
+            <View style={{ flexDirection: "row", gap: 8 }}>
+              {[
+                { v: true, label: "🏢 Company", hint: "reimbursable" },
+                { v: false, label: "👤 Personal", hint: "" },
+              ].map((opt) => {
+                const active = reimbursable === opt.v;
+                return (
+                  <Pressable
+                    key={String(opt.v)}
+                    onPress={() => setReimbursable(opt.v)}
+                    style={[styles.claimChip, { backgroundColor: active ? colors.primary : colors.card, borderColor: active ? colors.primary : colors.border }]}
+                  >
+                    <Text style={[styles.claimChipText, { color: active ? colors.primaryForeground : colors.foreground }]}>{opt.label}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
             <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>Date (blank = today)</Text>
             <DateField value={spentOn} onChange={setSpentOn} mode="date" />
             {trips.length > 0 && (
@@ -326,6 +460,20 @@ const styles = StyleSheet.create({
   totalLabel: { fontFamily: "Inter_500Medium", fontSize: 12, color: "rgba(255,255,255,0.8)", textTransform: "uppercase", letterSpacing: 0.8 },
   totalValue: { fontFamily: "Inter_700Bold", fontSize: 38, color: "#fff", marginTop: 4, letterSpacing: -0.5 },
   totalMeta: { fontFamily: "Inter_400Regular", fontSize: 13, color: "rgba(255,255,255,0.85)", marginTop: 2 },
+  splitRow: { flexDirection: "row", alignItems: "center", marginTop: 14, borderTopWidth: 1, borderTopColor: "rgba(255,255,255,0.18)", paddingTop: 12 },
+  splitItem: { flex: 1 },
+  splitLabel: { fontFamily: "Inter_500Medium", fontSize: 11, color: "rgba(255,255,255,0.7)", textTransform: "uppercase", letterSpacing: 0.6 },
+  splitValue: { fontFamily: "Inter_700Bold", fontSize: 18, color: "#fff", marginTop: 2 },
+  splitDivider: { width: 1, height: 32, backgroundColor: "rgba(255,255,255,0.18)", marginHorizontal: 14 },
+  scanBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, height: 50, borderWidth: 1.5 },
+  scanBtnText: { fontFamily: "Inter_600SemiBold", fontSize: 15 },
+  scanBtnHint: { fontFamily: "Inter_400Regular", fontSize: 12 },
+  scanNote: { flexDirection: "row", alignItems: "center", gap: 8, padding: 10, borderRadius: 10, marginBottom: 10 },
+  scanNoteText: { fontFamily: "Inter_500Medium", fontSize: 13, flex: 1 },
+  personalTag: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 5 },
+  personalTagText: { fontFamily: "Inter_600SemiBold", fontSize: 10 },
+  claimChip: { flex: 1, alignItems: "center", borderWidth: 1, borderRadius: 10, paddingVertical: 11 },
+  claimChipText: { fontFamily: "Inter_600SemiBold", fontSize: 13 },
   h2: { fontFamily: "Inter_700Bold", fontSize: 18, marginBottom: 12 },
   catRow: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 12 },
   catEmoji: { fontSize: 18, width: 24, textAlign: "center" },
