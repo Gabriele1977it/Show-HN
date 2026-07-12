@@ -5,6 +5,7 @@ import { Router, type IRouter } from "express";
 import { requireAuth } from "../middlewares/auth";
 import { parseTripFromText } from "../lib/trip-parse";
 import { getRatesPerGBP, toGBP } from "../lib/fx";
+import { makeSlug } from "../lib/slug";
 
 const router: IRouter = Router();
 
@@ -146,6 +147,40 @@ router.post("/trips/parse", requireAuth, async (req, res): Promise<void> => {
     : [];
 
   res.status(201).json({ ...trip, items });
+});
+
+// Publish / unpublish a trip as a shareable public recap, and toggle whether the
+// spend total is shown. The slug is minted once and kept stable so re-sharing
+// gives the same link.
+router.post("/trips/:id/share", requireAuth, async (req, res): Promise<void> => {
+  const id = parseId(req.params.id);
+  if (isNaN(id)) {
+    res.status(400).json({ error: "Invalid trip id" });
+    return;
+  }
+  const { isPublic, showSpend } = req.body as { isPublic?: boolean; showSpend?: boolean };
+
+  const [trip] = await db
+    .select()
+    .from(tripsTable)
+    .where(and(eq(tripsTable.id, id), eq(tripsTable.userId, req.auth!.userId)))
+    .limit(1);
+  if (!trip) {
+    res.status(404).json({ error: "Trip not found" });
+    return;
+  }
+
+  const [updated] = await db
+    .update(tripsTable)
+    .set({
+      isPublic: isPublic !== false,
+      publicSlug: trip.publicSlug ?? makeSlug(),
+      publicShowSpend: showSpend == null ? trip.publicShowSpend : !!showSpend,
+    })
+    .where(and(eq(tripsTable.id, id), eq(tripsTable.userId, req.auth!.userId)))
+    .returning();
+
+  res.json({ isPublic: updated.isPublic, slug: updated.publicSlug, showSpend: updated.publicShowSpend });
 });
 
 router.delete("/trips/:id", requireAuth, async (req, res): Promise<void> => {

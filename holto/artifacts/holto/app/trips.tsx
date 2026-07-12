@@ -18,6 +18,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { DateField } from "@/components/DateField";
 import { Icon } from "@/components/Icon";
+import { ShareRecapSheet } from "@/components/ShareRecapSheet";
 import { useColors } from "@/hooks/useColors";
 
 type ItemType = "flight" | "hotel" | "train" | "car" | "activity" | "other";
@@ -48,6 +49,9 @@ interface Trip {
   endDate: string | null;
   items: TripItem[];
   expenseTotalGBP?: number;
+  isPublic?: boolean;
+  publicSlug?: string | null;
+  publicShowSpend?: boolean;
 }
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -85,6 +89,7 @@ export default function TripsScreen() {
   const [showPaste, setShowPaste] = useState(false);
   const [pasteText, setPasteText] = useState("");
   const [pasteError, setPasteError] = useState<string | null>(null);
+  const [shareTrip, setShareTrip] = useState<Trip | null>(null);
 
   const [itemFor, setItemFor] = useState<number | null>(null);
   const [iType, setIType] = useState<ItemType>("flight");
@@ -294,9 +299,17 @@ export default function TripsScreen() {
             </View>
           )}
 
-          <Pressable onPress={() => { closeItemForm(); setItemFor(trip.id); }} style={[styles.addItemBtn, { borderColor: colors.border }]}>
-            <Text style={[styles.addItemText, { color: colors.primary }]}>＋ Add flight, hotel or plan</Text>
-          </Pressable>
+          <View style={{ flexDirection: "row", gap: 8, marginTop: 10 }}>
+            <Pressable onPress={() => { closeItemForm(); setItemFor(trip.id); }} style={[styles.addItemBtn, { borderColor: colors.border, flex: 1, marginTop: 0 }]}>
+              <Text style={[styles.addItemText, { color: colors.primary }]}>＋ Add flight, hotel or plan</Text>
+            </Pressable>
+            <Pressable onPress={() => setShareTrip(trip)} style={[styles.shareRecapBtn, { borderColor: colors.border }]} accessibilityLabel="Share trip recap">
+              <Icon name="share-2" size={15} color={trip.isPublic ? colors.primary : colors.mutedForeground} />
+              <Text style={[styles.shareRecapText, { color: trip.isPublic ? colors.primary : colors.mutedForeground }]}>
+                {trip.isPublic ? "Public" : "Share"}
+              </Text>
+            </Pressable>
+          </View>
         </Animated.View>
       ))}
 
@@ -369,6 +382,8 @@ export default function TripsScreen() {
       <Pressable onPress={() => router.push("/residency")} style={{ marginTop: 12 }}>
         <Text style={[styles.footLink, { color: colors.mutedForeground }]}>Tracking days per country? Open Residency & Tax Days →</Text>
       </Pressable>
+
+      <ShareRecapSheet trip={shareTrip} onClose={() => setShareTrip(null)} />
     </ScrollView>
   );
 }
@@ -380,6 +395,8 @@ const styles = StyleSheet.create({
   pasteBtnText: { fontFamily: "Inter_600SemiBold", fontSize: 15 },
   pasteHint: { fontFamily: "Inter_400Regular", fontSize: 13, lineHeight: 19, marginBottom: 12 },
   pasteArea: { borderWidth: 1, borderRadius: 12, padding: 14, minHeight: 160, fontFamily: "Inter_400Regular", fontSize: 14, lineHeight: 20 },
+  shareRecapBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, borderWidth: 1, borderRadius: 10, height: 40, paddingHorizontal: 14 },
+  shareRecapText: { fontFamily: "Inter_600SemiBold", fontSize: 13 },
   newBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderWidth: 1, borderRadius: 12, height: 44 },
   newBtnText: { fontFamily: "Inter_500Medium", fontSize: 14 },
   formCard: { borderWidth: 1, padding: 16 },

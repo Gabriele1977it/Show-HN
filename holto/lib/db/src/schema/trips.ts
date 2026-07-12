@@ -1,4 +1,4 @@
-import { date, integer, pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
+import { boolean, date, integer, pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -16,6 +16,12 @@ export const tripsTable = pgTable("trips", {
   destination: text("destination"), // optional "Lisbon, Portugal"
   startDate: date("start_date"), // "YYYY-MM-DD", nullable
   endDate: date("end_date"),
+  // Public "trip recap" sharing for creators. A trip is private until the owner
+  // publishes it; the unguessable slug is the public link, and showSpend lets
+  // them keep the money side private while still sharing the journey.
+  isPublic: boolean("is_public").notNull().default(false),
+  publicSlug: text("public_slug").unique(),
+  publicShowSpend: boolean("public_show_spend").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

@@ -55,6 +55,10 @@ function RootLayoutNav() {
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="residency" options={{ headerShown: true, headerTitle: "Residency & Tax Days", ...headerOptions }} />
       <Stack.Screen name="trips" options={{ headerShown: true, headerTitle: "Your Trips", ...headerOptions }} />
+      <Stack.Screen name="today" options={{ headerShown: true, headerTitle: "Your Travel Day", ...headerOptions }} />
+      <Stack.Screen name="loyalty" options={{ headerShown: true, headerTitle: "Loyalty & Points", ...headerOptions }} />
+      <Stack.Screen name="import" options={{ headerShown: true, headerTitle: "Add from a Booking", ...headerOptions }} />
+      <Stack.Screen name="t/[slug]" options={{ headerShown: false }} />
       <Stack.Screen name="expenses" options={{ headerShown: true, headerTitle: "Expenses", ...headerOptions }} />
       <Stack.Screen name="airport-timing" options={{ headerShown: true, headerTitle: "Airport Timing", ...headerOptions }} />
       <Stack.Screen name="legal/terms" options={{ headerShown: true, headerTitle: "Terms of Service", ...headerOptions }} />
