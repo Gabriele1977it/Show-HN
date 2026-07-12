@@ -8,6 +8,11 @@ const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 
 let cache: { rates: Record<string, number>; ts: number } | null = null;
 
+// When the currently-cached rates were fetched (epoch ms), or null if none yet.
+export function ratesFetchedAt(): number | null {
+  return cache?.ts ?? null;
+}
+
 export async function getRatesPerGBP(): Promise<Record<string, number>> {
   if (cache && Date.now() - cache.ts < CACHE_TTL_MS) return cache.rates;
   try {
