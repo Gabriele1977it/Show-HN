@@ -1,3 +1,5 @@
+import { customFetch } from "@workspace/api-client-react";
+import { useQuery } from "@tanstack/react-query";
 import { router, useLocalSearchParams } from "expo-router";
 import React, { useMemo, useState } from "react";
 import { Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
@@ -18,6 +20,33 @@ const WATER_META: Record<WaterSafety, { label: string; color: string; emoji: str
   bottled: { label: "Bottled water recommended", color: "#C9A24B", emoji: "🚰" },
   caution: { label: "Drink bottled or filtered water only", color: "#C0392B", emoji: "⚠️" },
 };
+
+interface AdvisoryResp {
+  available: boolean;
+  advisory?: { code: string; score: number; level: "low" | "moderate" | "high" | "extreme"; label: string; message: string | null; source: string | null; updated: string | null };
+}
+const ADVISORY_COLOR: Record<string, string> = { low: "#2E7D52", moderate: "#C9A24B", high: "#E67E22", extreme: "#C0392B" };
+
+function AdvisoryBanner({ code, colors }: { code: string; colors: ReturnType<typeof useColors> }) {
+  const { data } = useQuery<AdvisoryResp>({
+    queryKey: ["advisory", code],
+    queryFn: () => customFetch<AdvisoryResp>(`/api/advisory/${code}`, { responseType: "json" }),
+    staleTime: 6 * 60 * 60 * 1000,
+    retry: false,
+  });
+  if (!data?.available || !data.advisory) return null;
+  const a = data.advisory;
+  const color = ADVISORY_COLOR[a.level] ?? colors.mutedForeground;
+  return (
+    <View style={[styles.advisory, { backgroundColor: color + "18", borderColor: color + "55" }]}>
+      <View style={[styles.advisoryDot, { backgroundColor: color }]} />
+      <View style={{ flex: 1 }}>
+        <Text style={[styles.advisoryLabel, { color }]}>Travel advisory · {a.label}</Text>
+        {a.updated ? <Text style={[styles.advisoryMeta, { color: colors.mutedForeground }]}>Aggregated from official sources · updated {a.updated}</Text> : null}
+      </View>
+    </View>
+  );
+}
 
 function firstNumber(s: string): string | null {
   const m = s.match(/\d{3,}/) ?? s.match(/\d+/);
@@ -103,6 +132,8 @@ export default function DestinationScreen() {
         <Text style={[styles.country, { color: colors.foreground }]}>{c.flag} {c.name}</Text>
       </Animated.View>
 
+      <AdvisoryBanner code={c.code} colors={colors} />
+
       {/* Emergency — most important, tappable */}
       <Animated.View entering={FadeInDown.delay(40).duration(400)}>
         <Pressable
@@ -177,6 +208,10 @@ const styles = StyleSheet.create({
   changeRow: { flexDirection: "row", alignItems: "center", gap: 3, marginBottom: 8 },
   changeText: { fontFamily: "Inter_600SemiBold", fontSize: 13 },
   country: { fontFamily: "Inter_700Bold", fontSize: 26, letterSpacing: -0.3 },
+  advisory: { flexDirection: "row", alignItems: "center", gap: 10, borderWidth: 1, borderRadius: 12, padding: 12, marginTop: 14 },
+  advisoryDot: { width: 9, height: 9, borderRadius: 5 },
+  advisoryLabel: { fontFamily: "Inter_600SemiBold", fontSize: 13 },
+  advisoryMeta: { fontFamily: "Inter_400Regular", fontSize: 11, marginTop: 2 },
   emergencyCard: { flexDirection: "row", alignItems: "center", padding: 18, marginTop: 16 },
   emergencyLabel: { fontFamily: "Inter_600SemiBold", fontSize: 11, letterSpacing: 1.4, color: "rgba(255,255,255,0.8)" },
   emergencyValue: { fontFamily: "Inter_700Bold", fontSize: 22, color: "#fff", marginTop: 3 },

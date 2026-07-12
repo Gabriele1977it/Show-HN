@@ -39,6 +39,11 @@ const SLIDES: Slide[] = [
     body: "HOLTO checks your flight against EU261 and UK261 rules, then helps you claim the compensation and care you're actually entitled to.",
   },
   {
+    icon: "sliders" as IconName,
+    title: "A whole travel toolkit",
+    body: "Trips & bookings, when to leave for the airport, expenses & receipts, a destination guide, currency, best-light times and more — all in one place.",
+  },
+  {
     icon: "home",
     title: "Life beyond the flight",
     body: "Compare the real cost of living in cities worldwide and get honest, no-pressure guidance if you're dreaming of a move abroad.",
