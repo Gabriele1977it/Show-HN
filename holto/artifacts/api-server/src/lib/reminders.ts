@@ -10,7 +10,8 @@ import {
 import { and, eq, gte, isNotNull, lte } from "drizzle-orm";
 
 import { computeResidency, type Stay } from "./residency";
-import { buildFlightReminder, buildLoyaltyReminder, buildResidencyReminders, type ReminderMsg } from "./reminder-messages";
+import { computeSchengen } from "./schengen";
+import { buildFlightReminder, buildLoyaltyReminder, buildResidencyReminders, buildSchengenReminder, type ReminderMsg } from "./reminder-messages";
 import { sendEmail } from "./email";
 import { sendPush } from "./push";
 import { logger } from "./logger";
@@ -46,8 +47,9 @@ async function deliver(userId: number, msg: ReminderMsg): Promise<void> {
 
 // ── Runners ─────────────────────────────────────────────────────────────────
 
-async function runResidencyReminders(): Promise<number> {
-  const stays = await db
+// All country stays grouped by user — shared by the residency and Schengen runs.
+async function loadStaysByUser(): Promise<Map<number, Stay[]>> {
+  const rows = await db
     .select({
       userId: countryStaysTable.userId,
       countryCode: countryStaysTable.countryCode,
@@ -56,14 +58,19 @@ async function runResidencyReminders(): Promise<number> {
       departureDate: countryStaysTable.departureDate,
     })
     .from(countryStaysTable);
-  if (!stays.length) return 0;
 
   const byUser = new Map<number, Stay[]>();
-  for (const s of stays) {
+  for (const s of rows) {
     const list = byUser.get(s.userId) ?? [];
     list.push({ countryCode: s.countryCode, countryName: s.countryName, arrivalDate: s.arrivalDate, departureDate: s.departureDate });
     byUser.set(s.userId, list);
   }
+  return byUser;
+}
+
+async function runResidencyReminders(): Promise<number> {
+  const byUser = await loadStaysByUser();
+  if (byUser.size === 0) return 0;
 
   const today = new Date().toISOString().slice(0, 10);
   const year = new Date().getUTCFullYear();
@@ -75,6 +82,24 @@ async function runResidencyReminders(): Promise<number> {
         await deliver(userId, msg);
         sent += 1;
       }
+    }
+  }
+  return sent;
+}
+
+async function runSchengenReminders(): Promise<number> {
+  const byUser = await loadStaysByUser();
+  if (byUser.size === 0) return 0;
+
+  const today = new Date().toISOString().slice(0, 10);
+  let sent = 0;
+  for (const [userId, userStays] of byUser) {
+    const status = computeSchengen(userStays, today);
+    if (!status.applicable) continue;
+    const msg = buildSchengenReminder(status);
+    if (msg && (await claim(userId, msg))) {
+      await deliver(userId, msg);
+      sent += 1;
     }
   }
   return sent;
@@ -127,14 +152,20 @@ async function runLoyaltyReminders(): Promise<number> {
 }
 
 // One pass over all proactive reminders. Best-effort; never throws.
-export async function runProactiveReminders(): Promise<{ residency: number; flights: number; loyalty: number }> {
+export async function runProactiveReminders(): Promise<{ residency: number; schengen: number; flights: number; loyalty: number }> {
   let residency = 0;
+  let schengen = 0;
   let flights = 0;
   let loyalty = 0;
   try {
     residency = await runResidencyReminders();
   } catch (err) {
     logger.error({ err }, "residency reminders failed");
+  }
+  try {
+    schengen = await runSchengenReminders();
+  } catch (err) {
+    logger.error({ err }, "schengen reminders failed");
   }
   try {
     flights = await runFlightReminders();
@@ -146,6 +177,8 @@ export async function runProactiveReminders(): Promise<{ residency: number; flig
   } catch (err) {
     logger.error({ err }, "loyalty reminders failed");
   }
-  if (residency || flights || loyalty) logger.info({ residency, flights, loyalty }, "Proactive reminders sent");
-  return { residency, flights, loyalty };
+  if (residency || schengen || flights || loyalty) {
+    logger.info({ residency, schengen, flights, loyalty }, "Proactive reminders sent");
+  }
+  return { residency, schengen, flights, loyalty };
 }

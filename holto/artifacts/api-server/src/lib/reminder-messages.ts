@@ -37,6 +37,37 @@ export function buildResidencyReminders(countries: CountryResidency[], year: num
   return out;
 }
 
+function niceDate(iso: string): string {
+  const d = new Date(`${iso.slice(0, 10)}T00:00:00Z`);
+  return Number.isNaN(d.getTime())
+    ? iso
+    : d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+}
+
+// The remaining-day thresholds at which we nudge about the Schengen 90/180
+// limit — meaningful checkpoints on the way down, not a daily countdown.
+export const SCHENGEN_ALERT_DAYS = [14, 7, 3, 1, 0];
+
+// Reminder about the Schengen 90/180 limit. Fires once per threshold value.
+export function buildSchengenReminder(
+  s: { daysRemaining: number; daysUsed: number; mustLeaveBy: string | null },
+): ReminderMsg | null {
+  if (!SCHENGEN_ALERT_DAYS.includes(s.daysRemaining)) return null;
+  const left = s.daysRemaining;
+  const leaveBy = s.mustLeaveBy ? niceDate(s.mustLeaveBy) : null;
+  const body =
+    left === 0
+      ? `You've used all 90 of your Schengen days in the last 180. ${leaveBy ? `On your current stay, plan to exit by ${leaveBy}.` : "Time to plan your exit from the Schengen area."}`
+      : `You have ${left} Schengen day${left === 1 ? "" : "s"} left (used ${s.daysUsed} of 90 in the last 180 days).${leaveBy ? ` On your current stay, leave by ${leaveBy}.` : ""}`;
+  return {
+    refKey: `schengen:left:${left}`,
+    kind: "schengen",
+    title: left === 0 ? "Schengen 90-day limit reached" : "Schengen days running low",
+    body,
+    data: { type: "schengen" },
+  };
+}
+
 // How far ahead of a points/status expiry we start nudging.
 export const LOYALTY_WINDOW_DAYS = 45;
 

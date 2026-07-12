@@ -33,10 +33,22 @@ interface CountryResidency {
   daysUntilThreshold: number;
 }
 
+interface SchengenStatus {
+  applicable: boolean;
+  daysUsed: number;
+  daysRemaining: number;
+  windowStart: string;
+  windowEnd: string;
+  currentlyIn: boolean;
+  mustLeaveBy: string | null;
+  status: ResidencyStatus;
+}
+
 interface Summary {
   today: string;
   threshold: number;
   countries: CountryResidency[];
+  schengen?: SchengenStatus;
 }
 
 interface Stay {
@@ -64,6 +76,50 @@ function statusMeta(status: ResidencyStatus): { label: string; color: string } {
 function fmtDate(iso: string): string {
   const d = new Date(`${iso}T00:00:00Z`);
   return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+}
+
+function SchengenCard({ s, colors }: { s: SchengenStatus; colors: ReturnType<typeof useColors> }) {
+  const pct = Math.min(100, Math.round((s.daysUsed / 90) * 100));
+  const color = s.status === "over" ? "#E5695F" : s.status === "approaching" ? "#C9A24B" : "#2ECC71";
+  const label = s.status === "over" ? "Over 90 days" : s.status === "approaching" ? "Running low" : "Within limit";
+  return (
+    <Animated.View entering={FadeInDown.delay(40).duration(400)} style={{ marginTop: 20 }}>
+      <View style={[styles.schengenCard, colors.shadow, { backgroundColor: colors.card, borderColor: colors.border, borderRadius: colors.radius }]}>
+        <View style={styles.schengenHead}>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.schengenTitle, { color: colors.foreground }]}>🇪🇺 Schengen 90/180</Text>
+            <Text style={[styles.schengenSub, { color: colors.mutedForeground }]}>Days in the Schengen area over the last 180</Text>
+          </View>
+          <View style={[styles.chip, { backgroundColor: color + "22" }]}>
+            <Text style={[styles.chipText, { color }]}>{label}</Text>
+          </View>
+        </View>
+
+        <View style={styles.schengenNumbers}>
+          <Text style={[styles.schengenBig, { color: colors.foreground }]}>
+            {s.daysUsed}
+            <Text style={[styles.schengenBigSub, { color: colors.mutedForeground }]}> / 90 used</Text>
+          </Text>
+          <Text style={[styles.schengenRemain, { color }]}>{s.daysRemaining} left</Text>
+        </View>
+
+        <View style={[styles.barTrack, { backgroundColor: colors.muted }]}>
+          <View style={[styles.barFill, { width: `${pct}%`, backgroundColor: color }]} />
+        </View>
+
+        {s.currentlyIn && s.mustLeaveBy ? (
+          <Text style={[styles.schengenNote, { color: colors.mutedForeground }]}>
+            On your current stay, leave by{" "}
+            <Text style={{ fontFamily: "Inter_600SemiBold", color: colors.foreground }}>{fmtDate(s.mustLeaveBy)}</Text> to stay within 90 days.
+          </Text>
+        ) : (
+          <Text style={[styles.schengenNote, { color: colors.mutedForeground }]}>
+            Rolling window since {fmtDate(s.windowStart)} — days free up as they pass out of the 180-day window.
+          </Text>
+        )}
+      </View>
+    </Animated.View>
+  );
 }
 
 function CountryPicker({
@@ -216,6 +272,11 @@ export default function ResidencyScreen() {
         </View>
       </Animated.View>
 
+      {/* Schengen 90/180 */}
+      {summary?.schengen?.applicable && (
+        <SchengenCard s={summary.schengen} colors={colors} />
+      )}
+
       {/* Summary */}
       {countries.length > 0 && (
         <Animated.View entering={FadeInDown.delay(60).duration(400)} style={{ marginTop: 22 }}>
@@ -335,6 +396,17 @@ const styles = StyleSheet.create({
   noteCard: { flexDirection: "row", gap: 8, borderWidth: 1, borderRadius: 10, padding: 12, marginTop: 14, alignItems: "flex-start" },
   noteText: { flex: 1, fontFamily: "Inter_400Regular", fontSize: 12, lineHeight: 17 },
   h2: { fontFamily: "Inter_700Bold", fontSize: 18, marginBottom: 12 },
+  schengenCard: { borderWidth: 1, padding: 18 },
+  schengenHead: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 10 },
+  schengenTitle: { fontFamily: "Inter_700Bold", fontSize: 16 },
+  schengenSub: { fontFamily: "Inter_400Regular", fontSize: 12, lineHeight: 17, marginTop: 2 },
+  schengenNumbers: { flexDirection: "row", alignItems: "baseline", justifyContent: "space-between", marginTop: 14 },
+  schengenBig: { fontFamily: "Inter_700Bold", fontSize: 30, letterSpacing: -0.5 },
+  schengenBigSub: { fontFamily: "Inter_400Regular", fontSize: 14 },
+  schengenRemain: { fontFamily: "Inter_700Bold", fontSize: 16 },
+  barTrack: { height: 8, borderRadius: 4, marginTop: 10, overflow: "hidden" },
+  barFill: { height: 8, borderRadius: 4 },
+  schengenNote: { fontFamily: "Inter_400Regular", fontSize: 12, lineHeight: 18, marginTop: 12 },
   card: { borderWidth: 1, padding: 16, marginBottom: 12 },
   cardTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   country: { fontFamily: "Inter_600SemiBold", fontSize: 16 },

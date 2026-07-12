@@ -4,6 +4,7 @@ import { Router, type IRouter } from "express";
 
 import { requireAuth } from "../middlewares/auth";
 import { computeResidency, type Stay } from "../lib/residency";
+import { computeSchengen } from "../lib/schengen";
 
 const router: IRouter = Router();
 
@@ -33,7 +34,8 @@ router.get("/residency/summary", requireAuth, async (req, res): Promise<void> =>
 
   const today = new Date().toISOString().slice(0, 10);
   const countries = computeResidency(stays as Stay[], today);
-  res.json({ today, threshold: 183, countries });
+  const schengen = computeSchengen(stays as Stay[], today);
+  res.json({ today, threshold: 183, countries, schengen });
 });
 
 router.post("/residency/stays", requireAuth, async (req, res): Promise<void> => {

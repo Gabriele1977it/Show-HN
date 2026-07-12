@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { buildResidencyReminders, buildFlightReminder, buildLoyaltyReminder } from "../src/lib/reminder-messages.ts";
+import { buildResidencyReminders, buildFlightReminder, buildLoyaltyReminder, buildSchengenReminder } from "../src/lib/reminder-messages.ts";
 import type { CountryResidency } from "../src/lib/residency.ts";
 
 function country(partial: Partial<CountryResidency>): CountryResidency {
@@ -95,4 +95,24 @@ test("loyalty reminder says 'today' on the expiry day", () => {
   const msg = buildLoyaltyReminder({ id: 9, programName: "Hilton Honors", tier: null, expiresAt: "2026-07-11" }, "2026-07-11");
   assert.ok(msg);
   assert.match(msg!.body, /expire today/);
+});
+
+test("schengen reminder fires at a threshold and reports the leave-by date", () => {
+  const msg = buildSchengenReminder({ daysRemaining: 7, daysUsed: 83, mustLeaveBy: "2026-07-18" });
+  assert.ok(msg);
+  assert.equal(msg!.refKey, "schengen:left:7");
+  assert.match(msg!.body, /7 Schengen days left/);
+  assert.match(msg!.body, /83 of 90/);
+  assert.match(msg!.body, /18 Jul 2026/);
+});
+
+test("schengen reminder is silent between thresholds", () => {
+  assert.equal(buildSchengenReminder({ daysRemaining: 20, daysUsed: 70, mustLeaveBy: null }), null);
+});
+
+test("schengen reminder at zero says the limit is reached", () => {
+  const msg = buildSchengenReminder({ daysRemaining: 0, daysUsed: 90, mustLeaveBy: "2026-07-11" });
+  assert.ok(msg);
+  assert.equal(msg!.refKey, "schengen:left:0");
+  assert.match(msg!.title, /limit reached/);
 });
