@@ -64,6 +64,71 @@ export async function generateText(
   return null;
 }
 
+// Free-first "read this document and give me JSON". Sends the file inline to
+// Gemini's multimodal model (handles both text-based and scanned PDFs, plus
+// photos of a booking) with no PDF-parsing dependency. Falls back to OpenAI
+// for images only (chat.completions can't take a PDF). Returns null on failure.
+export async function generateJsonFromDocument(
+  prompt: string,
+  file: { data: string; mimeType: string },
+  opts: { maxTokens?: number; temperature?: number } = {},
+): Promise<unknown | null> {
+  const maxTokens = opts.maxTokens ?? 1200;
+  const temperature = opts.temperature ?? 0;
+
+  if (GEMINI_KEY) {
+    try {
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_KEY}`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: file.mimeType, data: file.data } }] }],
+            generationConfig: { responseMimeType: "application/json", temperature, maxOutputTokens: maxTokens },
+          }),
+          signal: AbortSignal.timeout(30000),
+        },
+      );
+      if (!res.ok) throw new Error(`Gemini HTTP ${res.status}`);
+      const json = (await res.json()) as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
+      const text = json.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (typeof text === "string" && text.trim()) return JSON.parse(text);
+    } catch (err) {
+      logger.warn({ err }, "Gemini generateJsonFromDocument failed");
+    }
+  }
+
+  if (openai && file.mimeType.startsWith("image/")) {
+    try {
+      const r = await openai.chat.completions.create(
+        {
+          model: "gpt-4o-mini",
+          messages: [
+            {
+              role: "user",
+              content: [
+                { type: "text", text: prompt },
+                { type: "image_url", image_url: { url: `data:${file.mimeType};base64,${file.data}` } },
+              ],
+            },
+          ],
+          response_format: { type: "json_object" },
+          temperature,
+          max_tokens: maxTokens,
+        },
+        { timeout: 30000, maxRetries: 1 },
+      );
+      const content = r.choices[0]?.message?.content;
+      if (content) return JSON.parse(content);
+    } catch (err) {
+      logger.warn({ err }, "OpenAI generateJsonFromDocument failed");
+    }
+  }
+
+  return null;
+}
+
 export async function generateJson(
   prompt: string,
   opts: { maxTokens?: number; temperature?: number } = {},

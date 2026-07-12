@@ -92,6 +92,11 @@ app.post(
   },
 );
 
+// Booking-document uploads (base64 PDF/image) need a larger body than the
+// default 100kb. Mount a bigger JSON parser for just that path first; the
+// global parser below then no-ops for it (body already parsed) and keeps the
+// tight default everywhere else.
+app.use("/api/trips/parse-file", express.json({ limit: "12mb" }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 

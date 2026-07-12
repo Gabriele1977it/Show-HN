@@ -1,4 +1,4 @@
-import { generateJson } from "./llm";
+import { generateJson, generateJsonFromDocument } from "./llm";
 
 // Turn a pasted booking confirmation (flight, hotel, train, car…) into a
 // structured trip. Uses an LLM purely as a parser — it extracts what's in the
@@ -45,19 +45,9 @@ function str(v: unknown, max = 200): string | null {
   return t ? t.slice(0, max) : null;
 }
 
-export async function parseTripFromText(text: string): Promise<ParsedTrip | null> {
-  const trimmed = text.trim();
-  if (trimmed.length < 15) return null;
-
-  const prompt = `You extract travel bookings from pasted confirmation text (emails, receipts).
-Return ONLY the bookings that are explicitly present — never invent flights, hotels, dates, times or references.
-
-Booking text:
-"""
-${trimmed.slice(0, 6000)}
-"""
-
-Respond ONLY with valid JSON, no markdown:
+// The JSON contract the model must return — shared by the text and document
+// parsers so both produce the same shape.
+const SCHEMA_INSTRUCTIONS = `Respond ONLY with valid JSON, no markdown:
 {
   "title": "short trip name, e.g. 'Lisbon' or 'New York sales trip'",
   "destination": "City, Country or null",
@@ -74,9 +64,11 @@ Respond ONLY with valid JSON, no markdown:
     }
   ]
 }
-If there are no real bookings in the text, return {"title":"","destination":null,"startDate":null,"endDate":null,"items":[]}.`;
+If there are no real bookings, return {"title":"","destination":null,"startDate":null,"endDate":null,"items":[]}.`;
 
-  const parsed = await generateJson(prompt, { maxTokens: 900, temperature: 0 });
+// Turn the model's raw JSON into a validated ParsedTrip, or null if it holds no
+// usable booking. Shared by both the text and document parsers.
+function finalizeParsedTrip(parsed: unknown): ParsedTrip | null {
   if (!parsed || typeof parsed !== "object") return null;
   const raw = parsed as Record<string, unknown>;
   const rawItems = Array.isArray(raw.items) ? raw.items : [];
@@ -100,12 +92,41 @@ If there are no real bookings in the text, return {"title":"","destination":null
 
   if (items.length === 0) return null;
 
-  const title = str(raw.title) ?? str(raw.destination) ?? "New trip";
   return {
-    title,
+    title: str(raw.title) ?? str(raw.destination) ?? "New trip",
     destination: str(raw.destination),
     startDate: cleanDate(raw.startDate),
     endDate: cleanDate(raw.endDate),
     items,
   };
+}
+
+export async function parseTripFromText(text: string): Promise<ParsedTrip | null> {
+  const trimmed = text.trim();
+  if (trimmed.length < 15) return null;
+
+  const prompt = `You extract travel bookings from pasted confirmation text (emails, receipts).
+Return ONLY the bookings that are explicitly present — never invent flights, hotels, dates, times or references.
+
+Booking text:
+"""
+${trimmed.slice(0, 6000)}
+"""
+
+${SCHEMA_INSTRUCTIONS}`;
+
+  const parsed = await generateJson(prompt, { maxTokens: 900, temperature: 0 });
+  return finalizeParsedTrip(parsed);
+}
+
+// Parse an uploaded booking document (PDF or a photo/screenshot of a
+// confirmation). The model reads the file directly — see generateJsonFromDocument.
+export async function parseTripFromDocument(file: { data: string; mimeType: string }): Promise<ParsedTrip | null> {
+  const prompt = `This document is a travel booking confirmation (e.g. an airline, hotel, train or car-hire PDF or a photo of one).
+Extract ONLY the bookings that are explicitly present — never invent flights, hotels, dates, times or references.
+
+${SCHEMA_INSTRUCTIONS}`;
+
+  const parsed = await generateJsonFromDocument(prompt, file, { maxTokens: 1200, temperature: 0 });
+  return finalizeParsedTrip(parsed);
 }

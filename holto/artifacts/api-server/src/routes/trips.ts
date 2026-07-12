@@ -3,7 +3,7 @@ import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { Router, type IRouter } from "express";
 
 import { requireAuth } from "../middlewares/auth";
-import { parseTripFromText } from "../lib/trip-parse";
+import { parseTripFromText, parseTripFromDocument, type ParsedTrip } from "../lib/trip-parse";
 import { getRatesPerGBP, toGBP } from "../lib/fx";
 import { makeSlug } from "../lib/slug";
 
@@ -106,8 +106,36 @@ router.post("/trips", requireAuth, async (req, res): Promise<void> => {
   res.status(201).json({ ...trip, items: [] });
 });
 
+// Persist a parsed booking as a trip + timeline items. Shared by the paste and
+// file-upload parsers so there's one insertion path.
+async function persistParsedTrip(userId: number, parsed: ParsedTrip) {
+  const [trip] = await db
+    .insert(tripsTable)
+    .values({
+      userId,
+      title: parsed.title,
+      destination: parsed.destination,
+      startDate: parsed.startDate,
+      endDate: parsed.endDate,
+    })
+    .returning();
+
+  const itemsToInsert = parsed.items.map((it) => ({
+    tripId: trip.id,
+    userId,
+    type: it.type,
+    title: it.title,
+    startAt: it.startAt ? new Date(it.startAt) : null,
+    endAt: it.endAt ? new Date(it.endAt) : null,
+    location: it.location,
+    reference: it.reference,
+  }));
+  const items = itemsToInsert.length ? await db.insert(tripItemsTable).values(itemsToInsert).returning() : [];
+  return { ...trip, items };
+}
+
 // Paste a booking confirmation → parse it into a trip with items (uses the
-// existing OpenAI key; no third-party email service needed).
+// existing LLM key; no third-party email service needed).
 router.post("/trips/parse", requireAuth, async (req, res): Promise<void> => {
   const { text } = req.body as { text?: string };
   if (!text?.trim() || text.trim().length < 15) {
@@ -121,32 +149,43 @@ router.post("/trips/parse", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
-  const [trip] = await db
-    .insert(tripsTable)
-    .values({
-      userId: req.auth!.userId,
-      title: parsed.title,
-      destination: parsed.destination,
-      startDate: parsed.startDate,
-      endDate: parsed.endDate,
-    })
-    .returning();
+  res.status(201).json(await persistParsedTrip(req.auth!.userId, parsed));
+});
 
-  const itemsToInsert = parsed.items.map((it) => ({
-    tripId: trip.id,
-    userId: req.auth!.userId,
-    type: it.type,
-    title: it.title,
-    startAt: it.startAt ? new Date(it.startAt) : null,
-    endAt: it.endAt ? new Date(it.endAt) : null,
-    location: it.location,
-    reference: it.reference,
-  }));
-  const items = itemsToInsert.length
-    ? await db.insert(tripItemsTable).values(itemsToInsert).returning()
-    : [];
+// Upload a booking document (PDF, or a photo/screenshot) → the model reads it
+// directly and builds the trip. Free-tier: Gemini multimodal, no PDF library.
+const ALLOWED_DOC_MIME = new Set(["application/pdf", "image/png", "image/jpeg", "image/jpg", "image/webp", "image/heic"]);
+const MAX_DOC_BYTES = 10 * 1024 * 1024; // 10 MB decoded
 
-  res.status(201).json({ ...trip, items });
+router.post("/trips/parse-file", requireAuth, async (req, res): Promise<void> => {
+  let { data } = req.body as { data?: string };
+  const { mimeType } = req.body as { mimeType?: string };
+
+  if (typeof data !== "string" || !data || typeof mimeType !== "string") {
+    res.status(400).json({ error: "Upload a booking file (PDF or image)." });
+    return;
+  }
+  // Accept a full data: URL or a bare base64 string.
+  const comma = data.indexOf(",");
+  if (data.startsWith("data:") && comma !== -1) data = data.slice(comma + 1);
+
+  if (!ALLOWED_DOC_MIME.has(mimeType)) {
+    res.status(415).json({ error: "That file type isn't supported. Upload a PDF, or a JPG/PNG photo of your booking." });
+    return;
+  }
+  // base64 → byte-length guard (4 chars ≈ 3 bytes).
+  if (Math.floor((data.length * 3) / 4) > MAX_DOC_BYTES) {
+    res.status(413).json({ error: "That file is a bit large. Please upload a booking under 10 MB." });
+    return;
+  }
+
+  const parsed = await parseTripFromDocument({ data, mimeType });
+  if (!parsed) {
+    res.status(422).json({ error: "Couldn't read a booking from that file. Try a clearer copy, or paste the text instead." });
+    return;
+  }
+
+  res.status(201).json(await persistParsedTrip(req.auth!.userId, parsed));
 });
 
 // Publish / unpublish a trip as a shareable public recap, and toggle whether the

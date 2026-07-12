@@ -20,6 +20,7 @@ import { DateField } from "@/components/DateField";
 import { Icon } from "@/components/Icon";
 import { ShareRecapSheet } from "@/components/ShareRecapSheet";
 import { useColors } from "@/hooks/useColors";
+import { bookingUploadSupported, pickBookingFile } from "@/utils/pickBookingFile";
 
 type ItemType = "flight" | "hotel" | "train" | "car" | "activity" | "other";
 
@@ -90,6 +91,7 @@ export default function TripsScreen() {
   const [pasteText, setPasteText] = useState("");
   const [pasteError, setPasteError] = useState<string | null>(null);
   const [shareTrip, setShareTrip] = useState<Trip | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   const [itemFor, setItemFor] = useState<number | null>(null);
   const [iType, setIType] = useState<ItemType>("flight");
@@ -143,6 +145,23 @@ export default function TripsScreen() {
       setPasteError(msg ?? "Couldn't read that booking. Try adding it manually.");
     },
   });
+
+  const parseFile = useMutation({
+    mutationFn: (f: { data: string; mimeType: string }) =>
+      customFetch("/api/trips/parse-file", { method: "POST", body: JSON.stringify(f) }),
+    onSuccess: () => void invalidate(),
+    onError: (err: unknown) => {
+      const msg = (err as { data?: { error?: string } }).data?.error;
+      setUploadError(msg ?? "Couldn't read that file. Try pasting the text instead.");
+    },
+  });
+
+  async function uploadBooking() {
+    setUploadError(null);
+    const file = await pickBookingFile();
+    if (!file) return;
+    parseFile.mutate({ data: file.data, mimeType: file.mimeType });
+  }
 
   const addItem = useMutation({
     mutationFn: ({ tripId, body }: { tripId: number; body: object }) =>
@@ -209,13 +228,44 @@ export default function TripsScreen() {
       <Animated.View entering={FadeInDown.delay(60).duration(400)} style={{ marginTop: 16 }}>
         {!showNewTrip ? (
           <View style={{ gap: 10 }}>
+            {bookingUploadSupported ? (
+              <Pressable
+                onPress={uploadBooking}
+                disabled={parseFile.isPending}
+                style={({ pressed }) => [styles.pasteBtn, { backgroundColor: colors.primary, opacity: pressed || parseFile.isPending ? 0.88 : 1 }]}
+              >
+                {parseFile.isPending ? (
+                  <>
+                    <ActivityIndicator color={colors.primaryForeground} size="small" />
+                    <Text style={[styles.pasteBtnText, { color: colors.primaryForeground }]}>Reading your booking…</Text>
+                  </>
+                ) : (
+                  <>
+                    <Icon name="file-text" size={17} color={colors.primaryForeground} />
+                    <Text style={[styles.pasteBtnText, { color: colors.primaryForeground }]}>Upload a booking PDF</Text>
+                  </>
+                )}
+              </Pressable>
+            ) : null}
             <Pressable
               onPress={() => { setPasteError(null); setShowPaste(true); }}
-              style={({ pressed }) => [styles.pasteBtn, { backgroundColor: colors.primary, opacity: pressed ? 0.88 : 1 }]}
+              style={({ pressed }) => [
+                bookingUploadSupported ? styles.newBtn : styles.pasteBtn,
+                bookingUploadSupported
+                  ? { borderColor: colors.border, opacity: pressed ? 0.8 : 1 }
+                  : { backgroundColor: colors.primary, opacity: pressed ? 0.88 : 1 },
+              ]}
             >
-              <Text style={{ fontSize: 15 }}>✨</Text>
-              <Text style={[styles.pasteBtnText, { color: colors.primaryForeground }]}>Paste a booking confirmation</Text>
+              {bookingUploadSupported ? (
+                <Text style={[styles.newBtnText, { color: colors.mutedForeground }]}>or paste the text instead</Text>
+              ) : (
+                <>
+                  <Text style={{ fontSize: 15 }}>✨</Text>
+                  <Text style={[styles.pasteBtnText, { color: colors.primaryForeground }]}>Paste a booking confirmation</Text>
+                </>
+              )}
             </Pressable>
+            {uploadError ? <Text style={[styles.err, { color: colors.destructive }]}>{uploadError}</Text> : null}
             <Pressable
               onPress={() => setShowNewTrip(true)}
               style={({ pressed }) => [styles.newBtn, { borderColor: colors.border, opacity: pressed ? 0.8 : 1 }]}

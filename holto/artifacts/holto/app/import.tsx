@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Icon } from "@/components/Icon";
 import { useColors } from "@/hooks/useColors";
+import { bookingUploadSupported, pickBookingFile } from "@/utils/pickBookingFile";
 
 interface ParsedTrip {
   id: number;
@@ -47,6 +48,27 @@ export default function ImportScreen() {
       setError(body?.error ?? "Couldn't read that booking. Try pasting more of the confirmation, or add it manually.");
     },
   });
+
+  const parseFile = useMutation({
+    mutationFn: (f: { data: string; mimeType: string }) =>
+      customFetch<ParsedTrip>("/api/trips/parse-file", { method: "POST", body: JSON.stringify(f), responseType: "json" }),
+    onSuccess: (trip) => {
+      setDone(trip);
+      void qc.invalidateQueries({ queryKey: ["trips"] });
+      void qc.invalidateQueries({ queryKey: ["journey-next"] });
+    },
+    onError: (err: unknown) => {
+      const body = (err as { data?: { error?: string } }).data;
+      setError(body?.error ?? "Couldn't read that file. Try a clearer copy, or paste the text instead.");
+    },
+  });
+
+  async function upload() {
+    setError(null);
+    const file = await pickBookingFile();
+    if (!file) return;
+    parseFile.mutate({ data: file.data, mimeType: file.mimeType });
+  }
 
   function submit() {
     if (text.trim().length < 15) {
@@ -100,7 +122,38 @@ export default function ImportScreen() {
         </Animated.View>
       ) : null}
 
-      <Animated.View entering={FadeInDown.delay(80).duration(400)} style={{ marginTop: 16 }}>
+      {bookingUploadSupported ? (
+        <Animated.View entering={FadeInDown.delay(60).duration(400)} style={{ marginTop: 16 }}>
+          <Pressable
+            onPress={upload}
+            disabled={parseFile.isPending}
+            style={[styles.uploadBtn, colors.shadow, { backgroundColor: colors.card, borderColor: colors.primary, borderRadius: colors.radius, opacity: parseFile.isPending ? 0.7 : 1 }]}
+          >
+            {parseFile.isPending ? (
+              <>
+                <ActivityIndicator color={colors.primary} size="small" />
+                <Text style={[styles.uploadText, { color: colors.primary }]}>Reading your booking…</Text>
+              </>
+            ) : (
+              <>
+                <Icon name="file-text" size={20} color={colors.primary} />
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.uploadText, { color: colors.foreground }]}>Upload a booking PDF</Text>
+                  <Text style={[styles.uploadSub, { color: colors.mutedForeground }]}>Or a photo/screenshot — HOLTO reads it for you</Text>
+                </View>
+                <Icon name="chevron-right" size={18} color={colors.mutedForeground} />
+              </>
+            )}
+          </Pressable>
+          <View style={styles.orRow}>
+            <View style={[styles.orLine, { backgroundColor: colors.border }]} />
+            <Text style={[styles.orText, { color: colors.mutedForeground }]}>or paste the text</Text>
+            <View style={[styles.orLine, { backgroundColor: colors.border }]} />
+          </View>
+        </Animated.View>
+      ) : null}
+
+      <Animated.View entering={FadeInDown.delay(80).duration(400)} style={{ marginTop: bookingUploadSupported ? 0 : 16 }}>
         <TextInput
           value={text}
           onChangeText={(t) => { setText(t); if (error) setError(null); }}
@@ -139,6 +192,12 @@ const styles = StyleSheet.create({
   sub: { fontFamily: "Inter_400Regular", fontSize: 15, lineHeight: 22, marginTop: 6 },
   sharedNote: { flexDirection: "row", alignItems: "center", gap: 8, padding: 12, marginTop: 16 },
   sharedNoteText: { fontFamily: "Inter_500Medium", fontSize: 13, flex: 1 },
+  uploadBtn: { flexDirection: "row", alignItems: "center", gap: 12, borderWidth: 1.5, padding: 16 },
+  uploadText: { fontFamily: "Inter_600SemiBold", fontSize: 15 },
+  uploadSub: { fontFamily: "Inter_400Regular", fontSize: 12, lineHeight: 16, marginTop: 2 },
+  orRow: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 16, marginBottom: 2 },
+  orLine: { flex: 1, height: 1 },
+  orText: { fontFamily: "Inter_500Medium", fontSize: 12 },
   area: { borderWidth: 1, minHeight: 200, padding: 14, fontFamily: "Inter_400Regular", fontSize: 15, lineHeight: 21 },
   err: { fontFamily: "Inter_500Medium", fontSize: 13, marginTop: 10 },
   primaryBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, height: 52, borderRadius: 12 },
