@@ -102,18 +102,21 @@ async function geminiGenerate(
 ): Promise<GenResult> {
   if (!GEMINI_KEY) return { text: null, diag: "Gemini key not set" };
 
-  const body = JSON.stringify({
-    contents: [{ parts }],
-    generationConfig: {
-      ...(opts.json ? { responseMimeType: "application/json" } : {}),
-      temperature: opts.temperature,
-      maxOutputTokens: opts.maxTokens,
-    },
-  });
   const timeoutMs = opts.timeoutMs ?? 20000;
 
   let lastDiag = "Gemini unavailable";
   for (const model of GEMINI_MODELS) {
+    const generationConfig: Record<string, unknown> = {
+      ...(opts.json ? { responseMimeType: "application/json" } : {}),
+      temperature: opts.temperature,
+      maxOutputTokens: opts.maxTokens,
+    };
+    // 2.5 models "think" by default, which eats the output-token budget and can
+    // truncate the JSON. Turn it off for our structured extraction so the whole
+    // budget goes to the answer. (Only 2.5 accepts this field.)
+    if (model.includes("2.5")) generationConfig.thinkingConfig = { thinkingBudget: 0 };
+    const body = JSON.stringify({ contents: [{ parts }], generationConfig });
+
     let res = await geminiCall(model, body, timeoutMs);
     // A transient throttle self-heals: pause and retry the same model once.
     if (res.kind === "throttled") {
@@ -128,8 +131,36 @@ async function geminiGenerate(
   return { text: null, diag: lastDiag };
 }
 
-// Parse JSON that may arrive wrapped in ```json fences despite our asking for a
-// raw JSON mime type — some models still add them. Returns null if unparseable.
+// Find the first balanced JSON object/array in a string, respecting strings and
+// escapes. Salvages JSON that has prose around it or a trailing truncation.
+function extractFirstJson(text: string): string | null {
+  const startObj = text.indexOf("{");
+  const startArr = text.indexOf("[");
+  let i = startObj === -1 ? startArr : startArr === -1 ? startObj : Math.min(startObj, startArr);
+  if (i === -1) return null;
+  const open = text[i]!;
+  const close = open === "{" ? "}" : "]";
+  let depth = 0;
+  let inStr = false;
+  for (; i < text.length; i++) {
+    const c = text[i]!;
+    if (inStr) {
+      if (c === "\\") i++;
+      else if (c === '"') inStr = false;
+      continue;
+    }
+    if (c === '"') inStr = true;
+    else if (c === open) depth++;
+    else if (c === close) {
+      depth--;
+      if (depth === 0) return text.slice(text.indexOf(open), i + 1);
+    }
+  }
+  return null;
+}
+
+// Parse JSON that may arrive wrapped in ```json fences or with stray prose
+// despite our asking for a raw JSON mime type. Returns null if unparseable.
 function parseJsonLoose(text: string): unknown | null {
   const cleaned = text
     .replace(/^\s*```(?:json)?\s*/i, "")
@@ -138,8 +169,17 @@ function parseJsonLoose(text: string): unknown | null {
   try {
     return JSON.parse(cleaned);
   } catch {
-    return null;
+    /* fall through to salvage */
   }
+  const extracted = extractFirstJson(cleaned);
+  if (extracted) {
+    try {
+      return JSON.parse(extracted);
+    } catch {
+      /* give up */
+    }
+  }
+  return null;
 }
 
 // Free-first plain-text generation (prefers Gemini). Returns null on failure.
@@ -183,7 +223,7 @@ export async function generateJsonFromDocument(
   file: { data: string; mimeType: string },
   opts: { maxTokens?: number; temperature?: number } = {},
 ): Promise<DocResult> {
-  const maxTokens = opts.maxTokens ?? 2048;
+  const maxTokens = opts.maxTokens ?? 8192;
   const temperature = opts.temperature ?? 0;
   const diags: string[] = [];
 

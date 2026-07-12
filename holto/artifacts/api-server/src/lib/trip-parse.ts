@@ -134,7 +134,7 @@ Extract ONLY the bookings that are explicitly present — never invent flights, 
 
 ${SCHEMA_INSTRUCTIONS}`;
 
-  const { data, diag } = await generateJsonFromDocument(prompt, file, { maxTokens: 2048, temperature: 0 });
+  const { data, diag } = await generateJsonFromDocument(prompt, file, { maxTokens: 8192, temperature: 0 });
   const fromVision = finalizeParsedTrip(data);
   if (fromVision) return { trip: fromVision, diag: "" };
   // The model replied but held no booking (vs. failing to read the file at all).
