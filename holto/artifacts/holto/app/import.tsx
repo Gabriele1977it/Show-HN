@@ -58,8 +58,13 @@ export default function ImportScreen() {
       void qc.invalidateQueries({ queryKey: ["journey-next"] });
     },
     onError: (err: unknown) => {
-      const body = (err as { data?: { error?: string } }).data;
-      setError(body?.error ?? "Couldn't read that file. Try a clearer copy, or paste the text instead.");
+      const e = err as { status?: number; data?: { error?: string } };
+      setError(
+        e.data?.error ??
+          (e.status
+            ? `Upload failed (error ${e.status}). Try again, or paste the text below.`
+            : "Upload failed — check your connection, or paste the text below."),
+      );
     },
   });
 

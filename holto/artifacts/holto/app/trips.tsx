@@ -151,8 +151,13 @@ export default function TripsScreen() {
       customFetch("/api/trips/parse-file", { method: "POST", body: JSON.stringify(f) }),
     onSuccess: () => void invalidate(),
     onError: (err: unknown) => {
-      const msg = (err as { data?: { error?: string } }).data?.error;
-      setUploadError(msg ?? "Couldn't read that file. Try pasting the text instead.");
+      const e = err as { status?: number; data?: { error?: string }; message?: string };
+      const msg =
+        e.data?.error ??
+        (e.status
+          ? `Upload failed (error ${e.status}). Try again, or paste the booking text instead.`
+          : "Upload failed — check your connection, or paste the booking text instead.");
+      setUploadError(msg);
     },
   });
 

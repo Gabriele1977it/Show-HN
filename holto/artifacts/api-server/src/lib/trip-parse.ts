@@ -1,4 +1,6 @@
 import { generateJson, generateJsonFromDocument } from "./llm";
+import { extractPdfText } from "./pdf-text";
+import { logger } from "./logger";
 
 // Turn a pasted booking confirmation (flight, hotel, train, car…) into a
 // structured trip. Uses an LLM purely as a parser — it extracts what's in the
@@ -127,6 +129,28 @@ Extract ONLY the bookings that are explicitly present — never invent flights, 
 
 ${SCHEMA_INSTRUCTIONS}`;
 
-  const parsed = await generateJsonFromDocument(prompt, file, { maxTokens: 1200, temperature: 0 });
-  return finalizeParsedTrip(parsed);
+  const parsed = await generateJsonFromDocument(prompt, file, { maxTokens: 2048, temperature: 0 });
+  const fromVision = finalizeParsedTrip(parsed);
+  if (fromVision) return fromVision;
+
+  // Fallback: if the vision model couldn't read the PDF (unsupported model,
+  // odd inline handling, etc.), extract the embedded text and run it through
+  // the proven text parser — a second path that doesn't depend on vision.
+  if (file.mimeType === "application/pdf") {
+    try {
+      const text = extractPdfText(Buffer.from(file.data, "base64"));
+      // Only worth a parse if we got real words, not glyph-index noise from a
+      // custom-encoded font (common in airline/hotel PDFs, which then only the
+      // vision model can read).
+      const letters = (text.match(/[A-Za-z]/g) ?? []).length;
+      if (letters >= 20) {
+        logger.info({ chars: text.length, letters }, "PDF vision empty — retrying via extracted text");
+        return await parseTripFromText(text);
+      }
+      logger.warn({ chars: text.length, letters }, "PDF text extraction yielded no readable words (custom font?)");
+    } catch (err) {
+      logger.warn({ err }, "PDF text-extraction fallback failed");
+    }
+  }
+  return null;
 }
