@@ -83,14 +83,11 @@ export default function TabLayout() {
           ),
         }}
       />
+      {/* "Living" is reached from the Home ecosystem card, not the tab bar —
+          keep the route but hide it so the action bar stays uncluttered. */}
       <Tabs.Screen
         name="living"
-        options={{
-          title: "Living",
-          tabBarIcon: ({ color }) => (
-            <TabSvgIcon name="globe" color={color} />
-          ),
-        }}
+        options={{ href: null }}
       />
       <Tabs.Screen
         name="plans"
