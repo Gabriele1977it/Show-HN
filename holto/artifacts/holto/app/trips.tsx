@@ -340,6 +340,19 @@ export default function TripsScreen() {
                     <Text style={[styles.itemMeta, { color: colors.mutedForeground }]}>
                       {[fmtItemTime(it.startAt), it.location, it.reference && `Ref ${it.reference}`].filter(Boolean).join(" · ")}
                     </Text>
+                    {it.location ? (
+                      <Pressable
+                        onPress={() =>
+                          router.push(
+                            `/shoot-times?location=${encodeURIComponent(it.location!)}${it.startAt ? `&date=${new Date(it.startAt).toISOString().slice(0, 10)}` : ""}` as never,
+                          )
+                        }
+                        hitSlop={6}
+                        style={{ marginTop: 4 }}
+                      >
+                        <Text style={[styles.bestLightLink, { color: colors.primary }]}>🌇 Best light here</Text>
+                      </Pressable>
+                    ) : null}
                   </View>
                   <Pressable onPress={() => deleteItem.mutate({ tripId: trip.id, itemId: it.id })} hitSlop={8} style={{ padding: 4 }}>
                     <Icon name="x" size={15} color={colors.mutedForeground} />
@@ -469,6 +482,7 @@ const styles = StyleSheet.create({
   itemEmoji: { fontSize: 18, width: 24, textAlign: "center" },
   itemTitle: { fontFamily: "Inter_600SemiBold", fontSize: 14 },
   itemMeta: { fontFamily: "Inter_400Regular", fontSize: 12, marginTop: 1 },
+  bestLightLink: { fontFamily: "Inter_600SemiBold", fontSize: 12 },
   addItemBtn: { borderTopWidth: 1, marginTop: 10, paddingTop: 12, alignItems: "center" },
   addItemText: { fontFamily: "Inter_600SemiBold", fontSize: 14 },
   backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },

@@ -16,6 +16,7 @@ import airportRouter from "./airport";
 import journeyRouter from "./journey";
 import loyaltyRouter from "./loyalty";
 import publicRouter from "./public";
+import shootRouter from "./shoot";
 import stripeRouter from "./stripe";
 
 const router: IRouter = Router();
@@ -39,6 +40,7 @@ router.use(airportRouter);
 router.use(journeyRouter);
 router.use(loyaltyRouter);
 router.use(publicRouter);
+router.use(shootRouter);
 router.use(stripeRouter);
 
 export default router;

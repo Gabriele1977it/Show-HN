@@ -11,7 +11,7 @@ interface Tool {
   emoji: string;
   title: string;
   desc: string;
-  route: "/trips" | "/expenses" | "/residency" | "/airport-timing" | "/today" | "/loyalty" | "/import";
+  route: "/trips" | "/expenses" | "/residency" | "/airport-timing" | "/today" | "/loyalty" | "/import" | "/shoot-times";
 }
 
 const TOOLS: Tool[] = [
@@ -20,6 +20,7 @@ const TOOLS: Tool[] = [
   { emoji: "🧳", title: "Trips", desc: "Every flight, hotel and plan in one timeline. Paste a booking to auto-fill it.", route: "/trips" },
   { emoji: "⏱️", title: "Airport timing", desc: "When to leave for the airport, using live traffic and your flight time.", route: "/airport-timing" },
   { emoji: "🏆", title: "Loyalty & points", desc: "Every membership in one wallet, with a nudge before your points expire.", route: "/loyalty" },
+  { emoji: "🌇", title: "Best light", desc: "Golden hour and blue hour for any place and date — never miss the shot.", route: "/shoot-times" },
   { emoji: "🧾", title: "Expenses", desc: "Log spend in any currency, total in GBP, export a report in one tap.", route: "/expenses" },
   { emoji: "🌍", title: "Residency & tax days", desc: "Count your days per country and stay ahead of the 183-day rule.", route: "/residency" },
 ];
