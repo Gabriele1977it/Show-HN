@@ -16,6 +16,7 @@ import Animated, { FadeInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { DateField } from "@/components/DateField";
+import { AwardWalletCard } from "@/components/AwardWalletCard";
 import { Icon, type IconName } from "@/components/Icon";
 import { SkeletonCard } from "@/components/Skeleton";
 import { useColors } from "@/hooks/useColors";
@@ -199,6 +200,8 @@ export default function LoyaltyScreen() {
           <Icon name="award" size={17} color={colors.primaryForeground} />
           <Text style={[styles.addBtnText, { color: colors.primaryForeground }]}>Add a programme</Text>
         </Pressable>
+
+        <AwardWalletCard onSynced={invalidate} />
 
         {isLoading ? (
           <View style={{ marginTop: 24 }}>

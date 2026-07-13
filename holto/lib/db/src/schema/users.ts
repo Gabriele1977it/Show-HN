@@ -20,6 +20,10 @@ export const usersTable = pgTable("users", {
   // expiry. The raw token lives only in the reset link. Both cleared on use.
   resetTokenHash: text("reset_token_hash"),
   resetTokenExpiresAt: timestamp("reset_token_expires_at", { withTimezone: true }),
+  // AwardWallet Account Access link: the connected user's AwardWallet id, so we
+  // can pull the loyalty balances they've shared. Null = not connected.
+  awardwalletUserId: integer("awardwallet_user_id"),
+  awardwalletSyncedAt: timestamp("awardwallet_synced_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

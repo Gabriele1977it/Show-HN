@@ -18,6 +18,11 @@ const STATEMENTS: string[] = [
   // Password reset (forgot-password flow).
   `ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "reset_token_hash" text`,
   `ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "reset_token_expires_at" timestamp with time zone`,
+  // AwardWallet Account Access link.
+  `ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "awardwallet_user_id" integer`,
+  `ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "awardwallet_synced_at" timestamp with time zone`,
+  // Loyalty row provenance ("manual" vs "awardwallet").
+  `ALTER TABLE "loyalty_programs" ADD COLUMN IF NOT EXISTS "source" text`,
 ];
 
 export async function ensureAppSchema(): Promise<void> {

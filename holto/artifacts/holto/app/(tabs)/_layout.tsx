@@ -83,6 +83,15 @@ export default function TabLayout() {
           ),
         }}
       />
+      <Tabs.Screen
+        name="news"
+        options={{
+          title: "News",
+          tabBarIcon: ({ color }) => (
+            <TabSvgIcon name="news" color={color} />
+          ),
+        }}
+      />
       {/* "Living" is reached from the Home ecosystem card, not the tab bar —
           keep the route but hide it so the action bar stays uncluttered. */}
       <Tabs.Screen

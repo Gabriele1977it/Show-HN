@@ -21,6 +21,9 @@ export const loyaltyProgramsTable = pgTable("loyalty_programs", {
   pointsBalance: integer("points_balance"), // nullable — many users won't track this
   expiresAt: date("expires_at"), // points/status expiry, "YYYY-MM-DD", nullable
   notes: text("notes"),
+  // "manual" (user-entered) or "awardwallet" (auto-synced). Lets a sync update
+  // its own rows without clobbering anything the user typed by hand.
+  source: text("source"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
