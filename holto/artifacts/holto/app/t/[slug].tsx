@@ -2,8 +2,8 @@ import { customFetch } from "@workspace/api-client-react";
 import { useQuery } from "@tanstack/react-query";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useLocalSearchParams } from "expo-router";
-import React from "react";
-import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import React, { useEffect } from "react";
+import { ActivityIndicator, Platform, Pressable, ScrollView, Share, StyleSheet, Text, View } from "react-native";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -71,6 +71,32 @@ export default function PublicTripScreen() {
     enabled: !!slug,
   });
 
+  // Set the page title + Open Graph tags on web so a shared link shows a rich
+  // preview (title, summary) instead of the bare app shell. Restored on unmount.
+  useEffect(() => {
+    if (Platform.OS !== "web" || typeof document === "undefined" || !data) return;
+    const prevTitle = document.title;
+    document.title = `${data.title} · HOLTO trip recap`;
+    const places = data.recap.countries || data.recap.places;
+    const desc = `${data.recap.days != null ? `${data.recap.days} days` : "A trip"}${places ? `, ${places} place${places === 1 ? "" : "s"}` : ""}${data.recap.flights ? `, ${data.recap.flights} flight${data.recap.flights === 1 ? "" : "s"}` : ""} — planned with HOLTO.`;
+    const setMeta = (key: string, attr: "name" | "property", value: string) => {
+      let el = document.querySelector(`meta[${attr}="${key}"]`) as HTMLMetaElement | null;
+      if (!el) {
+        el = document.createElement("meta");
+        el.setAttribute(attr, key);
+        document.head.appendChild(el);
+      }
+      el.setAttribute("content", value);
+    };
+    setMeta("description", "name", desc);
+    setMeta("og:title", "property", `${data.title} · HOLTO`);
+    setMeta("og:description", "property", desc);
+    setMeta("og:type", "property", "article");
+    return () => {
+      document.title = prevTitle;
+    };
+  }, [data]);
+
   if (isLoading) {
     return (
       <View style={[styles.center, { backgroundColor: colors.background }]}>
@@ -95,6 +121,27 @@ export default function PublicTripScreen() {
   }
 
   const r = data.recap;
+
+  const shareUrl =
+    Platform.OS === "web" && typeof window !== "undefined"
+      ? window.location.href
+      : `https://app.holtotravel.com/t/${slug}`;
+
+  async function shareTrip() {
+    const message = `${data!.title} — my trip recap on HOLTO`;
+    try {
+      if (Platform.OS === "web" && typeof navigator !== "undefined" && (navigator as Navigator & { share?: unknown }).share) {
+        await (navigator as unknown as { share: (d: object) => Promise<void> }).share({ title: data!.title, text: message, url: shareUrl });
+      } else if (Platform.OS === "web" && typeof navigator !== "undefined" && navigator.clipboard) {
+        await navigator.clipboard.writeText(shareUrl);
+      } else {
+        await Share.share({ message: `${message}\n${shareUrl}`, url: shareUrl, title: data!.title });
+      }
+    } catch {
+      /* user dismissed the share sheet */
+    }
+  }
+
   const placeStat = r.countries > 0 ? { value: r.countries, label: r.countries === 1 ? "country" : "countries" } : { value: r.places, label: r.places === 1 ? "place" : "places" };
   const stats: { value: string; label: string }[] = [];
   if (r.days != null) stats.push({ value: String(r.days), label: r.days === 1 ? "day" : "days" });
@@ -129,6 +176,11 @@ export default function PublicTripScreen() {
             </React.Fragment>
           ))}
         </View>
+
+        <Pressable onPress={shareTrip} style={styles.shareBtn}>
+          <Icon name="share-2" size={15} color="#0A2E38" />
+          <Text style={styles.shareText}>Share this trip</Text>
+        </Pressable>
       </LinearGradient>
 
       {/* Timeline */}
@@ -177,6 +229,8 @@ const styles = StyleSheet.create({
   heroTitle: { fontFamily: "Inter_700Bold", fontSize: 30, color: "#fff", letterSpacing: -0.5, marginTop: 6 },
   heroDest: { fontFamily: "Inter_500Medium", fontSize: 15, color: "rgba(255,255,255,0.75)", marginTop: 4 },
   heroDates: { fontFamily: "Inter_400Regular", fontSize: 13, color: "rgba(255,255,255,0.5)", marginTop: 2 },
+  shareBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, alignSelf: "flex-start", backgroundColor: "#F2C94C", borderRadius: 12, paddingHorizontal: 16, paddingVertical: 10, marginTop: 22 },
+  shareText: { fontFamily: "Inter_700Bold", fontSize: 14, color: "#0A2E38" },
   statRow: { flexDirection: "row", alignItems: "center", marginTop: 24, flexWrap: "wrap" },
   stat: { alignItems: "center", paddingHorizontal: 6 },
   statValue: { fontFamily: "Inter_700Bold", fontSize: 26, color: "#fff", letterSpacing: -0.5 },
