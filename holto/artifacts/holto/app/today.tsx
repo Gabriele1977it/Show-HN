@@ -9,6 +9,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Icon, type IconName } from "@/components/Icon";
 import { findEssentials } from "@/constants/countryEssentials";
+import { addToCalendar } from "@/utils/calendar";
 import { useColors } from "@/hooks/useColors";
 
 type FlightStatus = "scheduled" | "active" | "landed" | "cancelled" | "incident" | "diverted" | "unknown";
@@ -260,6 +261,24 @@ export default function TodayScreen() {
         </LinearGradient>
       </Animated.View>
 
+      <Animated.View entering={FadeInDown.delay(70).duration(400)}>
+        <Pressable
+          onPress={() =>
+            addToCalendar({
+              title: `Flight ${flight.flightNumber ?? flight.title}`,
+              start: flight.scheduledDep ?? new Date().toISOString(),
+              end: flight.scheduledArr,
+              location: flight.depAirport ?? undefined,
+              description: `${flight.depAirport ?? ""} → ${flight.arrAirport ?? ""}${flight.reference ? ` · Ref ${flight.reference}` : ""}`,
+            })
+          }
+          style={({ pressed }) => [styles.calBtn, { borderColor: colors.border, backgroundColor: colors.card, borderRadius: colors.radius, opacity: pressed ? 0.9 : 1 }]}
+        >
+          <Text style={{ fontSize: 15 }}>📅</Text>
+          <Text style={[styles.calText, { color: colors.foreground }]}>Add flight to calendar</Text>
+        </Pressable>
+      </Animated.View>
+
       {disrupted ? (
         <Animated.View entering={FadeInDown.delay(90).duration(400)}>
           <Pressable
@@ -362,6 +381,8 @@ const styles = StyleSheet.create({
   heroFallback: { fontFamily: "Inter_400Regular", fontSize: 11, lineHeight: 16, color: "rgba(255,255,255,0.5)", marginTop: 8 },
   wxRow: { flexDirection: "row", alignItems: "center", gap: 7, marginTop: 12 },
   wxText: { fontFamily: "Inter_500Medium", fontSize: 12, color: "rgba(255,255,255,0.85)", flex: 1 },
+  calBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderWidth: 1, padding: 13, marginTop: 12 },
+  calText: { fontFamily: "Inter_600SemiBold", fontSize: 14 },
   rescueBtn: { flexDirection: "row", alignItems: "center", gap: 10, padding: 16, marginTop: 12 },
   rescueText: { flex: 1, fontFamily: "Inter_600SemiBold", fontSize: 15, color: "#fff" },
   stepRow: { flexDirection: "row", gap: 14 },

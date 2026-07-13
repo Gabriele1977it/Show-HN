@@ -35,6 +35,7 @@ import { openUrl } from "@/utils/openUrl";
 import { UpgradeSheet } from "@/components/UpgradeSheet";
 import { AddToTripSheet } from "@/components/AddToTripSheet";
 import { InstallPrompt } from "@/components/InstallPrompt";
+import { RatingPrompt } from "@/components/RatingPrompt";
 import { WhatsNewSheet } from "@/components/WhatsNewSheet";
 import { SkeletonCard } from "@/components/Skeleton";
 
@@ -420,6 +421,7 @@ export default function HomeScreen() {
 
         <InstallPrompt />
         <WhatsNewSheet />
+        <RatingPrompt />
 
         {showTravelDay && journeyFlight && (
           <Animated.View entering={FadeInDown.delay(40).duration(450)}>

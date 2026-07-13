@@ -75,9 +75,12 @@ export function usePushRegistration(): void {
 
   useEffect(() => {
     const sub = Notifications.addNotificationResponseReceivedListener((response) => {
-      const data = response.notification.request.content.data as { type?: string } | undefined;
+      const data = response.notification.request.content.data as { type?: string; status?: string } | undefined;
       if (data?.type === "flight_alert") {
-        router.push("/(tabs)/monitor");
+        // A disruption (cancelled/diverted/incident) jumps straight into the
+        // rescue flow; a routine update opens the flight screen.
+        const disrupted = data.status === "cancelled" || data.status === "diverted" || data.status === "incident";
+        router.push(disrupted ? ("/disruption/wizard" as never) : "/(tabs)/monitor");
       } else if (data?.type === "digest") {
         router.push("/today" as never);
       } else if (data?.type === "residency" || data?.type === "schengen") {
