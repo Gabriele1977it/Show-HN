@@ -1,6 +1,7 @@
 import { runMigrations } from "stripe-replit-sync";
 
 import app from "./app";
+import { ensureAppSchema } from "./lib/ensure-schema";
 import { logger } from "./lib/logger";
 import { pollOnce } from "./lib/monitor";
 import { runProactiveReminders } from "./lib/reminders";
@@ -105,4 +106,10 @@ app.listen(port, (err) => {
   }
 });
 
-initStripe().catch((err) => logger.error({ err }, "Stripe init uncaught error"));
+// Reconcile the app's own schema (adds any missing recently-added columns),
+// then bring up Stripe. Both run in the background so the port binds instantly.
+ensureAppSchema()
+  .catch((err) => logger.error({ err }, "App schema reconcile uncaught error"))
+  .finally(() => {
+    initStripe().catch((err) => logger.error({ err }, "Stripe init uncaught error"));
+  });
