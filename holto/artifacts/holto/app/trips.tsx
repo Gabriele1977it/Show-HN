@@ -20,6 +20,7 @@ import { DateField } from "@/components/DateField";
 import { Icon } from "@/components/Icon";
 import { ShareRecapSheet } from "@/components/ShareRecapSheet";
 import { SkeletonCard } from "@/components/Skeleton";
+import { UpgradeSheet } from "@/components/UpgradeSheet";
 import { useColors } from "@/hooks/useColors";
 import { bookingUploadSupported, pickBookingFile } from "@/utils/pickBookingFile";
 
@@ -93,6 +94,7 @@ export default function TripsScreen() {
   const [pasteError, setPasteError] = useState<string | null>(null);
   const [shareTrip, setShareTrip] = useState<Trip | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [showUpgrade, setShowUpgrade] = useState(false);
 
   const [itemFor, setItemFor] = useState<number | null>(null);
   const [iType, setIType] = useState<ItemType>("flight");
@@ -152,7 +154,11 @@ export default function TripsScreen() {
       customFetch("/api/trips/parse-file", { method: "POST", body: JSON.stringify(f) }),
     onSuccess: () => void invalidate(),
     onError: (err: unknown) => {
-      const e = err as { status?: number; data?: { error?: string }; message?: string };
+      const e = err as { status?: number; data?: { error?: string; requiresUpgrade?: boolean }; message?: string };
+      if (e.data?.requiresUpgrade) {
+        setShowUpgrade(true);
+        return;
+      }
       const msg =
         e.data?.error ??
         (e.status
@@ -464,6 +470,12 @@ export default function TripsScreen() {
       </Pressable>
 
       <ShareRecapSheet trip={shareTrip} onClose={() => setShareTrip(null)} />
+      <UpgradeSheet
+        visible={showUpgrade}
+        onClose={() => setShowUpgrade(false)}
+        title="You've hit today's scan limit"
+        message="Upgrade for unlimited booking imports and AI features."
+      />
     </ScrollView>
   );
 }

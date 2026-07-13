@@ -35,6 +35,7 @@ import { openUrl } from "@/utils/openUrl";
 import { UpgradeSheet } from "@/components/UpgradeSheet";
 import { AddToTripSheet } from "@/components/AddToTripSheet";
 import { InstallPrompt } from "@/components/InstallPrompt";
+import { WhatsNewSheet } from "@/components/WhatsNewSheet";
 import { SkeletonCard } from "@/components/Skeleton";
 
 const TOOLKIT: { emoji: string; label: string; route: string }[] = [
@@ -418,6 +419,7 @@ export default function HomeScreen() {
         </Animated.View>
 
         <InstallPrompt />
+        <WhatsNewSheet />
 
         {showTravelDay && journeyFlight && (
           <Animated.View entering={FadeInDown.delay(40).duration(450)}>

@@ -18,6 +18,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { DateField } from "@/components/DateField";
 import { Icon } from "@/components/Icon";
+import { UpgradeSheet } from "@/components/UpgradeSheet";
 import { CURRENCIES, CURRENCY_BY_CODE, type Currency } from "@/constants/currencies";
 import { useColors } from "@/hooks/useColors";
 import { bookingUploadSupported, pickBookingFile } from "@/utils/pickBookingFile";
@@ -117,6 +118,7 @@ export default function ExpensesScreen() {
   const [formError, setFormError] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
   const [scanNote, setScanNote] = useState<string | null>(null);
+  const [showUpgrade, setShowUpgrade] = useState(false);
 
   const { data: tripsData } = useQuery<Array<{ id: number; title: string }>>({
     queryKey: ["trips"],
@@ -181,10 +183,14 @@ export default function ExpensesScreen() {
       setScanNote("Scanned — check the details and save.");
       setShowAdd(true);
     } catch (err: unknown) {
-      const e = err as { status?: number; data?: { error?: string } };
+      const e = err as { status?: number; data?: { error?: string; requiresUpgrade?: boolean } };
       setScanNote(null);
-      setFormError(e.data?.error ?? "Couldn't scan that receipt. Enter it manually.");
-      setShowAdd(true);
+      if (e.data?.requiresUpgrade) {
+        setShowUpgrade(true);
+      } else {
+        setFormError(e.data?.error ?? "Couldn't scan that receipt. Enter it manually.");
+        setShowAdd(true);
+      }
     } finally {
       setScanning(false);
     }
@@ -449,6 +455,12 @@ export default function ExpensesScreen() {
       </Modal>
 
       <CurrencyPicker visible={curOpen} onSelect={setCurrency} onClose={() => setCurOpen(false)} />
+      <UpgradeSheet
+        visible={showUpgrade}
+        onClose={() => setShowUpgrade(false)}
+        title="You've hit today's scan limit"
+        message="Upgrade for unlimited receipt scans and AI features."
+      />
     </ScrollView>
   );
 }
