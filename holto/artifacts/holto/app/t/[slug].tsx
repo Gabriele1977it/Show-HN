@@ -11,6 +11,7 @@ import { HoltoLogo } from "@/components/HoltoLogo";
 import { Icon, type IconName } from "@/components/Icon";
 import { useColors } from "@/hooks/useColors";
 import { openUrl } from "@/utils/openUrl";
+import { downloadRecapCard, recapCardSupported } from "@/utils/recapCard";
 
 interface Recap {
   days: number | null;
@@ -153,6 +154,19 @@ export default function PublicTripScreen() {
   function openExternal(url: string) {
     openUrl(url);
   }
+  function downloadCard() {
+    void downloadRecapCard({
+      title: data!.title,
+      destination: data!.destination,
+      days: data!.recap.days,
+      countries: data!.recap.countries,
+      places: data!.recap.places,
+      flights: data!.recap.flights,
+      spendGBP: data!.spendGBP,
+      cities: data!.recap.cities,
+      creatorName: data!.creator?.name ?? null,
+    });
+  }
   function openSignup(code: string | null) {
     if (code) router.push({ pathname: "/(auth)/register", params: { ref: code } } as never);
     else router.replace("/");
@@ -193,10 +207,17 @@ export default function PublicTripScreen() {
           ))}
         </View>
 
-        <Pressable onPress={shareTrip} style={styles.shareBtn}>
-          <Icon name="share-2" size={15} color="#0A2E38" />
-          <Text style={styles.shareText}>Share this trip</Text>
-        </Pressable>
+        <View style={styles.heroBtnRow}>
+          <Pressable onPress={shareTrip} style={styles.shareBtn}>
+            <Icon name="share-2" size={15} color="#0A2E38" />
+            <Text style={styles.shareText}>Share this trip</Text>
+          </Pressable>
+          {recapCardSupported() ? (
+            <Pressable onPress={downloadCard} style={styles.cardBtn}>
+              <Text style={styles.cardBtnText}>📸 Story card</Text>
+            </Pressable>
+          ) : null}
+        </View>
       </LinearGradient>
 
       {/* Timeline */}
@@ -284,8 +305,11 @@ const styles = StyleSheet.create({
   creatorLinks: { flexDirection: "row", gap: 10, marginTop: 14 },
   creatorLink: { borderRadius: 10, paddingHorizontal: 18, paddingVertical: 9 },
   creatorLinkText: { fontFamily: "Inter_700Bold", fontSize: 13, color: "#fff" },
-  shareBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, alignSelf: "flex-start", backgroundColor: "#F2C94C", borderRadius: 12, paddingHorizontal: 16, paddingVertical: 10, marginTop: 22 },
+  heroBtnRow: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 22 },
+  shareBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, backgroundColor: "#F2C94C", borderRadius: 12, paddingHorizontal: 16, paddingVertical: 10 },
   shareText: { fontFamily: "Inter_700Bold", fontSize: 14, color: "#0A2E38" },
+  cardBtn: { alignItems: "center", justifyContent: "center", borderRadius: 12, paddingHorizontal: 16, paddingVertical: 10, borderWidth: 1, borderColor: "rgba(255,255,255,0.3)" },
+  cardBtnText: { fontFamily: "Inter_700Bold", fontSize: 14, color: "#fff" },
   statRow: { flexDirection: "row", alignItems: "center", marginTop: 24, flexWrap: "wrap" },
   stat: { alignItems: "center", paddingHorizontal: 6 },
   statValue: { fontFamily: "Inter_700Bold", fontSize: 26, color: "#fff", letterSpacing: -0.5 },
