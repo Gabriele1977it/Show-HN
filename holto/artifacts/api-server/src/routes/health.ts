@@ -1,6 +1,9 @@
 import { Router, type IRouter } from "express";
 import { HealthCheckResponse } from "@workspace/api-zod";
 
+import { requireAuth } from "../middlewares/auth";
+import { requireOwner } from "../middlewares/owner";
+
 const router: IRouter = Router();
 
 router.get("/healthz", (_req, res) => {
@@ -9,9 +12,10 @@ router.get("/healthz", (_req, res) => {
 });
 
 // Diagnostic: which Gemini models this key can actually use. Never exposes the
-// key; returns only model names + any error, so a non-technical user can open
-// it in a browser and share the result. Handy when document reading 404s.
-router.get("/health/gemini", async (_req, res) => {
+// key; returns only model names + any error. Owner-only (and returns 404 to
+// everyone else) — it hits the upstream API on each call, so leaving it public
+// would let anyone probe our config or burn quota.
+router.get("/health/gemini", requireAuth, requireOwner, async (_req, res) => {
   const key = process.env.GEMINI_API_KEY ?? "";
   if (!key) {
     res.json({ configured: false, note: "GEMINI_API_KEY is not set on this service." });

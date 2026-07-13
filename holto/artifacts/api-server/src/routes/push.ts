@@ -12,21 +12,23 @@ const router: IRouter = Router();
 router.post("/push/register", requireAuth, async (req, res): Promise<void> => {
   const { token, platform } = req.body as { token?: string; platform?: string };
 
-  if (!token?.trim()) {
-    res.status(400).json({ error: "A push token is required." });
+  const cleanToken = token?.trim() ?? "";
+  if (!cleanToken || cleanToken.length > 512) {
+    res.status(400).json({ error: "A valid push token is required." });
     return;
   }
+  const cleanPlatform = platform?.trim().slice(0, 20) ?? null;
 
   const [row] = await db
     .insert(pushTokensTable)
     .values({
       userId: req.auth!.userId,
-      token: token.trim(),
-      platform: platform?.trim() ?? null,
+      token: cleanToken,
+      platform: cleanPlatform,
     })
     .onConflictDoUpdate({
       target: pushTokensTable.token,
-      set: { userId: req.auth!.userId, platform: platform?.trim() ?? null, updatedAt: new Date() },
+      set: { userId: req.auth!.userId, platform: cleanPlatform, updatedAt: new Date() },
     })
     .returning();
 
