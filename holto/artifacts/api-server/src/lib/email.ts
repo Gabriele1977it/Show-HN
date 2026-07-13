@@ -16,10 +16,10 @@ export interface EmailMessage {
 }
 
 // The verified sender we send from. Overridable per-message, else from
-// EMAIL_FROM, else HOLTO's verified sending subdomain (send.holtotravel.com —
+// EMAIL_FROM, else HOLTO's verified sending subdomain (send.holtotravel.co.uk —
 // kept separate from the apex domain so transactional mail has its own
 // deliverability reputation).
-const DEFAULT_FROM = process.env.EMAIL_FROM ?? "HOLTO <hello@send.holtotravel.com>";
+const DEFAULT_FROM = process.env.EMAIL_FROM ?? "HOLTO <hello@send.holtotravel.co.uk>";
 
 async function sendViaResend(payload: Required<EmailMessage>, apiKey: string): Promise<boolean> {
   try {
