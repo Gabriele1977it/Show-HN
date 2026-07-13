@@ -19,10 +19,14 @@ interface NewsItem {
   source: string;
   publishedAt: string | null;
   category: Category;
+  disruption?: boolean;
 }
 
-const FILTERS: { key: "all" | Category; label: string }[] = [
+type FilterKey = "all" | Category | "disruption";
+
+const FILTERS: { key: FilterKey; label: string }[] = [
   { key: "all", label: "Top stories" },
+  { key: "disruption", label: "Disruptions" },
   { key: "world", label: "World" },
   { key: "travel", label: "Travel" },
 ];
@@ -46,7 +50,7 @@ export default function NewsScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const topPad = Platform.OS === "web" ? 20 : insets.top;
-  const [filter, setFilter] = useState<"all" | Category>("all");
+  const [filter, setFilter] = useState<FilterKey>("all");
   const [cached, setCached] = useState<NewsItem[] | null>(null);
 
   const { data, isLoading, isError, refetch, isRefetching } = useQuery({
@@ -76,10 +80,11 @@ export default function NewsScreen() {
   // Live data wins; fall back to the saved copy when the network is down.
   const source = data?.items ?? cached ?? [];
   const showingOffline = !data?.items && (cached?.length ?? 0) > 0;
-  const items = useMemo(
-    () => (filter === "all" ? source : source.filter((i) => i.category === filter)),
-    [source, filter],
-  );
+  const items = useMemo(() => {
+    if (filter === "all") return source;
+    if (filter === "disruption") return source.filter((i) => i.disruption);
+    return source.filter((i) => i.category === filter);
+  }, [source, filter]);
 
   return (
     <ScrollView
@@ -139,8 +144,12 @@ export default function NewsScreen() {
         </View>
       ) : items.length === 0 ? (
         <View style={[styles.empty, { backgroundColor: colors.card, borderColor: colors.border, borderRadius: colors.radius }]}>
-          <Text style={{ fontSize: 30 }}>🗞️</Text>
-          <Text style={[styles.emptySub, { color: colors.mutedForeground }]}>No stories right now — pull to refresh.</Text>
+          <Text style={{ fontSize: 30 }}>{filter === "disruption" ? "✅" : "🗞️"}</Text>
+          <Text style={[styles.emptySub, { color: colors.mutedForeground }]}>
+            {filter === "disruption"
+              ? "No travel disruptions in the headlines right now — good news."
+              : "No stories right now — pull to refresh."}
+          </Text>
         </View>
       ) : (
         items.map((item, i) => (
@@ -155,9 +164,15 @@ export default function NewsScreen() {
             >
               <View style={{ flex: 1 }}>
                 <View style={styles.metaRow}>
-                  <View style={[styles.tag, { backgroundColor: colors.primary + "14" }]}>
-                    <Text style={[styles.tagText, { color: colors.primary }]}>{item.category === "travel" ? "TRAVEL" : "WORLD"}</Text>
-                  </View>
+                  {item.disruption ? (
+                    <View style={[styles.tag, { backgroundColor: colors.gold + "22" }]}>
+                      <Text style={[styles.tagText, { color: colors.gold }]}>⚠ DISRUPTION</Text>
+                    </View>
+                  ) : (
+                    <View style={[styles.tag, { backgroundColor: colors.primary + "14" }]}>
+                      <Text style={[styles.tagText, { color: colors.primary }]}>{item.category === "travel" ? "TRAVEL" : "WORLD"}</Text>
+                    </View>
+                  )}
                   <Text style={[styles.meta, { color: colors.mutedForeground }]} numberOfLines={1}>
                     {item.source}
                     {timeAgo(item.publishedAt) ? ` · ${timeAgo(item.publishedAt)}` : ""}

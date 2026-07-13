@@ -15,6 +15,18 @@ export interface NewsItem {
   source: string;
   publishedAt: string | null; // ISO
   category: NewsCategory;
+  disruption: boolean; // travel-affecting (strike, airspace, weather, …)
+}
+
+// Deterministic travel-disruption classifier — a keyword pass over the headline.
+// No LLM: it's fast, free, and predictable. Deliberately travel-centric so it
+// surfaces things that actually change a trip (strikes, airspace, extreme
+// weather, border/visa changes), not general bad news.
+const DISRUPTION_RE =
+  /\b(strike|walkout|industrial action|air ?traffic|atc|airspace|grounded|cancel(?:led|s|ing)?|delays?|airport|aviation|flights?|runway|volcan|eruption|ash cloud|hurricane|typhoon|cyclone|storm|blizzard|snowstorm|heatwave|wildfire|flood(?:s|ing)?|earthquake|border closure|visa|passport|curfew|lockdown|evacuat|unrest|no-fly)\b/i;
+
+export function isDisruption(title: string): boolean {
+  return DISRUPTION_RE.test(title);
 }
 
 interface Feed {
@@ -71,7 +83,7 @@ function parseFeed(xml: string, feed: Feed): NewsItem[] {
       const d = new Date(pub);
       if (!Number.isNaN(d.getTime())) publishedAt = d.toISOString();
     }
-    out.push({ title, link, source: feed.source, publishedAt, category: feed.category });
+    out.push({ title, link, source: feed.source, publishedAt, category: feed.category, disruption: isDisruption(title) });
   }
   return out;
 }

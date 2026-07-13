@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { __test } from "../src/lib/news";
+import { __test, isDisruption } from "../src/lib/news";
 import { normaliseAccount } from "../src/lib/awardwallet";
 
 const SAMPLE_RSS = `<?xml version="1.0"?>
@@ -37,6 +37,21 @@ test("parseFeed extracts items, handles CDATA and entities, skips linkless", () 
 
 test("decodeEntities strips tags and decodes numeric entities", () => {
   assert.equal(__test.decodeEntities("Ben &amp; Jerry&#39;s <b>x</b>"), "Ben & Jerry's x");
+});
+
+test("parseFeed flags travel-disruption headlines", () => {
+  const feed = { url: "u", source: "Example", category: "world" as const };
+  const items = __test.parseFeed(SAMPLE_RSS, feed);
+  assert.equal(items[0].disruption, true); // "Air strike disrupts flights…"
+  assert.equal(items[1].disruption, false); // "Second & story"
+});
+
+test("isDisruption matches travel-affecting keywords, not general news", () => {
+  assert.equal(isDisruption("Pilots announce 48-hour strike at major hub"), true);
+  assert.equal(isDisruption("Storm forces airport to cancel flights"), true);
+  assert.equal(isDisruption("New visa rules for UK travellers"), true);
+  assert.equal(isDisruption("Local council debates library budget"), false);
+  assert.equal(isDisruption("Stock markets rise on tech earnings"), false);
 });
 
 test("normaliseAccount maps category, balance and membership", () => {

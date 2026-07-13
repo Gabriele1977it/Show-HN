@@ -8,6 +8,8 @@ import {
   awardwalletConnectUrl,
   findConnectedUserIdByEmail,
   getConnectedUserAccounts,
+  getMemberAccountsByEmail,
+  type NormalisedAccount,
 } from "../lib/awardwallet";
 
 const router: IRouter = Router();
@@ -75,19 +77,23 @@ router.post("/awardwallet/sync", requireAuth, async (req, res): Promise<void> =>
     return;
   }
 
+  // Resolve accounts: a stored connected-user link first, then a fresh
+  // email match, then the Members list (works before invite approval).
+  let accounts: NormalisedAccount[] = [];
   let awId = user.awardwalletUserId ?? null;
   if (!awId) {
     awId = await findConnectedUserIdByEmail(user.email);
     if (awId) await db.update(usersTable).set({ awardwalletUserId: awId }).where(eq(usersTable.id, user.id));
   }
-  if (!awId) {
+  if (awId) accounts = await getConnectedUserAccounts(awId);
+  if (accounts.length === 0) accounts = await getMemberAccountsByEmail(user.email);
+
+  if (!awId && accounts.length === 0) {
     res.status(404).json({
-      error: "Not connected to AwardWallet yet. Authorise HOLTO from the AwardWallet connect page, then sync.",
+      error: "Not connected to AwardWallet yet. Authorise HOLTO from the AwardWallet connect page (or add yourself as a Member), then sync.",
     });
     return;
   }
-
-  const accounts = await getConnectedUserAccounts(awId);
 
   const existing = await db
     .select()

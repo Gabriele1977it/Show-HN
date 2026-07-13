@@ -140,3 +140,36 @@ export async function findConnectedUserIdByEmail(email: string): Promise<number 
   const hit = users.find((u) => (u.email ?? "").trim().toLowerCase() === target);
   return hit?.userId ?? null;
 }
+
+// ── Members ──────────────────────────────────────────────────────────────────
+// "Members" are users added directly to the business account (no invite/connect
+// approval needed), which is handy for testing before AwardWallet approves the
+// public connect flow. Same account shape as connected users.
+
+interface AwMember {
+  userId?: number;
+  id?: number;
+  email?: string;
+  userName?: string;
+  fullName?: string;
+  accounts?: AwAccount[];
+}
+
+export async function listMembers(): Promise<AwMember[]> {
+  const data = await call<{ members?: AwMember[] } | AwMember[]>("/members");
+  if (!data) return [];
+  return Array.isArray(data) ? data : (data.members ?? []);
+}
+
+// Return the shared loyalty accounts for the member matching this email (or, if
+// there's exactly one member, that one). Empty if none / not yet approved.
+export async function getMemberAccountsByEmail(email: string): Promise<NormalisedAccount[]> {
+  const target = email.trim().toLowerCase();
+  const members = await listMembers();
+  if (members.length === 0) return [];
+  const match =
+    members.find((m) => (m.email ?? "").trim().toLowerCase() === target) ??
+    (members.length === 1 ? members[0] : undefined);
+  const accounts = match?.accounts ?? [];
+  return accounts.map(normaliseAccount).filter((a): a is NormalisedAccount => a !== null);
+}

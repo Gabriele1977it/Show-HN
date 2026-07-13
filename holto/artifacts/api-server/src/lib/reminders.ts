@@ -13,6 +13,7 @@ import { computeResidency, type Stay } from "./residency";
 import { computeSchengen } from "./schengen";
 import { buildFlightReminder, buildLoyaltyReminder, buildResidencyReminders, buildSchengenReminder, type ReminderMsg } from "./reminder-messages";
 import { sendEmail } from "./email";
+import { getNews } from "./news";
 import { sendPush } from "./push";
 import { logger } from "./logger";
 
@@ -151,12 +152,60 @@ async function runLoyaltyReminders(): Promise<number> {
   return sent;
 }
 
+// A once-a-day "your travel day" digest for anyone with a flight in the next
+// 24h — a proactive morning nudge (distinct from the 3h "leave now" reminder),
+// with today's top travel headline folded in so it's a genuine reason to open
+// the app. Deduped to one per user per day via the sent_reminders table.
+const DIGEST_LOOKAHEAD_MS = 24 * 60 * 60 * 1000;
+
+async function runDailyDigest(): Promise<number> {
+  const now = new Date();
+  const until = new Date(now.getTime() + DIGEST_LOOKAHEAD_MS);
+  const items = await db
+    .select({ id: tripItemsTable.id, userId: tripItemsTable.userId, title: tripItemsTable.title, startAt: tripItemsTable.startAt })
+    .from(tripItemsTable)
+    .where(and(eq(tripItemsTable.type, "flight"), gte(tripItemsTable.startAt, now), lte(tripItemsTable.startAt, until)))
+    .orderBy(tripItemsTable.startAt);
+
+  if (items.length === 0) return 0;
+
+  // One shared travel headline (best-effort — the digest still sends without it).
+  let headline: string | null = null;
+  try {
+    const news = await getNews("travel", 1);
+    headline = news[0]?.title ?? null;
+  } catch {
+    /* news is optional */
+  }
+
+  const day = now.toISOString().slice(0, 10);
+  const seen = new Set<number>();
+  let sent = 0;
+  for (const item of items) {
+    if (seen.has(item.userId)) continue; // one digest per user per day
+    seen.add(item.userId);
+
+    const flight = item.title?.trim() || "your flight";
+    const body = headline
+      ? `${flight} is coming up. Tap for your timeline, gate and live status. Travel news: ${headline}`
+      : `${flight} is coming up. Tap for your travel-day timeline, gate and live status.`;
+    const msg: ReminderMsg = { kind: "digest", refKey: `digest:${day}`, title: "Your travel day ✈️", body, data: { type: "digest", tripItemId: item.id } };
+
+    if (await claim(item.userId, msg)) {
+      await deliver(item.userId, msg);
+      sent += 1;
+    }
+  }
+  return sent;
+}
+
 // One pass over all proactive reminders. Best-effort; never throws.
-export async function runProactiveReminders(): Promise<{ residency: number; schengen: number; flights: number; loyalty: number }> {
+export async function runProactiveReminders(): Promise<{ residency: number; schengen: number; flights: number; loyalty: number; digest: number }> {
   let residency = 0;
   let schengen = 0;
   let flights = 0;
   let loyalty = 0;
+  let digest = 0;
   try {
     residency = await runResidencyReminders();
   } catch (err) {
@@ -177,8 +226,13 @@ export async function runProactiveReminders(): Promise<{ residency: number; sche
   } catch (err) {
     logger.error({ err }, "loyalty reminders failed");
   }
-  if (residency || schengen || flights || loyalty) {
-    logger.info({ residency, schengen, flights, loyalty }, "Proactive reminders sent");
+  try {
+    digest = await runDailyDigest();
+  } catch (err) {
+    logger.error({ err }, "daily digest failed");
   }
-  return { residency, schengen, flights, loyalty };
+  if (residency || schengen || flights || loyalty || digest) {
+    logger.info({ residency, schengen, flights, loyalty, digest }, "Proactive reminders sent");
+  }
+  return { residency, schengen, flights, loyalty, digest };
 }
