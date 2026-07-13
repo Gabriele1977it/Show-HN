@@ -38,6 +38,14 @@ interface JourneyResponse {
   flight?: JourneyFlight;
 }
 
+interface Weather {
+  tempC: number | null;
+  highC: number | null;
+  lowC: number | null;
+  emoji: string;
+  label: string;
+}
+
 function statusLabel(s: FlightStatus) {
   return { scheduled: "Scheduled", active: "In air", landed: "Landed", cancelled: "Cancelled", incident: "Incident", diverted: "Diverted", unknown: "Watching" }[s] ?? "Watching";
 }
@@ -106,6 +114,15 @@ export default function TodayScreen() {
     queryFn: () => customFetch<JourneyResponse>("/api/journey/next"),
     staleTime: 60_000,
   });
+
+  const arrCode = data?.flight?.arrAirport ?? null;
+  const { data: wxData } = useQuery({
+    queryKey: ["weather", arrCode],
+    queryFn: () => customFetch<{ weather: Weather | null }>(`/api/weather?airport=${encodeURIComponent(arrCode ?? "")}`),
+    enabled: !!arrCode,
+    staleTime: 30 * 60 * 1000,
+  });
+  const weather = wxData?.weather ?? null;
 
   if (isLoading) {
     return (
@@ -227,6 +244,16 @@ export default function TodayScreen() {
             </View>
           </View>
           <Text style={styles.heroHeadline}>{headline(flight)}</Text>
+          {weather ? (
+            <View style={styles.wxRow}>
+              <Text style={{ fontSize: 16 }}>{weather.emoji}</Text>
+              <Text style={styles.wxText}>
+                {flight.arrAirport ?? "Arrival"}
+                {weather.tempC != null ? ` ${Math.round(weather.tempC)}°C` : ""} · {weather.label}
+                {weather.highC != null && weather.lowC != null ? ` · H ${Math.round(weather.highC)}° / L ${Math.round(weather.lowC)}°` : ""}
+              </Text>
+            </View>
+          ) : null}
           {!flight.live ? (
             <Text style={styles.heroFallback}>Showing your itinerary times — live status will appear closer to departure.</Text>
           ) : null}
@@ -333,6 +360,8 @@ const styles = StyleSheet.create({
   heroTime: { fontFamily: "Inter_700Bold", fontSize: 30, color: "#fff", letterSpacing: -0.5, marginTop: 2 },
   heroHeadline: { fontFamily: "Inter_400Regular", fontSize: 13, lineHeight: 19, color: "rgba(255,255,255,0.85)", marginTop: 16 },
   heroFallback: { fontFamily: "Inter_400Regular", fontSize: 11, lineHeight: 16, color: "rgba(255,255,255,0.5)", marginTop: 8 },
+  wxRow: { flexDirection: "row", alignItems: "center", gap: 7, marginTop: 12 },
+  wxText: { fontFamily: "Inter_500Medium", fontSize: 12, color: "rgba(255,255,255,0.85)", flex: 1 },
   rescueBtn: { flexDirection: "row", alignItems: "center", gap: 10, padding: 16, marginTop: 12 },
   rescueText: { flex: 1, fontFamily: "Inter_600SemiBold", fontSize: 15, color: "#fff" },
   stepRow: { flexDirection: "row", gap: 14 },
