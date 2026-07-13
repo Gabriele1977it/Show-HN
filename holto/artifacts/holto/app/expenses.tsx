@@ -235,16 +235,30 @@ export default function ExpensesScreen() {
         .map((v) => csvCell(String(v)))
         .join(","),
     );
+    // Per-currency subtotals (original amounts) — the multi-currency breakdown
+    // a finance team needs to reconcile against card statements.
+    const byCur = new Map<string, number>();
+    for (const e of expenses) {
+      const n = Number(e.amount);
+      if (Number.isFinite(n)) byCur.set(e.currency, (byCur.get(e.currency) ?? 0) + n);
+    }
+    const currencyLines = [...byCur.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .map(([cur, sum]) => `Subtotal (${cur}),,,${sum.toFixed(2)},${cur}`);
+
     // Totals footer (GBP), for reimbursement. The 5 leading commas line the
     // figure up under the "Amount (GBP)" column.
     const totals = summary
       ? [
           "",
+          "By currency,,,,,",
+          ...currencyLines,
+          "",
           `Total (GBP),,,,,${summary.totalGBP}`,
           `Company / reimbursable (GBP),,,,,${summary.reimbursableGBP}`,
           `Personal (GBP),,,,,${summary.personalGBP}`,
         ]
-      : [];
+      : ["", "By currency,,,,,", ...currencyLines];
     const csv = [header, ...lines, ...totals].join("\n");
     if (Platform.OS === "web" && typeof document !== "undefined") {
       const blob = new Blob([csv], { type: "text/csv" });
