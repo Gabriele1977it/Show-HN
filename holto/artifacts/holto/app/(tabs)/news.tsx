@@ -1,6 +1,7 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { customFetch } from "@workspace/api-client-react";
 import { useQuery } from "@tanstack/react-query";
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -26,6 +27,8 @@ const FILTERS: { key: "all" | Category; label: string }[] = [
   { key: "travel", label: "Travel" },
 ];
 
+const CACHE_KEY = "holto_news_cache";
+
 function timeAgo(iso: string | null): string {
   if (!iso) return "";
   const then = Date.parse(iso);
@@ -44,6 +47,7 @@ export default function NewsScreen() {
   const insets = useSafeAreaInsets();
   const topPad = Platform.OS === "web" ? 20 : insets.top;
   const [filter, setFilter] = useState<"all" | Category>("all");
+  const [cached, setCached] = useState<NewsItem[] | null>(null);
 
   const { data, isLoading, isError, refetch, isRefetching } = useQuery({
     queryKey: ["news"],
@@ -51,10 +55,31 @@ export default function NewsScreen() {
     staleTime: 5 * 60 * 1000,
   });
 
-  const items = useMemo(() => {
-    const all = data?.items ?? [];
-    return filter === "all" ? all : all.filter((i) => i.category === filter);
-  }, [data, filter]);
+  // Hydrate from the last saved copy on mount so the tab shows something
+  // instantly — and still works offline / on a plane.
+  useEffect(() => {
+    AsyncStorage.getItem(CACHE_KEY)
+      .then((raw) => {
+        if (raw) setCached(JSON.parse(raw) as NewsItem[]);
+      })
+      .catch(() => {});
+  }, []);
+
+  // Persist each successful fetch for the next cold open.
+  useEffect(() => {
+    if (data?.items?.length) {
+      setCached(data.items);
+      AsyncStorage.setItem(CACHE_KEY, JSON.stringify(data.items)).catch(() => {});
+    }
+  }, [data]);
+
+  // Live data wins; fall back to the saved copy when the network is down.
+  const source = data?.items ?? cached ?? [];
+  const showingOffline = !data?.items && (cached?.length ?? 0) > 0;
+  const items = useMemo(
+    () => (filter === "all" ? source : source.filter((i) => i.category === filter)),
+    [source, filter],
+  );
 
   return (
     <ScrollView
@@ -89,14 +114,21 @@ export default function NewsScreen() {
         })}
       </View>
 
-      {isLoading ? (
+      {showingOffline ? (
+        <View style={[styles.offline, { backgroundColor: colors.muted, borderRadius: colors.radius }]}>
+          <Icon name="wifi-off" size={13} color={colors.mutedForeground} />
+          <Text style={[styles.offlineText, { color: colors.mutedForeground }]}>Offline — showing your last saved stories. Pull to refresh.</Text>
+        </View>
+      ) : null}
+
+      {isLoading && items.length === 0 ? (
         <View style={{ marginTop: 8 }}>
           <SkeletonCard />
           <SkeletonCard />
           <SkeletonCard />
           <SkeletonCard />
         </View>
-      ) : isError ? (
+      ) : isError && items.length === 0 ? (
         <View style={[styles.empty, { backgroundColor: colors.card, borderColor: colors.border, borderRadius: colors.radius }]}>
           <Text style={{ fontSize: 30 }}>📰</Text>
           <Text style={[styles.emptyTitle, { color: colors.foreground }]}>Couldn't load the news</Text>
@@ -150,6 +182,8 @@ const styles = StyleSheet.create({
   eyebrow: { fontFamily: "Inter_600SemiBold", fontSize: 11, letterSpacing: 1, marginBottom: 4 },
   h1: { fontFamily: "Inter_700Bold", fontSize: 28, letterSpacing: -0.4 },
   sub: { fontFamily: "Inter_400Regular", fontSize: 14, lineHeight: 20, marginTop: 6 },
+  offline: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 12, paddingVertical: 9, marginBottom: 12 },
+  offlineText: { fontFamily: "Inter_500Medium", fontSize: 12, flex: 1 },
   filterRow: { flexDirection: "row", gap: 8, marginTop: 18, marginBottom: 14 },
   chip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1 },
   chipText: { fontFamily: "Inter_600SemiBold", fontSize: 13 },

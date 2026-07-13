@@ -98,14 +98,11 @@ export default function TabLayout() {
         name="living"
         options={{ href: null }}
       />
+      {/* "Plans" is reached from Account and every upgrade prompt — keep it out
+          of the tab bar so the action bar stays at six and News has room. */}
       <Tabs.Screen
         name="plans"
-        options={{
-          title: "Plans",
-          tabBarIcon: ({ color }) => (
-            <TabSvgIcon name="star" color={color} />
-          ),
-        }}
+        options={{ href: null }}
       />
       <Tabs.Screen
         name="account"
