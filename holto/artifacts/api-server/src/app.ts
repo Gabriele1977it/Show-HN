@@ -42,8 +42,8 @@ const ENV_ORIGINS = [
   .filter((o): o is string => Boolean(o));
 
 const ALLOWED_ORIGIN_PATTERNS: (string | RegExp)[] = [
-  /^https:\/\/([\w-]+\.)?holtotravel\.co\.uk$/, // holtotravel.co.uk + any subdomain (www., app., …) — the live domain
-  /^https:\/\/([\w-]+\.)?holtotravel\.com$/,   // holtotravel.com + any subdomain (kept for compatibility)
+  /^https:\/\/([\w-]+\.)?holtotravel\.com$/,   // live app + any subdomain (app., www., …)
+  /^https:\/\/([\w-]+\.)?holtotravel\.co\.uk$/, // also owned; allowed in case of a .co.uk redirect
   ...ENV_ORIGINS,
   /^https:\/\/[\w-]+\.onrender\.com$/,         // the HOLTO web (PWA) on Render
   /^https:\/\/[\w-]+-[\w-]+\.replit\.app$/,   // published Replit apps

@@ -15,7 +15,7 @@ const RESET_LINK_BASE = (
   process.env.RESET_URL_BASE ??
   process.env.APP_ORIGIN ??
   process.env.PUBLIC_URL ??
-  "https://www.holtotravel.co.uk"
+  "https://app.holtotravel.com"
 ).replace(/\/+$/, "");
 
 function hashResetToken(token: string): string {
