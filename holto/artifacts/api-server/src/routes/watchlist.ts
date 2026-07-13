@@ -20,7 +20,7 @@ router.get("/watchlist", requireAuth, async (req, res): Promise<void> => {
 router.post("/watchlist", requireAuth, async (req, res): Promise<void> => {
   const { code, name } = req.body as { code?: string; name?: string };
   const c = String(code ?? "").trim().toUpperCase();
-  const n = String(name ?? "").trim();
+  const n = String(name ?? "").trim().slice(0, 80);
   if (!/^[A-Z]{2}$/.test(c) || !n) {
     res.status(400).json({ error: "A country code and name are required." });
     return;

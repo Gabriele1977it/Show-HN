@@ -165,11 +165,11 @@ export async function listMembers(): Promise<AwMember[]> {
 // there's exactly one member, that one). Empty if none / not yet approved.
 export async function getMemberAccountsByEmail(email: string): Promise<NormalisedAccount[]> {
   const target = email.trim().toLowerCase();
+  if (!target) return [];
   const members = await listMembers();
-  if (members.length === 0) return [];
-  const match =
-    members.find((m) => (m.email ?? "").trim().toLowerCase() === target) ??
-    (members.length === 1 ? members[0] : undefined);
+  // Strict email match only — never fall back to "the only member", which would
+  // leak one member's balances to any user during single-member testing.
+  const match = members.find((m) => (m.email ?? "").trim().toLowerCase() === target);
   const accounts = match?.accounts ?? [];
   return accounts.map(normaliseAccount).filter((a): a is NormalisedAccount => a !== null);
 }

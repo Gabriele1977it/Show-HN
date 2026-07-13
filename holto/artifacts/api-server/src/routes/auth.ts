@@ -6,8 +6,18 @@ import { Router, type IRouter } from "express";
 
 import { requireAuth, signToken } from "../middlewares/auth";
 import { sendEmail } from "../lib/email";
+import { rateLimit } from "../lib/rate-limit";
 import { getUserTier, isOwnerEmail, TIER_FEATURES } from "../lib/tier";
 import { makeSlug } from "../lib/slug";
+
+const HOUR = 60 * 60 * 1000;
+function clientIp(req: { ip?: string }): string {
+  return req.ip || "unknown";
+}
+
+// A real bcrypt hash to compare against when no account exists, so login timing
+// doesn't reveal whether an email is registered. Computed once at startup.
+const DUMMY_HASH = bcrypt.hashSync("holto-timing-equaliser", 12);
 
 // Reset links point at the web app. Prefer an explicit base, then the shared
 // APP_ORIGIN/PUBLIC_URL, and finally HOLTO's production domain.
@@ -36,6 +46,10 @@ function safeUser(user: typeof usersTable.$inferSelect) {
 }
 
 router.post("/auth/register", async (req, res): Promise<void> => {
+  if (!rateLimit(`register:${clientIp(req)}`, 8, HOUR)) {
+    res.status(429).json({ error: "Too many sign-ups from this connection. Please wait a little and try again." });
+    return;
+  }
   const { email, password, name, ref } = req.body as {
     email?: string;
     password?: string;
@@ -47,8 +61,12 @@ router.post("/auth/register", async (req, res): Promise<void> => {
     res.status(400).json({ error: "Name, email and password are all required." });
     return;
   }
-  if (password.length < 8) {
-    res.status(400).json({ error: "Password must be at least 8 characters." });
+  if (password.length < 8 || password.length > 200) {
+    res.status(400).json({ error: "Password must be between 8 and 200 characters." });
+    return;
+  }
+  if (email.trim().length > 254 || name.trim().length > 100) {
+    res.status(400).json({ error: "That name or email is too long." });
     return;
   }
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -108,20 +126,28 @@ router.post("/auth/login", async (req, res): Promise<void> => {
     return;
   }
 
-  const [user] = await db
-    .select()
-    .from(usersTable)
-    .where(eq(usersTable.email, email.trim().toLowerCase()))
-    .limit(1);
-
-  if (!user) {
-    res.status(401).json({ error: "No account found with that email. Check the address or create an account." });
+  // Throttle brute-force: per account (ip+email) and a wider per-IP ceiling.
+  const normEmail = email.trim().toLowerCase();
+  if (!rateLimit(`login:${clientIp(req)}:${normEmail}`, 8, 15 * 60 * 1000) || !rateLimit(`login-ip:${clientIp(req)}`, 40, 15 * 60 * 1000)) {
+    res.status(429).json({ error: "Too many sign-in attempts. Please wait a few minutes and try again." });
     return;
   }
 
-  const valid = await bcrypt.compare(password, user.passwordHash);
-  if (!valid) {
-    res.status(401).json({ error: "That password doesn't match. Try again or reset your password." });
+  const [user] = await db
+    .select()
+    .from(usersTable)
+    .where(eq(usersTable.email, normEmail))
+    .limit(1);
+
+  // Unified error + constant-ish timing to avoid leaking whether an account
+  // exists (user enumeration). When there's no user we still run a bcrypt
+  // compare against a dummy hash so the response time matches the real path.
+  const INVALID = "Email or password is incorrect. Check your details, or create an account.";
+  const valid = user
+    ? await bcrypt.compare(password, user.passwordHash)
+    : (await bcrypt.compare(password, DUMMY_HASH), false);
+  if (!user || !valid) {
+    res.status(401).json({ error: INVALID });
     return;
   }
 
@@ -187,6 +213,14 @@ router.post("/auth/forgot-password", async (req, res): Promise<void> => {
   }
   const normalized = email.trim().toLowerCase();
 
+  // Throttle to prevent using this endpoint to bombard a victim with reset
+  // emails (per target address) or to abuse our email quota (per IP). Returns
+  // the same generic message so it still can't be used to probe accounts.
+  if (!rateLimit(`forgot-ip:${clientIp(req)}`, 6, HOUR) || !rateLimit(`forgot-email:${normalized}`, 3, HOUR)) {
+    res.json(generic);
+    return;
+  }
+
   const [user] = await db.select().from(usersTable).where(eq(usersTable.email, normalized)).limit(1);
   if (!user) {
     res.json(generic);
@@ -220,6 +254,10 @@ router.post("/auth/forgot-password", async (req, res): Promise<void> => {
 
 // Step 2 of reset: exchange a valid, unexpired token for a new password.
 router.post("/auth/reset-password", async (req, res): Promise<void> => {
+  if (!rateLimit(`reset:${clientIp(req)}`, 20, HOUR)) {
+    res.status(429).json({ error: "Too many attempts. Please wait a little and try again." });
+    return;
+  }
   const { token, password } = req.body as { token?: string; password?: string };
 
   if (!token?.trim() || !password) {

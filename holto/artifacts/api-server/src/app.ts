@@ -7,6 +7,23 @@ import { WebhookHandlers } from "./webhookHandlers";
 
 const app: Express = express();
 
+// Behind Render/Fly/etc. the client IP arrives in X-Forwarded-For. Trust the
+// first proxy hop so req.ip is the real client (required for per-IP rate limits
+// to bucket by client rather than by the shared proxy address).
+app.set("trust proxy", 1);
+app.disable("x-powered-by");
+
+// Baseline security headers for the JSON API (no dependency needed). These are
+// cheap defence-in-depth even though the API returns data, not HTML.
+app.use((_req, res, next) => {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "DENY");
+  res.setHeader("Referrer-Policy", "no-referrer");
+  res.setHeader("Cross-Origin-Resource-Policy", "same-site");
+  res.setHeader("X-DNS-Prefetch-Control", "off");
+  next();
+});
+
 app.use(
   pinoHttp({
     logger,

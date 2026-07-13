@@ -25,9 +25,10 @@ router.get("/awardwallet/status", requireAuth, async (req, res): Promise<void> =
   });
 });
 
-// Link this HOLTO account to its AwardWallet connection. If the client doesn't
-// pass an explicit id, we try to resolve it by matching the account email among
-// the users who've authorised us.
+// Link this HOLTO account to its AwardWallet connection. We resolve the
+// connection strictly by matching the *authenticated* user's own email among
+// the users who authorised us — a client-supplied id is never trusted, so a
+// user can't link (and then read) someone else's shared loyalty accounts.
 router.post("/awardwallet/link", requireAuth, async (req, res): Promise<void> => {
   if (!awardwalletConfigured()) {
     res.status(503).json({ error: "AwardWallet isn't set up yet." });
@@ -39,28 +40,16 @@ router.post("/awardwallet/link", requireAuth, async (req, res): Promise<void> =>
     return;
   }
 
-  const raw = (req.body as { awardwalletUserId?: number | string }).awardwalletUserId;
-  let id: number | null = null;
-  if (raw != null && String(raw).trim() !== "") {
-    const n = Number(raw);
-    if (!Number.isInteger(n) || n <= 0) {
-      res.status(400).json({ error: "awardwalletUserId must be a positive number." });
-      return;
-    }
-    id = n;
-  } else {
-    id = await findConnectedUserIdByEmail(user.email);
-  }
-
+  const id = await findConnectedUserIdByEmail(user.email);
   if (!id) {
     res.status(404).json({
-      error: "Couldn't find your AwardWallet connection. Authorise HOLTO from the AwardWallet connect page first, then try again.",
+      error: "Couldn't find your AwardWallet connection. Authorise HOLTO from the AwardWallet connect page using this account's email, then try again.",
     });
     return;
   }
 
   await db.update(usersTable).set({ awardwalletUserId: id }).where(eq(usersTable.id, user.id));
-  res.json({ linked: true, awardwalletUserId: id });
+  res.json({ linked: true });
 });
 
 // Pull the user's shared loyalty accounts and upsert them into their wallet.

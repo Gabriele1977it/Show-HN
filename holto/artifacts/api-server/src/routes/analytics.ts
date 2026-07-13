@@ -2,6 +2,8 @@ import { analyticsDailyTable, db } from "@workspace/db";
 import { sql } from "drizzle-orm";
 import { Router, type IRouter } from "express";
 
+import { rateLimit } from "../lib/rate-limit";
+
 const router: IRouter = Router();
 
 // Whitelisted event names — keeps the table's cardinality bounded and stops
@@ -22,6 +24,11 @@ const EVENTS = new Set([
 // Privacy-friendly, aggregated analytics. No auth, no PII — just a per-day count
 // per known event. Unknown events are silently ignored.
 router.post("/analytics", async (req, res): Promise<void> => {
+  // Light per-IP throttle so the public counter can't be spammed to inflate it.
+  if (!rateLimit(`analytics:${req.ip || "unknown"}`, 120, 60 * 1000)) {
+    res.status(204).end();
+    return;
+  }
   const event = String((req.body as { event?: string })?.event ?? "").trim();
   if (!EVENTS.has(event)) {
     res.status(204).end();
