@@ -21,6 +21,12 @@ const STATEMENTS: string[] = [
   // AwardWallet Account Access link.
   `ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "awardwallet_user_id" integer`,
   `ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "awardwallet_synced_at" timestamp with time zone`,
+  // Creator programme.
+  `ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "creator_code" text`,
+  `ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "creator_name" text`,
+  `ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "creator_youtube" text`,
+  `ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "creator_instagram" text`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "users_creator_code_unique" ON "users" ("creator_code")`,
   // Loyalty row provenance ("manual" vs "awardwallet").
   `ALTER TABLE "loyalty_programs" ADD COLUMN IF NOT EXISTS "source" text`,
   // AI-usage counter for the owner cost dashboard.

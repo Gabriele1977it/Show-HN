@@ -24,6 +24,13 @@ export const usersTable = pgTable("users", {
   // can pull the loyalty balances they've shared. Null = not connected.
   awardwalletUserId: integer("awardwallet_user_id"),
   awardwalletSyncedAt: timestamp("awardwallet_synced_at", { withTimezone: true }),
+  // Creator ("link in bio") programme. A vanity code their audience signs up
+  // with (for a perk + attribution), plus profile bits shown on their public
+  // trip pages. Null on ordinary accounts.
+  creatorCode: text("creator_code").unique(),
+  creatorName: text("creator_name"),
+  creatorYoutube: text("creator_youtube"),
+  creatorInstagram: text("creator_instagram"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

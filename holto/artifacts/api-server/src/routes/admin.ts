@@ -13,7 +13,7 @@ import {
   usersTable,
 } from "@workspace/db";
 import bcrypt from "bcryptjs";
-import { and, count, desc, eq, gte, ilike, or, sql, sum } from "drizzle-orm";
+import { and, count, desc, eq, gte, ilike, isNotNull, or, sql, sum } from "drizzle-orm";
 import { Router, type IRouter } from "express";
 
 import { requireAuth } from "../middlewares/auth";
@@ -115,6 +115,52 @@ router.get("/admin/analytics", async (_req, res): Promise<void> => {
     .groupBy(analyticsDailyTable.event)
     .orderBy(desc(sql`sum(${analyticsDailyTable.count})`));
   res.json({ windowDays: 30, events: rows });
+});
+
+// Make a user a creator (vanity signup code + public profile), update it, or
+// clear it (empty code). The unique index enforces one code per user globally.
+router.patch("/admin/users/:id/creator", async (req, res): Promise<void> => {
+  const id = parseInt(String(req.params.id), 10);
+  if (!Number.isInteger(id)) {
+    res.status(400).json({ error: "Invalid user id." });
+    return;
+  }
+  const { code, name, youtube, instagram } = req.body as { code?: string; name?: string; youtube?: string; instagram?: string };
+  const c = String(code ?? "").trim().toUpperCase();
+  if (c && !/^[A-Z0-9]{3,20}$/.test(c)) {
+    res.status(400).json({ error: "Code must be 3–20 letters or numbers (e.g. YORKSHIRE)." });
+    return;
+  }
+  try {
+    await db
+      .update(usersTable)
+      .set({
+        creatorCode: c || null,
+        creatorName: name?.trim().slice(0, 60) || null,
+        creatorYoutube: youtube?.trim().slice(0, 200) || null,
+        creatorInstagram: instagram?.trim().slice(0, 200) || null,
+      })
+      .where(eq(usersTable.id, id));
+  } catch {
+    res.status(409).json({ error: "That code is already taken. Choose another." });
+    return;
+  }
+  res.json({ ok: true, code: c || null });
+});
+
+// All creators + how many people signed up with each one's code.
+router.get("/admin/creators", async (_req, res): Promise<void> => {
+  const creators = await db
+    .select({ id: usersTable.id, email: usersTable.email, code: usersTable.creatorCode, name: usersTable.creatorName })
+    .from(usersTable)
+    .where(isNotNull(usersTable.creatorCode));
+  const refRows = await db
+    .select({ referredBy: usersTable.referredBy, n: count() })
+    .from(usersTable)
+    .where(isNotNull(usersTable.referredBy))
+    .groupBy(usersTable.referredBy);
+  const byInviter = new Map(refRows.map((r) => [r.referredBy, Number(r.n)]));
+  res.json({ creators: creators.map((c) => ({ ...c, signups: byInviter.get(c.id) ?? 0 })) });
 });
 
 interface UserRow {

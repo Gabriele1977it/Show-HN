@@ -1,4 +1,4 @@
-import { db, expensesTable, tripItemsTable, tripsTable } from "@workspace/db";
+import { db, expensesTable, tripItemsTable, tripsTable, usersTable } from "@workspace/db";
 import { asc, eq } from "drizzle-orm";
 import { Router, type IRouter } from "express";
 
@@ -72,6 +72,24 @@ router.get("/public/trips/:slug", async (req, res): Promise<void> => {
   // Sanitised timeline highlights — type/title/location/time only.
   const highlights = recapItems;
 
+  // If the trip owner is a creator, surface their public "follow me" profile so
+  // the recap page promotes them (and carries their signup code). Only public
+  // profile fields — never the email or anything private.
+  let creator: { name: string | null; youtube: string | null; instagram: string | null; code: string | null } | null = null;
+  const [owner] = await db
+    .select({
+      creatorCode: usersTable.creatorCode,
+      creatorName: usersTable.creatorName,
+      creatorYoutube: usersTable.creatorYoutube,
+      creatorInstagram: usersTable.creatorInstagram,
+    })
+    .from(usersTable)
+    .where(eq(usersTable.id, trip.userId))
+    .limit(1);
+  if (owner?.creatorCode) {
+    creator = { name: owner.creatorName, youtube: owner.creatorYoutube, instagram: owner.creatorInstagram, code: owner.creatorCode };
+  }
+
   res.json({
     title: trip.title,
     destination: trip.destination,
@@ -80,6 +98,7 @@ router.get("/public/trips/:slug", async (req, res): Promise<void> => {
     recap,
     spendGBP,
     highlights,
+    creator,
   });
 });
 

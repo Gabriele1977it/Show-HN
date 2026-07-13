@@ -10,6 +10,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { HoltoLogo } from "@/components/HoltoLogo";
 import { Icon, type IconName } from "@/components/Icon";
 import { useColors } from "@/hooks/useColors";
+import { openUrl } from "@/utils/openUrl";
 
 interface Recap {
   days: number | null;
@@ -26,6 +27,12 @@ interface Highlight {
   location: string | null;
   startAt: string | null;
 }
+interface Creator {
+  name: string | null;
+  youtube: string | null;
+  instagram: string | null;
+  code: string | null;
+}
 interface PublicTrip {
   title: string;
   destination: string | null;
@@ -34,6 +41,7 @@ interface PublicTrip {
   recap: Recap;
   spendGBP: number | null;
   highlights: Highlight[];
+  creator?: Creator | null;
 }
 
 const TYPE_ICON: Record<string, IconName> = {
@@ -142,6 +150,14 @@ export default function PublicTripScreen() {
     }
   }
 
+  function openExternal(url: string) {
+    openUrl(url);
+  }
+  function openSignup(code: string | null) {
+    if (code) router.push({ pathname: "/(auth)/register", params: { ref: code } } as never);
+    else router.replace("/");
+  }
+
   const placeStat = r.countries > 0 ? { value: r.countries, label: r.countries === 1 ? "country" : "countries" } : { value: r.places, label: r.places === 1 ? "place" : "places" };
   const stats: { value: string; label: string }[] = [];
   if (r.days != null) stats.push({ value: String(r.days), label: r.days === 1 ? "day" : "days" });
@@ -205,15 +221,46 @@ export default function PublicTripScreen() {
         </View>
       ) : null}
 
+      {/* Creator follow card */}
+      {data.creator ? (
+        <View style={{ paddingHorizontal: 20, marginTop: 24 }}>
+          <View style={[styles.creatorCard, colors.shadow, { backgroundColor: colors.card, borderColor: colors.border, borderRadius: colors.radius }]}>
+            <View style={[styles.creatorAvatar, { backgroundColor: colors.primary }]}>
+              <Text style={styles.creatorInitial}>{(data.creator.name ?? "?").trim().charAt(0).toUpperCase()}</Text>
+            </View>
+            <Text style={[styles.creatorName, { color: colors.foreground }]}>{data.creator.name ?? "This creator"}</Text>
+            <Text style={[styles.creatorSub, { color: colors.mutedForeground }]}>Follow along for more trips & tips</Text>
+            <View style={styles.creatorLinks}>
+              {data.creator.youtube ? (
+                <Pressable onPress={() => openExternal(data.creator!.youtube!)} style={[styles.creatorLink, { backgroundColor: "#FF0000" }]}>
+                  <Text style={styles.creatorLinkText}>YouTube</Text>
+                </Pressable>
+              ) : null}
+              {data.creator.instagram ? (
+                <Pressable onPress={() => openExternal(data.creator!.instagram!)} style={[styles.creatorLink, { backgroundColor: "#C13584" }]}>
+                  <Text style={styles.creatorLinkText}>Instagram</Text>
+                </Pressable>
+              ) : null}
+            </View>
+          </View>
+        </View>
+      ) : null}
+
       {/* Viral CTA */}
-      <View style={{ paddingHorizontal: 20, marginTop: 28 }}>
+      <View style={{ paddingHorizontal: 20, marginTop: 20 }}>
         <View style={[styles.ctaCard, colors.shadow, { backgroundColor: colors.card, borderColor: colors.border, borderRadius: colors.radius }]}>
-          <Text style={[styles.ctaTitle, { color: colors.foreground }]}>Planned with HOLTO</Text>
-          <Text style={[styles.ctaSub, { color: colors.mutedForeground }]}>
-            Your honest travel companion — live flight tracking, disruption help, trips, expenses and more. Free to start.
+          <Text style={[styles.ctaTitle, { color: colors.foreground }]}>
+            {data.creator?.code ? `${data.creator.name ?? "This creator"} plans with HOLTO` : "Planned with HOLTO"}
           </Text>
-          <Pressable onPress={() => router.replace("/")} style={[styles.ctaBtn, { backgroundColor: colors.primary }]}>
-            <Text style={[styles.ctaBtnText, { color: colors.primaryForeground }]}>Plan your own trip — free</Text>
+          <Text style={[styles.ctaSub, { color: colors.mutedForeground }]}>
+            {data.creator?.code
+              ? "Your honest travel companion — flight tracking, disruption help, trips & more. Sign up with this link for 30 days of Pro, free."
+              : "Your honest travel companion — live flight tracking, disruption help, trips, expenses and more. Free to start."}
+          </Text>
+          <Pressable onPress={() => openSignup(data.creator?.code ?? null)} style={[styles.ctaBtn, { backgroundColor: colors.primary }]}>
+            <Text style={[styles.ctaBtnText, { color: colors.primaryForeground }]}>
+              {data.creator?.code ? "Get 30 days Pro — free" : "Plan your own trip — free"}
+            </Text>
           </Pressable>
         </View>
       </View>
@@ -229,6 +276,14 @@ const styles = StyleSheet.create({
   heroTitle: { fontFamily: "Inter_700Bold", fontSize: 30, color: "#fff", letterSpacing: -0.5, marginTop: 6 },
   heroDest: { fontFamily: "Inter_500Medium", fontSize: 15, color: "rgba(255,255,255,0.75)", marginTop: 4 },
   heroDates: { fontFamily: "Inter_400Regular", fontSize: 13, color: "rgba(255,255,255,0.5)", marginTop: 2 },
+  creatorCard: { borderWidth: 1, padding: 20, alignItems: "center" },
+  creatorAvatar: { width: 56, height: 56, borderRadius: 28, alignItems: "center", justifyContent: "center" },
+  creatorInitial: { fontFamily: "Inter_700Bold", fontSize: 24, color: "#fff" },
+  creatorName: { fontFamily: "Inter_700Bold", fontSize: 18, marginTop: 10 },
+  creatorSub: { fontFamily: "Inter_400Regular", fontSize: 13, marginTop: 2 },
+  creatorLinks: { flexDirection: "row", gap: 10, marginTop: 14 },
+  creatorLink: { borderRadius: 10, paddingHorizontal: 18, paddingVertical: 9 },
+  creatorLinkText: { fontFamily: "Inter_700Bold", fontSize: 13, color: "#fff" },
   shareBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, alignSelf: "flex-start", backgroundColor: "#F2C94C", borderRadius: 12, paddingHorizontal: 16, paddingVertical: 10, marginTop: 22 },
   shareText: { fontFamily: "Inter_700Bold", fontSize: 14, color: "#0A2E38" },
   statRow: { flexDirection: "row", alignItems: "center", marginTop: 24, flexWrap: "wrap" },

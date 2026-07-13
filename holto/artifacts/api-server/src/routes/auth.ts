@@ -1,7 +1,7 @@
 import { db, usersTable } from "@workspace/db";
 import bcrypt from "bcryptjs";
 import crypto from "node:crypto";
-import { and, eq, gt } from "drizzle-orm";
+import { and, eq, gt, or } from "drizzle-orm";
 import { Router, type IRouter } from "express";
 
 import { requireAuth, signToken } from "../middlewares/auth";
@@ -11,6 +11,9 @@ import { getUserTier, isOwnerEmail, TIER_FEATURES } from "../lib/tier";
 import { makeSlug } from "../lib/slug";
 
 const HOUR = 60 * 60 * 1000;
+// How long the premium perk lasts for someone who signs up with a creator's
+// code. Change this one number to tune the offer.
+const CREATOR_PERK_DAYS = 30;
 function clientIp(req: { ip?: string }): string {
   return req.ip || "unknown";
 }
@@ -86,15 +89,25 @@ router.post("/auth/register", async (req, res): Promise<void> => {
     return;
   }
 
-  // Resolve a referral code to the inviter (best effort — never blocks signup).
+  // Resolve a referral / creator code to the inviter (best effort — never
+  // blocks signup). A creator code additionally unlocks the follower perk:
+  // CREATOR_PERK_DAYS of full premium features (via tripPassExpiresAt, which
+  // grants the same feature set as Pro).
   let referredBy: number | null = null;
-  if (ref?.trim()) {
+  let tripPassExpiresAt: Date | null = null;
+  const code = ref?.trim();
+  if (code) {
     const [inviter] = await db
-      .select({ id: usersTable.id })
+      .select({ id: usersTable.id, creatorCode: usersTable.creatorCode })
       .from(usersTable)
-      .where(eq(usersTable.referralCode, ref.trim()))
+      .where(or(eq(usersTable.referralCode, code), eq(usersTable.creatorCode, code)))
       .limit(1);
-    if (inviter) referredBy = inviter.id;
+    if (inviter) {
+      referredBy = inviter.id;
+      if (inviter.creatorCode && inviter.creatorCode === code) {
+        tripPassExpiresAt = new Date(Date.now() + CREATOR_PERK_DAYS * 24 * 60 * 60 * 1000);
+      }
+    }
   }
 
   const passwordHash = await bcrypt.hash(password, 12);
@@ -106,6 +119,7 @@ router.post("/auth/register", async (req, res): Promise<void> => {
       passwordHash,
       referralCode: makeSlug(8),
       referredBy,
+      tripPassExpiresAt,
     })
     .returning();
 

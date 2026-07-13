@@ -68,6 +68,13 @@ export default function AdminScreen() {
   const [newTier, setNewTier] = useState("pro");
   const [notice, setNotice] = useState<string | null>(null);
 
+  const [cEmail, setCEmail] = useState("");
+  const [cCode, setCCode] = useState("");
+  const [cName, setCName] = useState("");
+  const [cYt, setCYt] = useState("");
+  const [cIg, setCIg] = useState("");
+  const [cNotice, setCNotice] = useState<string | null>(null);
+
   const overview = useQuery<Overview>({
     queryKey: ["admin-overview"],
     queryFn: () => customFetch<Overview>("/api/admin/overview", { responseType: "json" }),
@@ -82,6 +89,12 @@ export default function AdminScreen() {
   const analyticsQ = useQuery<{ events: { event: string; total: number }[] }>({
     queryKey: ["admin-analytics"],
     queryFn: () => customFetch<{ events: { event: string; total: number }[] }>("/api/admin/analytics", { responseType: "json" }),
+    retry: false,
+    enabled: !overview.isError,
+  });
+  const creatorsQ = useQuery<{ creators: { id: number; email: string; code: string; name: string | null; signups: number }[] }>({
+    queryKey: ["admin-creators"],
+    queryFn: () => customFetch<{ creators: { id: number; email: string; code: string; name: string | null; signups: number }[] }>("/api/admin/creators", { responseType: "json" }),
     retry: false,
     enabled: !overview.isError,
   });
@@ -107,6 +120,39 @@ export default function AdminScreen() {
     },
     onError: () => setNotice("Couldn't add that user. Check the email and try again."),
   });
+
+  const makeCreator = useMutation({
+    mutationFn: (body: { id: number; code: string; name: string; youtube: string; instagram: string }) =>
+      customFetch(`/api/admin/users/${body.id}/creator`, {
+        method: "PATCH",
+        body: JSON.stringify({ code: body.code, name: body.name || undefined, youtube: body.youtube || undefined, instagram: body.instagram || undefined }),
+        responseType: "json",
+      }),
+    onSuccess: () => {
+      setCNotice("Creator saved. Their signup link: app.holtotravel.com/?ref=" + cCode.trim().toUpperCase());
+      setCEmail("");
+      setCCode("");
+      setCName("");
+      setCYt("");
+      setCIg("");
+      void qc.invalidateQueries({ queryKey: ["admin-creators"] });
+    },
+    onError: () => setCNotice("Couldn't save. Check the email matches a user and the code is free (3–20 letters/numbers)."),
+  });
+
+  function submitCreator() {
+    const user = usersQ.data?.users.find((u) => u.email.toLowerCase() === cEmail.trim().toLowerCase());
+    if (!user) {
+      setCNotice("No user found with that email. They need a HOLTO account first.");
+      return;
+    }
+    if (!/^[A-Za-z0-9]{3,20}$/.test(cCode.trim())) {
+      setCNotice("Code must be 3–20 letters or numbers (e.g. YORKSHIRE).");
+      return;
+    }
+    setCNotice(null);
+    makeCreator.mutate({ id: user.id, code: cCode.trim(), name: cName.trim(), youtube: cYt.trim(), instagram: cIg.trim() });
+  }
 
   if (overview.isLoading) {
     return <View style={[styles.center, { backgroundColor: colors.background }]}><ActivityIndicator color={colors.primary} /></View>;
@@ -221,6 +267,28 @@ export default function AdminScreen() {
         </Pressable>
         {notice ? <Text style={[styles.notice, { color: colors.foreground, backgroundColor: colors.muted }]} selectable>{notice}</Text> : null}
       </View>
+
+      {/* Creators */}
+      <Text style={[styles.section, { color: colors.foreground }]}>Creators</Text>
+      <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, borderRadius: colors.radius }]}>
+        <TextInput value={cEmail} onChangeText={setCEmail} placeholder="Creator's account email" placeholderTextColor={colors.mutedForeground} autoCapitalize="none" keyboardType="email-address" style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.foreground }]} />
+        <TextInput value={cCode} onChangeText={setCCode} placeholder="Vanity code (e.g. YORKSHIRE)" placeholderTextColor={colors.mutedForeground} autoCapitalize="characters" style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.foreground, marginTop: 8 }]} />
+        <TextInput value={cName} onChangeText={setCName} placeholder="Display name (e.g. Yorkshire Lad Abroad)" placeholderTextColor={colors.mutedForeground} style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.foreground, marginTop: 8 }]} />
+        <TextInput value={cYt} onChangeText={setCYt} placeholder="YouTube URL (optional)" placeholderTextColor={colors.mutedForeground} autoCapitalize="none" style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.foreground, marginTop: 8 }]} />
+        <TextInput value={cIg} onChangeText={setCIg} placeholder="Instagram URL (optional)" placeholderTextColor={colors.mutedForeground} autoCapitalize="none" style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.foreground, marginTop: 8 }]} />
+        <Pressable onPress={submitCreator} disabled={makeCreator.isPending} style={[styles.solidBtn, { backgroundColor: colors.primary, marginTop: 12, opacity: makeCreator.isPending ? 0.7 : 1 }]}>
+          {makeCreator.isPending ? <ActivityIndicator color={colors.primaryForeground} size="small" /> : <Text style={[styles.solidBtnText, { color: colors.primaryForeground }]}>Save creator</Text>}
+        </Pressable>
+        {cNotice ? <Text style={[styles.notice, { color: colors.foreground, backgroundColor: colors.muted }]} selectable>{cNotice}</Text> : null}
+      </View>
+      {creatorsQ.data?.creators.map((c) => (
+        <View key={c.id} style={[styles.userRow, { borderBottomColor: colors.border }]}>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.userEmail, { color: colors.foreground }]}>{c.name ?? c.email} · {c.code}</Text>
+            <Text style={[styles.userMeta, { color: colors.mutedForeground }]}>{c.signups} signup{c.signups === 1 ? "" : "s"} via code</Text>
+          </View>
+        </View>
+      ))}
 
       {/* Users */}
       <Text style={[styles.section, { color: colors.foreground }]}>Users ({users.length})</Text>
