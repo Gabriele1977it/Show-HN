@@ -25,6 +25,24 @@ const STATEMENTS: string[] = [
   `ALTER TABLE "loyalty_programs" ADD COLUMN IF NOT EXISTS "source" text`,
   // AI-usage counter for the owner cost dashboard.
   `ALTER TABLE "daily_usage" ADD COLUMN IF NOT EXISTS "ai_calls" integer NOT NULL DEFAULT 0`,
+  // Saved-destinations watchlist.
+  `CREATE TABLE IF NOT EXISTS "saved_destinations" (
+    "id" serial PRIMARY KEY,
+    "user_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+    "code" text NOT NULL,
+    "name" text NOT NULL,
+    "created_at" timestamp with time zone NOT NULL DEFAULT now(),
+    CONSTRAINT "saved_destinations_user_code" UNIQUE ("user_id", "code")
+  )`,
+  // Aggregated, privacy-friendly analytics.
+  `CREATE TABLE IF NOT EXISTS "analytics_daily" (
+    "id" serial PRIMARY KEY,
+    "day" date NOT NULL,
+    "event" text NOT NULL,
+    "count" integer NOT NULL DEFAULT 0,
+    "updated_at" timestamp with time zone NOT NULL DEFAULT now(),
+    CONSTRAINT "analytics_daily_day_event" UNIQUE ("day", "event")
+  )`,
 ];
 
 export async function ensureAppSchema(): Promise<void> {

@@ -79,6 +79,12 @@ export default function AdminScreen() {
     retry: false,
     enabled: !overview.isError,
   });
+  const analyticsQ = useQuery<{ events: { event: string; total: number }[] }>({
+    queryKey: ["admin-analytics"],
+    queryFn: () => customFetch<{ events: { event: string; total: number }[] }>("/api/admin/analytics", { responseType: "json" }),
+    retry: false,
+    enabled: !overview.isError,
+  });
 
   const setTier = useMutation({
     mutationFn: (v: { id: number; tier: string }) =>
@@ -169,6 +175,21 @@ export default function AdminScreen() {
         </>
       ) : null}
 
+      {/* Product analytics */}
+      {analyticsQ.data?.events && analyticsQ.data.events.length > 0 ? (
+        <>
+          <Text style={[styles.section, { color: colors.foreground }]}>Analytics · 30 days</Text>
+          <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, borderRadius: colors.radius }]}>
+            {analyticsQ.data.events.map((e, i) => (
+              <View key={e.event} style={[styles.evtRow, i > 0 && { borderTopColor: colors.border, borderTopWidth: 1 }]}>
+                <Text style={[styles.evtName, { color: colors.foreground }]}>{e.event}</Text>
+                <Text style={[styles.evtCount, { color: colors.mutedForeground }]}>{e.total}</Text>
+              </View>
+            ))}
+          </View>
+        </>
+      ) : null}
+
       {/* Integration health */}
       <Text style={[styles.section, { color: colors.foreground }]}>Integrations</Text>
       <View style={styles.chipWrap}>
@@ -239,6 +260,9 @@ const styles = StyleSheet.create({
   statCard: { width: "31%", borderWidth: 1, padding: 12, minWidth: 96, flexGrow: 1 },
   statValue: { fontFamily: "Inter_700Bold", fontSize: 22, letterSpacing: -0.5 },
   statLabel: { fontFamily: "Inter_400Regular", fontSize: 11, marginTop: 2 },
+  evtRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 10 },
+  evtName: { fontFamily: "Inter_500Medium", fontSize: 14 },
+  evtCount: { fontFamily: "Inter_700Bold", fontSize: 14 },
   aiRow: { flexDirection: "row", justifyContent: "space-between" },
   aiCell: { flex: 1, alignItems: "flex-start" },
   chipWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8 },

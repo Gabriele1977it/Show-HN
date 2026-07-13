@@ -1,5 +1,5 @@
 import { customFetch } from "@workspace/api-client-react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { router, useLocalSearchParams } from "expo-router";
 import React, { useMemo, useState } from "react";
 import { Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Icon } from "@/components/Icon";
 import { useColors } from "@/hooks/useColors";
+import { track } from "@/utils/analytics";
 import {
   ESSENTIALS_LIST,
   findEssentials,
@@ -75,6 +76,26 @@ export default function DestinationScreen() {
   const initial = typeof params.country === "string" ? findEssentials(params.country) : null;
   const [selected, setSelected] = useState<CountryEssentials | null>(initial);
   const [query, setQuery] = useState("");
+  const qc = useQueryClient();
+
+  const { data: watchlist } = useQuery<{ destinations: { code: string }[] }>({
+    queryKey: ["watchlist"],
+    queryFn: () => customFetch<{ destinations: { code: string }[] }>("/api/watchlist", { responseType: "json" }),
+    retry: false,
+  });
+  const savedCodes = new Set((watchlist?.destinations ?? []).map((d) => d.code));
+
+  const toggleSave = useMutation({
+    mutationFn: async (c: CountryEssentials) => {
+      if (savedCodes.has(c.code)) {
+        await customFetch(`/api/watchlist/${c.code}`, { method: "DELETE" });
+      } else {
+        await customFetch("/api/watchlist", { method: "POST", body: JSON.stringify({ code: c.code, name: c.name }), responseType: "json" });
+        track("watchlist_add");
+      }
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["watchlist"] }),
+  });
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -94,6 +115,10 @@ export default function DestinationScreen() {
           <Text style={[styles.sub, { color: colors.mutedForeground }]}>
             The essentials the moment you land — emergency numbers, plugs, tap water, money and local know-how. Works offline.
           </Text>
+          <Pressable onPress={() => router.push("/watchlist" as never)} style={styles.watchLink} hitSlop={6}>
+            <Icon name="star" size={14} color={colors.primary} />
+            <Text style={[styles.watchLinkText, { color: colors.primary }]}>Your watchlist</Text>
+          </Pressable>
         </Animated.View>
 
         <View style={[styles.searchWrap, { backgroundColor: colors.card, borderColor: colors.border, marginTop: 18 }]}>
@@ -129,7 +154,19 @@ export default function DestinationScreen() {
           <Icon name="arrow-left" size={15} color={colors.primary} />
           <Text style={[styles.changeText, { color: colors.primary }]}>Change country</Text>
         </Pressable>
-        <Text style={[styles.country, { color: colors.foreground }]}>{c.flag} {c.name}</Text>
+        <View style={styles.titleRow}>
+          <Text style={[styles.country, { color: colors.foreground }]}>{c.flag} {c.name}</Text>
+          <Pressable
+            onPress={() => toggleSave.mutate(c)}
+            hitSlop={8}
+            style={[styles.saveBtn, { borderColor: savedCodes.has(c.code) ? colors.primary : colors.border, backgroundColor: savedCodes.has(c.code) ? colors.primary : "transparent" }]}
+          >
+            <Icon name="star" size={14} color={savedCodes.has(c.code) ? colors.primaryForeground : colors.mutedForeground} />
+            <Text style={[styles.saveText, { color: savedCodes.has(c.code) ? colors.primaryForeground : colors.mutedForeground }]}>
+              {savedCodes.has(c.code) ? "Saved" : "Save"}
+            </Text>
+          </Pressable>
+        </View>
       </Animated.View>
 
       <AdvisoryBanner code={c.code} colors={colors} />
@@ -207,7 +244,12 @@ const styles = StyleSheet.create({
   pickName: { flex: 1, fontFamily: "Inter_500Medium", fontSize: 15 },
   changeRow: { flexDirection: "row", alignItems: "center", gap: 3, marginBottom: 8 },
   changeText: { fontFamily: "Inter_600SemiBold", fontSize: 13 },
-  country: { fontFamily: "Inter_700Bold", fontSize: 26, letterSpacing: -0.3 },
+  country: { fontFamily: "Inter_700Bold", fontSize: 26, letterSpacing: -0.3, flex: 1 },
+  titleRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  saveBtn: { flexDirection: "row", alignItems: "center", gap: 5, borderWidth: 1, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 7 },
+  saveText: { fontFamily: "Inter_600SemiBold", fontSize: 13 },
+  watchLink: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 12 },
+  watchLinkText: { fontFamily: "Inter_600SemiBold", fontSize: 14 },
   advisory: { flexDirection: "row", alignItems: "center", gap: 10, borderWidth: 1, borderRadius: 12, padding: 12, marginTop: 14 },
   advisoryDot: { width: 9, height: 9, borderRadius: 5 },
   advisoryLabel: { fontFamily: "Inter_600SemiBold", fontSize: 13 },

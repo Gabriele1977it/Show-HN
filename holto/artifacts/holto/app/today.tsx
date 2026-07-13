@@ -2,13 +2,14 @@ import { customFetch } from "@workspace/api-client-react";
 import { useQuery } from "@tanstack/react-query";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
-import React from "react";
+import React, { useEffect } from "react";
 import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Icon, type IconName } from "@/components/Icon";
 import { findEssentials } from "@/constants/countryEssentials";
+import { track } from "@/utils/analytics";
 import { addToCalendar } from "@/utils/calendar";
 import { useColors } from "@/hooks/useColors";
 
@@ -124,6 +125,10 @@ export default function TodayScreen() {
     staleTime: 30 * 60 * 1000,
   });
   const weather = wxData?.weather ?? null;
+
+  useEffect(() => {
+    track("today_view");
+  }, []);
 
   if (isLoading) {
     return (

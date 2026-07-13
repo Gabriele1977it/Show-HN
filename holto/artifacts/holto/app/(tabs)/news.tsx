@@ -9,6 +9,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Icon } from "@/components/Icon";
 import { SkeletonCard } from "@/components/Skeleton";
 import { useColors } from "@/hooks/useColors";
+import { track } from "@/utils/analytics";
 import { openUrl } from "@/utils/openUrl";
 
 type Category = "world" | "travel";
@@ -58,6 +59,10 @@ export default function NewsScreen() {
     queryFn: () => customFetch<{ items: NewsItem[] }>("/api/news?limit=60"),
     staleTime: 5 * 60 * 1000,
   });
+
+  useEffect(() => {
+    track("news_view");
+  }, []);
 
   // Hydrate from the last saved copy on mount so the tab shows something
   // instantly — and still works offline / on a plane.

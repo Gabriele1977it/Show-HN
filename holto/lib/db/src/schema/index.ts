@@ -9,3 +9,5 @@ export * from "./expenses";
 export * from "./usage";
 export * from "./sent-reminders";
 export * from "./loyalty";
+export * from "./saved-destinations";
+export * from "./analytics";

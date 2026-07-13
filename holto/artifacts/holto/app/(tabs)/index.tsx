@@ -10,7 +10,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Platform,
@@ -36,6 +36,7 @@ import { UpgradeSheet } from "@/components/UpgradeSheet";
 import { AddToTripSheet } from "@/components/AddToTripSheet";
 import { InstallPrompt } from "@/components/InstallPrompt";
 import { RatingPrompt } from "@/components/RatingPrompt";
+import { track } from "@/utils/analytics";
 import { WhatsNewSheet } from "@/components/WhatsNewSheet";
 import { SkeletonCard } from "@/components/Skeleton";
 
@@ -262,6 +263,10 @@ function FlightResultCard({
 export default function HomeScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+
+  useEffect(() => {
+    track("app_open");
+  }, []);
   const { user, token, logout } = useAuth();
 
   const [askVisible, setAskVisible] = useState(false);

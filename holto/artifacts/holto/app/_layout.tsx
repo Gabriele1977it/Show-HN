@@ -65,6 +65,7 @@ function RootLayoutNav() {
       <Stack.Screen name="cost-of-living" options={{ headerShown: true, headerTitle: "Cost of Living", ...headerOptions }} />
       <Stack.Screen name="currency" options={{ headerShown: true, headerTitle: "Currency Converter", ...headerOptions }} />
       <Stack.Screen name="destination" options={{ headerShown: true, headerTitle: "Destination Guide", ...headerOptions }} />
+      <Stack.Screen name="watchlist" options={{ headerShown: true, headerTitle: "Watchlist", ...headerOptions }} />
       <Stack.Screen name="admin" options={{ headerShown: true, headerTitle: "Admin", ...headerOptions }} />
       <Stack.Screen name="invite" options={{ headerShown: true, headerTitle: "Invite Friends", ...headerOptions }} />
       <Stack.Screen name="whats-new" options={{ headerShown: false }} />

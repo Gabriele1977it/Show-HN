@@ -1,4 +1,5 @@
 import {
+  analyticsDailyTable,
   claimsTable,
   countryStaysTable,
   dailyUsageTable,
@@ -102,6 +103,18 @@ router.get("/admin/usage", async (_req, res): Promise<void> => {
     .orderBy(desc(sql`sum(${dailyUsageTable.aiCalls})`))
     .limit(20);
   res.json({ windowDays: 30, topConsumers: rows });
+});
+
+// Aggregated product analytics — event totals over the last 30 days.
+router.get("/admin/analytics", async (_req, res): Promise<void> => {
+  const monthAgoStr = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const rows = await db
+    .select({ event: analyticsDailyTable.event, total: sql<number>`sum(${analyticsDailyTable.count})::int` })
+    .from(analyticsDailyTable)
+    .where(gte(analyticsDailyTable.day, monthAgoStr))
+    .groupBy(analyticsDailyTable.event)
+    .orderBy(desc(sql`sum(${analyticsDailyTable.count})`));
+  res.json({ windowDays: 30, events: rows });
 });
 
 interface UserRow {
