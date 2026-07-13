@@ -23,6 +23,8 @@ const STATEMENTS: string[] = [
   `ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "awardwallet_synced_at" timestamp with time zone`,
   // Loyalty row provenance ("manual" vs "awardwallet").
   `ALTER TABLE "loyalty_programs" ADD COLUMN IF NOT EXISTS "source" text`,
+  // AI-usage counter for the owner cost dashboard.
+  `ALTER TABLE "daily_usage" ADD COLUMN IF NOT EXISTS "ai_calls" integer NOT NULL DEFAULT 0`,
 ];
 
 export async function ensureAppSchema(): Promise<void> {

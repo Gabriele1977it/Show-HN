@@ -12,6 +12,7 @@ export const dailyUsageTable = pgTable(
       .references(() => usersTable.id, { onDelete: "cascade" }),
     day: date("day").notNull(), // "YYYY-MM-DD"
     flightSearches: integer("flight_searches").notNull().default(0),
+    aiCalls: integer("ai_calls").notNull().default(0), // token-costing AI requests (scans, Ask)
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [unique("daily_usage_user_day").on(t.userId, t.day)],

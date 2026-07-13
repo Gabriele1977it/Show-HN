@@ -10,6 +10,7 @@ import { useColors } from "@/hooks/useColors";
 
 interface Overview {
   counts: Record<string, number>;
+  aiUsage?: { callsToday: number; callsLast30d: number; searchesToday: number; dailyCap: number | null };
   integrations: Record<string, boolean>;
   generatedAt: string;
 }
@@ -45,6 +46,8 @@ const INTEGRATION_LABELS: Record<string, string> = {
   sessionSecret: "Session secret",
   ownerEmailsSet: "Owner emails",
   pushExpo: "Push (Expo)",
+  email_resend: "Email (Resend)",
+  awardwallet: "AwardWallet",
 };
 const TIER_OPTS = [
   { v: "free", label: "Free" },
@@ -138,6 +141,34 @@ export default function AdminScreen() {
         ))}
       </View>
 
+      {/* AI cost visibility */}
+      {overview.data?.aiUsage ? (
+        <>
+          <Text style={[styles.section, { color: colors.foreground }]}>AI usage (token cost)</Text>
+          <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, borderRadius: colors.radius }]}>
+            <View style={styles.aiRow}>
+              <View style={styles.aiCell}>
+                <Text style={[styles.statValue, { color: colors.foreground }]}>{overview.data.aiUsage.callsToday}</Text>
+                <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>AI calls today</Text>
+              </View>
+              <View style={styles.aiCell}>
+                <Text style={[styles.statValue, { color: colors.foreground }]}>{overview.data.aiUsage.callsLast30d}</Text>
+                <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>AI calls · 30d</Text>
+              </View>
+              <View style={styles.aiCell}>
+                <Text style={[styles.statValue, { color: colors.foreground }]}>{overview.data.aiUsage.searchesToday}</Text>
+                <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>Searches today</Text>
+              </View>
+            </View>
+            <Text style={[styles.muted, { color: colors.mutedForeground, marginTop: 10 }]}>
+              {overview.data.aiUsage.dailyCap
+                ? `Per-user daily cap: ${overview.data.aiUsage.dailyCap} (free tier). Set via AI_CALLS_PER_DAY.`
+                : "No per-user daily cap set. Add AI_CALLS_PER_DAY to cap free-tier AI usage."}
+            </Text>
+          </View>
+        </>
+      ) : null}
+
       {/* Integration health */}
       <Text style={[styles.section, { color: colors.foreground }]}>Integrations</Text>
       <View style={styles.chipWrap}>
@@ -208,6 +239,8 @@ const styles = StyleSheet.create({
   statCard: { width: "31%", borderWidth: 1, padding: 12, minWidth: 96, flexGrow: 1 },
   statValue: { fontFamily: "Inter_700Bold", fontSize: 22, letterSpacing: -0.5 },
   statLabel: { fontFamily: "Inter_400Regular", fontSize: 11, marginTop: 2 },
+  aiRow: { flexDirection: "row", justifyContent: "space-between" },
+  aiCell: { flex: 1, alignItems: "flex-start" },
   chipWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   hChip: { flexDirection: "row", alignItems: "center", gap: 6, borderWidth: 1, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 7 },
   dot: { width: 7, height: 7, borderRadius: 4 },

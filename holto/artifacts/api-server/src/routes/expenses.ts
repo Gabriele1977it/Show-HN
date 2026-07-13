@@ -8,6 +8,7 @@ import { summarizeExpenses } from "../lib/expense-summary";
 import { parseReceiptFromDocument } from "../lib/receipt-parse";
 import { llmConfigured } from "../lib/llm";
 import { rateLimit } from "../lib/rate-limit";
+import { allowAiCall } from "../lib/usage";
 
 const router: IRouter = Router();
 
@@ -113,6 +114,12 @@ router.post("/expenses/scan", requireAuth, async (req, res): Promise<void> => {
   }
   if (!llmConfigured()) {
     res.status(503).json({ error: "Receipt scanning isn't switched on yet (it needs an AI key). Enter the expense manually instead." });
+    return;
+  }
+
+  const gate = await allowAiCall(req.auth!.userId);
+  if (!gate.allowed) {
+    res.status(429).json({ error: "You've reached today's AI limit. It resets tomorrow — upgrade for unlimited scans.", requiresUpgrade: true });
     return;
   }
 

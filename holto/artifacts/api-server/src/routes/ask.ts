@@ -4,6 +4,7 @@ import { requireAuth } from "../middlewares/auth";
 import { logger } from "../lib/logger";
 import { getUserTier } from "../lib/tier";
 import { generateText } from "../lib/llm";
+import { allowAiCall } from "../lib/usage";
 import { buildUserContext } from "../lib/ask-context";
 
 const router: IRouter = Router();
@@ -128,6 +129,12 @@ ${locationNote}
 ${userContext ? `What you know about this traveller (use these facts for personal questions about their flights, trips or days in a country — quote the specific numbers/dates):\n${userContext}\n\n` : ""}Their question: "${question.trim()}"
 
 ${placesContext ? placesContext + "\n\n" : ""}Give a short, natural, helpful answer (3-5 sentences max). ${places.length > 0 ? "If relevant, mention the most helpful nearby option by name with practical context." : "Give clear, accurate travel advice."} If they ask about their own flights, trips or days in a country, answer from the facts above; if a fact isn't listed, say you don't have it rather than guessing. Be warm and direct like a knowledgeable friend — never robotic, never vague.`;
+
+  const gate = await allowAiCall(req.auth!.userId);
+  if (!gate.allowed) {
+    res.status(429).json({ error: "You've reached today's AI limit. It resets tomorrow — upgrade for unlimited questions.", requiresUpgrade: true });
+    return;
+  }
 
   const answer =
     (await generateText(prompt, { maxTokens: 260, temperature: 0.4 })) ??

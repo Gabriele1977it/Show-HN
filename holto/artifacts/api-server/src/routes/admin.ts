@@ -1,6 +1,7 @@
 import {
   claimsTable,
   countryStaysTable,
+  dailyUsageTable,
   db,
   disruptionsTable,
   expensesTable,
@@ -11,7 +12,7 @@ import {
   usersTable,
 } from "@workspace/db";
 import bcrypt from "bcryptjs";
-import { and, count, desc, eq, gte, ilike, or } from "drizzle-orm";
+import { and, count, desc, eq, gte, ilike, or, sql, sum } from "drizzle-orm";
 import { Router, type IRouter } from "express";
 
 import { requireAuth } from "../middlewares/auth";
@@ -49,8 +50,24 @@ router.get("/admin/overview", async (_req, res): Promise<void> => {
     tableCount(countryStaysTable),
   ]);
 
+  // AI-cost visibility: token-costing requests today and over the last 30 days.
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const monthAgoStr = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const [aiTodayRow, aiMonthRow, searchTodayRow] = await Promise.all([
+    db.select({ v: sum(dailyUsageTable.aiCalls) }).from(dailyUsageTable).where(eq(dailyUsageTable.day, todayStr)),
+    db.select({ v: sum(dailyUsageTable.aiCalls) }).from(dailyUsageTable).where(gte(dailyUsageTable.day, monthAgoStr)),
+    db.select({ v: sum(dailyUsageTable.flightSearches) }).from(dailyUsageTable).where(eq(dailyUsageTable.day, todayStr)),
+  ]);
+  const num = (v: string | null | undefined): number => Number(v ?? 0);
+
   res.json({
     counts: { users, newUsersThisWeek: newUsers, trips, monitoredFlightsActive: flights, disruptions, claims, expenses, pushTokens, loyaltyPrograms: loyalty, countryStays: stays },
+    aiUsage: {
+      callsToday: num(aiTodayRow[0]?.v),
+      callsLast30d: num(aiMonthRow[0]?.v),
+      searchesToday: num(searchTodayRow[0]?.v),
+      dailyCap: Number(process.env.AI_CALLS_PER_DAY) > 0 ? Number(process.env.AI_CALLS_PER_DAY) : null,
+    },
     integrations: {
       geminiAI: !!process.env.GEMINI_API_KEY,
       openAI: !!process.env.OPENAI_API_KEY,
@@ -61,9 +78,30 @@ router.get("/admin/overview", async (_req, res): Promise<void> => {
       sessionSecret: !!process.env.SESSION_SECRET,
       ownerEmailsSet: !!process.env.OWNER_EMAILS,
       pushExpo: !!process.env.EXPO_ACCESS_TOKEN,
+      email_resend: !!process.env.RESEND_API_KEY,
+      awardwallet: !!process.env.AWARDWALLET_API_KEY,
     },
     generatedAt: new Date().toISOString(),
   });
+});
+
+// Top AI consumers over the last 30 days — spot heavy usage before it costs.
+router.get("/admin/usage", async (_req, res): Promise<void> => {
+  const monthAgoStr = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const rows = await db
+    .select({
+      userId: dailyUsageTable.userId,
+      email: usersTable.email,
+      aiCalls: sql<number>`sum(${dailyUsageTable.aiCalls})::int`,
+      searches: sql<number>`sum(${dailyUsageTable.flightSearches})::int`,
+    })
+    .from(dailyUsageTable)
+    .innerJoin(usersTable, eq(usersTable.id, dailyUsageTable.userId))
+    .where(gte(dailyUsageTable.day, monthAgoStr))
+    .groupBy(dailyUsageTable.userId, usersTable.email)
+    .orderBy(desc(sql`sum(${dailyUsageTable.aiCalls})`))
+    .limit(20);
+  res.json({ windowDays: 30, topConsumers: rows });
 });
 
 interface UserRow {

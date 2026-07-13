@@ -8,6 +8,7 @@ import { llmConfigured } from "../lib/llm";
 import { getRatesPerGBP, toGBP } from "../lib/fx";
 import { makeSlug } from "../lib/slug";
 import { rateLimit } from "../lib/rate-limit";
+import { allowAiCall } from "../lib/usage";
 
 const router: IRouter = Router();
 
@@ -188,6 +189,12 @@ router.post("/trips/parse-file", requireAuth, async (req, res): Promise<void> =>
   // Reading documents needs an AI key — say so plainly rather than a vague "couldn't read".
   if (!llmConfigured()) {
     res.status(503).json({ error: "Document reading isn't switched on yet (it needs an AI key). You can paste the booking text instead." });
+    return;
+  }
+
+  const gate = await allowAiCall(req.auth!.userId);
+  if (!gate.allowed) {
+    res.status(429).json({ error: "You've reached today's AI limit. It resets tomorrow — upgrade for unlimited scans.", requiresUpgrade: true });
     return;
   }
 
