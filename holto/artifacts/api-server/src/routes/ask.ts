@@ -65,7 +65,9 @@ router.post("/ask", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
-  const googleApiKey = process.env.GOOGLE_API_KEY;
+  // Accept either env name — the Places lookup uses a standard Google Cloud key,
+  // which many deployments store as GOOGLE_MAPS_API_KEY.
+  const googleApiKey = process.env.GOOGLE_API_KEY ?? process.env.GOOGLE_MAPS_API_KEY;
   let places: Array<{ name: string; vicinity: string; rating: number | null; openNow: boolean | null; placeId: string | null; lat: number | null; lng: number | null }> = [];
 
   const placeDetection = detectPlaceType(question);
@@ -128,7 +130,13 @@ ${locationNote}
 
 ${userContext ? `What you know about this traveller (use these facts for personal questions about their flights, trips or days in a country — quote the specific numbers/dates):\n${userContext}\n\n` : ""}Their question: "${question.trim()}"
 
-${placesContext ? placesContext + "\n\n" : ""}Give a short, natural, helpful answer (3-5 sentences max). ${places.length > 0 ? "Recommend the most helpful nearby option by name with practical context. Refer to the area using the place addresses above — never try to name their city or region from raw coordinates." : "Give clear, accurate travel advice. Don't guess the traveller's city or region from coordinates; only reference a location if it's stated in the facts above."} If they ask about their own flights, trips or days in a country, answer from the facts above; if a fact isn't listed, say you don't have it rather than guessing. Write complete sentences and finish your final thought. Be warm and direct like a knowledgeable friend — never robotic, never vague.`;
+${placesContext ? placesContext + "\n\n" : ""}Give a short, natural, helpful answer (3-5 sentences max). ${
+    places.length > 0
+      ? "Recommend the most helpful nearby option by name with practical context. Refer to the area using the place addresses above — never try to name their city or region from raw coordinates."
+      : placeDetection
+        ? "You have NO live results for places near them right now. Tell them plainly you can't see nearby options at this moment — their location sharing may be off, or none are listed — and suggest turning on location or naming the area they're in. Do NOT present hotels, restaurants or places from their saved trips as if they are nearby, and do NOT invent nearby places."
+        : "Give clear, accurate travel advice. Don't guess the traveller's city or region from coordinates; only reference a location if it's stated in the facts above."
+  } If they ask about their own flights, trips or days in a country, answer from the facts above; if a fact isn't listed, say you don't have it rather than guessing. Write complete sentences and finish your final thought. Never include notes about your own reasoning or planning — reply only with the answer. Be warm and direct like a knowledgeable friend — never robotic, never vague.`;
 
   const gate = await allowAiCall(req.auth!.userId);
   if (!gate.allowed) {

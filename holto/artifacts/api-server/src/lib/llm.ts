@@ -15,8 +15,11 @@ const openai = OPENAI_KEY ? new OpenAI({ apiKey: OPENAI_KEY }) : null;
 // availability varies by key/project/region, and a single alias can 404. An
 // optional GEMINI_MODEL env is tried first, then current GA fallbacks. On a
 // 404 (model-not-found) we advance to the next; other errors stop the chain.
+// gemini-2.0-flash first: it doesn't "think", so it can't spend the output
+// budget on hidden reasoning (which truncated chat answers) or leak that
+// reasoning into the reply. 2.5-flash stays as a fallback.
 const GEMINI_MODELS: string[] = (() => {
-  const fallbacks = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-flash-latest", "gemini-1.5-flash"];
+  const fallbacks = ["gemini-2.0-flash", "gemini-2.5-flash", "gemini-flash-latest", "gemini-1.5-flash"];
   const configured = process.env.GEMINI_MODEL?.trim();
   return configured ? [configured, ...fallbacks.filter((m) => m !== configured)] : fallbacks;
 })();
