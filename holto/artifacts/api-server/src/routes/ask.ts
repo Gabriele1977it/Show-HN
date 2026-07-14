@@ -9,19 +9,13 @@ import { buildUserContext } from "../lib/ask-context";
 
 const router: IRouter = Router();
 
-interface GooglePlace {
-  name: string;
-  vicinity: string;
+// Response shape for the new Places API (places:searchNearby).
+interface NewPlace {
+  displayName?: { text?: string };
+  formattedAddress?: string;
   rating?: number;
-  opening_hours?: { open_now?: boolean };
-  place_id?: string;
-  geometry?: { location: { lat: number; lng: number } };
-}
-
-interface GooglePlacesResponse {
-  results: GooglePlace[];
-  status: string;
-  error_message?: string;
+  location?: { latitude?: number; longitude?: number };
+  currentOpeningHours?: { openNow?: boolean };
 }
 
 const PLACE_KEYWORDS: { keywords: string[]; type: string; keyword?: string }[] = [
@@ -74,29 +68,39 @@ router.post("/ask", requireAuth, async (req, res): Promise<void> => {
 
   if (lat != null && lng != null && googleApiKey && placeDetection) {
     try {
-      const { type, keyword } = placeDetection;
-      const params = new URLSearchParams({
-        location: `${lat},${lng}`,
-        radius: "1500",
-        type,
-        key: googleApiKey,
+      const { type } = placeDetection;
+      const placesRes = await fetch("https://places.googleapis.com/v1/places:searchNearby", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "X-Goog-Api-Key": googleApiKey,
+          // Only request the fields we render — smaller, cheaper responses.
+          "X-Goog-FieldMask": "places.displayName,places.formattedAddress,places.rating,places.location,places.currentOpeningHours.openNow",
+        },
+        body: JSON.stringify({
+          includedTypes: [type],
+          maxResultCount: 5,
+          rankPreference: "DISTANCE",
+          locationRestriction: { circle: { center: { latitude: lat, longitude: lng }, radius: 2000 } },
+        }),
+        signal: AbortSignal.timeout(8000),
       });
-      if (keyword) params.set("keyword", keyword);
 
-      const placesRes = await fetch(
-        `https://maps.googleapis.com/maps/api/place/nearbysearch/json?${params.toString()}`,
-      );
-      const placesData = (await placesRes.json()) as GooglePlacesResponse;
-
-      if (placesData.status === "OK" && placesData.results?.length > 0) {
-        places = placesData.results.slice(0, 4).map((p) => ({
-          name: p.name,
-          vicinity: p.vicinity,
+      if (!placesRes.ok) {
+        // Surface the exact reason (REQUEST_DENIED, key restriction, API not
+        // enabled, …) so a misconfiguration is diagnosable from the logs.
+        const errText = await placesRes.text().catch(() => "");
+        logger.warn({ status: placesRes.status, body: errText.slice(0, 400) }, "Google Places (new) returned non-OK");
+      } else {
+        const placesData = (await placesRes.json()) as { places?: NewPlace[] };
+        places = (placesData.places ?? []).slice(0, 4).map((p) => ({
+          name: p.displayName?.text ?? "Unnamed place",
+          vicinity: p.formattedAddress ?? "",
           rating: p.rating ?? null,
-          openNow: p.opening_hours?.open_now ?? null,
-          placeId: p.place_id ?? null,
-          lat: p.geometry?.location.lat ?? null,
-          lng: p.geometry?.location.lng ?? null,
+          openNow: p.currentOpeningHours?.openNow ?? null,
+          placeId: null,
+          lat: p.location?.latitude ?? null,
+          lng: p.location?.longitude ?? null,
         }));
       }
     } catch (e) {
