@@ -140,6 +140,15 @@ export default function AdminScreen() {
     onError: () => setCNotice("Couldn't save. Check the email matches a user and the code is free (3–20 letters/numbers)."),
   });
 
+  const seedTrips = useMutation({
+    mutationFn: (id: number) => customFetch<{ trips: { title: string; url: string }[] }>(`/api/admin/users/${id}/demo-trips`, { method: "POST", responseType: "json" }),
+    onSuccess: (r) => {
+      const links = (r.trips ?? []).map((t) => `${t.title}: ${t.url}`).join("\n");
+      setCNotice(`Demo trips ready:\n${links}`);
+    },
+    onError: () => setCNotice("Couldn't create demo trips. Try again."),
+  });
+
   function submitCreator() {
     const user = usersQ.data?.users.find((u) => u.email.toLowerCase() === cEmail.trim().toLowerCase());
     if (!user) {
@@ -287,6 +296,9 @@ export default function AdminScreen() {
             <Text style={[styles.userEmail, { color: colors.foreground }]}>{c.name ?? c.email} · {c.code}</Text>
             <Text style={[styles.userMeta, { color: colors.mutedForeground }]}>{c.signups} signup{c.signups === 1 ? "" : "s"} via code</Text>
           </View>
+          <Pressable onPress={() => seedTrips.mutate(c.id)} disabled={seedTrips.isPending} style={[styles.miniAction, { borderColor: colors.border }]}>
+            <Text style={[styles.miniActionText, { color: colors.primary }]}>{seedTrips.isPending ? "…" : "Demo trips"}</Text>
+          </Pressable>
         </View>
       ))}
 
@@ -328,6 +340,8 @@ const styles = StyleSheet.create({
   statCard: { width: "31%", borderWidth: 1, padding: 12, minWidth: 96, flexGrow: 1 },
   statValue: { fontFamily: "Inter_700Bold", fontSize: 22, letterSpacing: -0.5 },
   statLabel: { fontFamily: "Inter_400Regular", fontSize: 11, marginTop: 2 },
+  miniAction: { borderWidth: 1, borderRadius: 9, paddingHorizontal: 12, paddingVertical: 8 },
+  miniActionText: { fontFamily: "Inter_600SemiBold", fontSize: 13 },
   evtRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 10 },
   evtName: { fontFamily: "Inter_500Medium", fontSize: 14 },
   evtCount: { fontFamily: "Inter_700Bold", fontSize: 14 },

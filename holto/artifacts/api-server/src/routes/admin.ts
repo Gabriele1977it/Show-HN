@@ -9,6 +9,7 @@ import {
   loyaltyProgramsTable,
   monitoredFlightsTable,
   pushTokensTable,
+  tripItemsTable,
   tripsTable,
   usersTable,
 } from "@workspace/db";
@@ -18,6 +19,7 @@ import { Router, type IRouter } from "express";
 
 import { requireAuth } from "../middlewares/auth";
 import { requireOwner } from "../middlewares/owner";
+import { DEMO_TRIPS } from "../lib/demo-trips";
 import { isOwnerEmail } from "../lib/tier";
 import { makeSlug } from "../lib/slug";
 
@@ -161,6 +163,94 @@ router.get("/admin/creators", async (_req, res): Promise<void> => {
     .groupBy(usersTable.referredBy);
   const byInviter = new Map(refRows.map((r) => [r.referredBy, Number(r.n)]));
   res.json({ creators: creators.map((c) => ({ ...c, signups: byInviter.get(c.id) ?? 0 })) });
+});
+
+// Seed a couple of polished, published demo trips for a creator so they have
+// something to share on day one. Idempotent: re-running reuses trips it already
+// created (matched by title) rather than duplicating them.
+router.post("/admin/users/:id/demo-trips", async (req, res): Promise<void> => {
+  const userId = parseInt(String(req.params.id), 10);
+  if (!Number.isInteger(userId)) {
+    res.status(400).json({ error: "Invalid user id." });
+    return;
+  }
+  const [user] = await db.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.id, userId)).limit(1);
+  if (!user) {
+    res.status(404).json({ error: "No user with that id." });
+    return;
+  }
+
+  const origin = (process.env.APP_ORIGIN ?? process.env.PUBLIC_URL ?? "https://app.holtotravel.com").replace(/\/+$/, "");
+  const dayMs = 24 * 60 * 60 * 1000;
+  const at = (start: Date, dayIndex: number, hour: number): Date => new Date(start.getTime() + dayIndex * dayMs + hour * 60 * 60 * 1000);
+  const dateStr = (d: Date): string => d.toISOString().slice(0, 10);
+
+  const out: { title: string; slug: string; url: string }[] = [];
+
+  for (const demo of DEMO_TRIPS) {
+    // Reuse an existing trip with the same title for this user (idempotent).
+    const [existing] = await db
+      .select({ id: tripsTable.id, publicSlug: tripsTable.publicSlug })
+      .from(tripsTable)
+      .where(and(eq(tripsTable.userId, userId), eq(tripsTable.title, demo.title)))
+      .limit(1);
+    if (existing?.publicSlug) {
+      out.push({ title: demo.title, slug: existing.publicSlug, url: `${origin}/t/${existing.publicSlug}` });
+      continue;
+    }
+
+    const start = new Date(Date.now() - demo.startDaysAgo * dayMs);
+    start.setUTCHours(0, 0, 0, 0);
+    const end = new Date(start.getTime() + (demo.lengthDays - 1) * dayMs);
+    const slug = makeSlug(10);
+
+    const [trip] = await db
+      .insert(tripsTable)
+      .values({
+        userId,
+        title: demo.title,
+        destination: demo.destination,
+        startDate: dateStr(start),
+        endDate: dateStr(end),
+        isPublic: true,
+        publicSlug: slug,
+        publicShowSpend: true,
+      })
+      .returning({ id: tripsTable.id });
+
+    if (demo.items.length) {
+      await db.insert(tripItemsTable).values(
+        demo.items.map((it) => ({
+          tripId: trip.id,
+          userId,
+          type: it.type,
+          title: it.title,
+          startAt: at(start, it.dayIndex, it.hour),
+          endAt: it.endHour != null ? at(start, it.endDayIndex ?? it.dayIndex, it.endHour) : null,
+          location: it.location ?? null,
+          reference: it.reference ?? null,
+        })),
+      );
+    }
+    if (demo.expenses.length) {
+      await db.insert(expensesTable).values(
+        demo.expenses.map((e) => ({
+          userId,
+          tripId: trip.id,
+          category: e.category,
+          merchant: e.merchant,
+          amount: e.amount,
+          currency: e.currency,
+          spentOn: dateStr(at(start, e.dayIndex, 12)),
+          reimbursable: e.reimbursable,
+        })),
+      );
+    }
+
+    out.push({ title: demo.title, slug, url: `${origin}/t/${slug}` });
+  }
+
+  res.json({ trips: out });
 });
 
 interface UserRow {
