@@ -101,10 +101,8 @@ function pickPrice(pkg: AwPackage): { price: number | null; currency: string } {
 const cache = new Map<string, { data: EsimPackage[]; ts: number }>();
 const CACHE_TTL_MS = 60 * 60 * 1000; // Airalo asks for at most one call/hour.
 
-// Data packages available for a two-letter country code, cheapest first.
-export async function getEsimPackages(countryCode: string): Promise<EsimPackage[]> {
-  const code = countryCode.trim().toUpperCase();
-  if (!/^[A-Z]{2}$/.test(code)) return [];
+// The full normalised package list for a country (cheapest first), cached.
+async function fetchCountryPackages(code: string): Promise<EsimPackage[]> {
   const hit = cache.get(code);
   if (hit && Date.now() - hit.ts < CACHE_TTL_MS) return hit.data;
 
@@ -141,11 +139,74 @@ export async function getEsimPackages(countryCode: string): Promise<EsimPackage[
       }
     }
     out.sort((a, b) => (a.price ?? Infinity) - (b.price ?? Infinity));
-    const top = out.slice(0, 6);
-    cache.set(code, { data: top, ts: Date.now() });
-    return top;
+    cache.set(code, { data: out, ts: Date.now() });
+    return out;
   } catch (err) {
     logger.warn({ err, code }, "Airalo packages errored");
     return [];
+  }
+}
+
+// Data packages to show for a country (cheapest six).
+export async function getEsimPackages(countryCode: string): Promise<EsimPackage[]> {
+  const code = countryCode.trim().toUpperCase();
+  if (!/^[A-Z]{2}$/.test(code)) return [];
+  return (await fetchCountryPackages(code)).slice(0, 6);
+}
+
+// Look up one package (for checkout — we need its exact price server-side rather
+// than trusting a client-supplied amount).
+export async function findPackage(countryCode: string, packageId: string): Promise<EsimPackage | null> {
+  const code = countryCode.trim().toUpperCase();
+  if (!/^[A-Z]{2}$/.test(code) || !packageId) return null;
+  return (await fetchCountryPackages(code)).find((p) => p.id === packageId) ?? null;
+}
+
+export interface PlacedEsim {
+  airaloOrderId: string;
+  iccid: string | null;
+  qrCodeUrl: string | null;
+  lpa: string | null;
+}
+
+interface AwOrderSim {
+  iccid?: string;
+  lpa?: string;
+  qrcode?: string;
+  qrcode_url?: string;
+}
+interface AwOrderResponse {
+  data?: { id?: string | number; code?: string; sims?: AwOrderSim[] };
+}
+
+// Place an Airalo order for one eSIM of a package. This spends the partner's
+// Airalo balance — only ever call it AFTER payment is confirmed. Returns the
+// eSIM details (ICCID + QR) or null on failure.
+export async function placeOrder(packageId: string, description: string): Promise<PlacedEsim | null> {
+  const token = await getToken();
+  if (!token || !packageId) return null;
+  try {
+    const res = await fetch(`${BASE}/v2/orders`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/x-www-form-urlencoded", accept: "application/json" },
+      body: new URLSearchParams({ package_id: packageId, quantity: "1", type: "sim", description: description.slice(0, 255) }),
+      signal: AbortSignal.timeout(20000),
+    });
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      logger.error({ status: res.status, packageId, body: body.slice(0, 400) }, "Airalo order failed");
+      return null;
+    }
+    const json = (await res.json()) as AwOrderResponse;
+    const sim = json.data?.sims?.[0];
+    return {
+      airaloOrderId: String(json.data?.id ?? json.data?.code ?? ""),
+      iccid: sim?.iccid ?? null,
+      qrCodeUrl: sim?.qrcode_url ?? null,
+      lpa: sim?.lpa ?? sim?.qrcode ?? null,
+    };
+  } catch (err) {
+    logger.error({ err, packageId }, "Airalo order errored");
+    return null;
   }
 }

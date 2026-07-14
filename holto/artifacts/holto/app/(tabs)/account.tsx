@@ -656,6 +656,13 @@ export default function AccountScreen() {
           />
           <View style={[styles.rowDivider, { backgroundColor: colors.border }]} />
           <SettingsRow
+            icon="wifi"
+            label="My eSIMs"
+            onPress={() => router.push("/esims" as never)}
+            colors={colors}
+          />
+          <View style={[styles.rowDivider, { backgroundColor: colors.border }]} />
+          <SettingsRow
             icon="star"
             label="What's new"
             onPress={() => router.push("/whats-new" as never)}

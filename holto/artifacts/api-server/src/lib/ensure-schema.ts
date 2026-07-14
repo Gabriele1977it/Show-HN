@@ -49,6 +49,25 @@ const STATEMENTS: string[] = [
     "updated_at" timestamp with time zone NOT NULL DEFAULT now(),
     CONSTRAINT "analytics_daily_day_event" UNIQUE ("day", "event")
   )`,
+  // eSIM purchases (Airalo + Stripe).
+  `CREATE TABLE IF NOT EXISTS "esim_orders" (
+    "id" serial PRIMARY KEY,
+    "user_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+    "country" text NOT NULL,
+    "package_id" text NOT NULL,
+    "package_title" text NOT NULL,
+    "data_label" text,
+    "days" integer,
+    "amount" numeric(10,2) NOT NULL,
+    "currency" text NOT NULL,
+    "status" text NOT NULL DEFAULT 'pending',
+    "stripe_session_id" text,
+    "airalo_order_id" text,
+    "iccid" text,
+    "qr_code_url" text,
+    "lpa" text,
+    "created_at" timestamp with time zone NOT NULL DEFAULT now()
+  )`,
 ];
 
 export async function ensureAppSchema(): Promise<void> {

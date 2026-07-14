@@ -2,13 +2,14 @@ import { customFetch } from "@workspace/api-client-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { router, useLocalSearchParams } from "expo-router";
 import React, { useMemo, useState } from "react";
-import { Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Icon } from "@/components/Icon";
 import { useColors } from "@/hooks/useColors";
 import { track } from "@/utils/analytics";
+import { openUrl } from "@/utils/openUrl";
 import {
   ESSENTIALS_LIST,
   findEssentials,
@@ -94,14 +95,25 @@ export default function DestinationScreen() {
     retry: false,
   });
 
-  const { data: esim } = useQuery<{ configured: boolean; packages: EsimPackage[] }>({
+  const { data: esim } = useQuery<{ configured: boolean; canBuy: boolean; packages: EsimPackage[] }>({
     queryKey: ["esim", selected?.code],
-    queryFn: () => customFetch<{ configured: boolean; packages: EsimPackage[] }>(`/api/esim/packages?country=${selected!.code}`, { responseType: "json" }),
+    queryFn: () => customFetch<{ configured: boolean; canBuy: boolean; packages: EsimPackage[] }>(`/api/esim/packages?country=${selected!.code}`, { responseType: "json" }),
     enabled: !!selected?.code,
     retry: false,
     staleTime: 30 * 60 * 1000,
   });
   const esimPackages = esim?.configured ? esim.packages : [];
+  const canBuyEsim = !!esim?.canBuy;
+
+  const buyEsim = useMutation({
+    mutationFn: (packageId: string) =>
+      customFetch<{ url: string }>("/api/esim/checkout", { method: "POST", body: JSON.stringify({ packageId, country: selected!.code }), responseType: "json" }),
+    onSuccess: (r) => {
+      if (!r?.url) return;
+      if (Platform.OS === "web" && typeof window !== "undefined") window.location.assign(r.url);
+      else openUrl(r.url);
+    },
+  });
   const savedCodes = new Set((watchlist?.destinations ?? []).map((d) => d.code));
 
   const toggleSave = useMutation({
@@ -255,20 +267,28 @@ export default function DestinationScreen() {
               <Text style={[styles.esimSub, { color: colors.mutedForeground }]}>Prepaid eSIM data — install before you land, no roaming bills.</Text>
             </View>
           </View>
-          {esimPackages.slice(0, 4).map((p) => (
-            <View key={p.id} style={[styles.esimRow, { borderTopColor: colors.border }]}>
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.esimData, { color: colors.foreground }]}>{p.data}{p.days ? ` · ${p.days} days` : ""}</Text>
-                <Text style={[styles.esimOp, { color: colors.mutedForeground }]}>{p.operator}</Text>
+          {esimPackages.slice(0, 4).map((p) => {
+            const priceStr = p.price != null ? `${p.currency === "GBP" ? "£" : p.currency === "USD" ? "$" : ""}${p.price.toFixed(2)}${p.currency !== "GBP" && p.currency !== "USD" ? ` ${p.currency}` : ""}` : null;
+            const loading = buyEsim.isPending && buyEsim.variables === p.id;
+            return (
+              <View key={p.id} style={[styles.esimRow, { borderTopColor: colors.border }]}>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.esimData, { color: colors.foreground }]}>{p.data}{p.days ? ` · ${p.days} days` : ""}</Text>
+                  <Text style={[styles.esimOp, { color: colors.mutedForeground }]}>{p.operator}</Text>
+                </View>
+                {canBuyEsim && p.price != null ? (
+                  <Pressable onPress={() => buyEsim.mutate(p.id)} disabled={buyEsim.isPending} style={[styles.esimBuy, { backgroundColor: colors.primary, opacity: buyEsim.isPending && !loading ? 0.5 : 1 }]}>
+                    {loading ? <ActivityIndicator size="small" color={colors.primaryForeground} /> : <Text style={[styles.esimBuyText, { color: colors.primaryForeground }]}>{priceStr}</Text>}
+                  </Pressable>
+                ) : priceStr ? (
+                  <Text style={[styles.esimPrice, { color: colors.primary }]}>{priceStr}</Text>
+                ) : null}
               </View>
-              {p.price != null ? (
-                <Text style={[styles.esimPrice, { color: colors.primary }]}>
-                  {p.currency === "GBP" ? "£" : p.currency === "USD" ? "$" : ""}{p.price.toFixed(2)}{p.currency !== "GBP" && p.currency !== "USD" ? ` ${p.currency}` : ""}
-                </Text>
-              ) : null}
-            </View>
-          ))}
-          <Text style={[styles.esimNote, { color: colors.mutedForeground }]}>Powered by Airalo · in-app purchase coming soon.</Text>
+            );
+          })}
+          <Text style={[styles.esimNote, { color: colors.mutedForeground }]}>
+            {canBuyEsim ? "Powered by Airalo · installs in minutes, no roaming bills." : "Powered by Airalo · in-app purchase coming soon."}
+          </Text>
         </Animated.View>
       ) : null}
 
@@ -302,6 +322,8 @@ const styles = StyleSheet.create({
   esimData: { fontFamily: "Inter_600SemiBold", fontSize: 14 },
   esimOp: { fontFamily: "Inter_400Regular", fontSize: 12, marginTop: 1 },
   esimPrice: { fontFamily: "Inter_700Bold", fontSize: 16 },
+  esimBuy: { minWidth: 68, height: 36, borderRadius: 10, alignItems: "center", justifyContent: "center", paddingHorizontal: 14 },
+  esimBuyText: { fontFamily: "Inter_700Bold", fontSize: 14 },
   esimNote: { fontFamily: "Inter_400Regular", fontSize: 11, marginTop: 12 },
   advisory: { flexDirection: "row", alignItems: "center", gap: 10, borderWidth: 1, borderRadius: 12, padding: 12, marginTop: 14 },
   advisoryDot: { width: 9, height: 9, borderRadius: 5 },
