@@ -137,7 +137,7 @@ export default function CostOfLivingScreen() {
       {isError && !isFetching ? (
         <View style={[styles.infoCard, { backgroundColor: colors.card, borderColor: colors.border, borderRadius: colors.radius }]}>
           <Text style={[styles.infoText, { color: colors.mutedForeground }]}>
-            Live cost-of-living data isn't available right now. This needs the ZYLA_API_KEY to be set — once it is, comparisons appear here.
+            Couldn't load the comparison just now. Check your connection and try again.
           </Text>
         </View>
       ) : null}
@@ -177,7 +177,7 @@ export default function CostOfLivingScreen() {
           </View>
 
           <Text style={[styles.note, { color: colors.mutedForeground }]}>
-            Estimates in GBP, refreshed daily. Rent is a one-bedroom flat; the monthly total assumes ~8 meals out. Real budgets vary with lifestyle and neighbourhood.
+            Curated estimates in GBP for one person. Rent is a one-bedroom flat; the monthly total assumes ~8 meals out. Real budgets vary with lifestyle and neighbourhood.
           </Text>
         </Animated.View>
       ) : null}

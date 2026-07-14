@@ -76,7 +76,7 @@ router.get("/admin/overview", async (_req, res): Promise<void> => {
       openAI: !!process.env.OPENAI_API_KEY,
       flights_airlabs: !!process.env.AIRLABS_API_KEY,
       maps_mapbox: !!process.env.MAPBOX_TOKEN,
-      costOfLiving_zyla: !!process.env.ZYLA_API_KEY,
+      costOfLiving: "bundled",
       stripe: !!process.env.STRIPE_SECRET_KEY,
       sessionSecret: !!process.env.SESSION_SECRET,
       ownerEmailsSet: !!process.env.OWNER_EMAILS,

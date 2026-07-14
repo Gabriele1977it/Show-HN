@@ -1,85 +1,50 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { CITIES, computeBudget, resolvePerGBP, type CityDef } from "../src/routes/cost-of-living.ts";
+import { computeBudget } from "../src/routes/cost-of-living.ts";
+import { CITY_COSTS } from "../src/lib/cost-of-living-data.ts";
 
-const london = CITIES.find((c) => c.code === "LON")!;
-const hurghada = CITIES.find((c) => c.code === "HRG")!;
+const london = CITY_COSTS.find((c) => c.code === "LON")!;
+const hurghada = CITY_COSTS.find((c) => c.code === "HRG")!;
+const delhi = CITY_COSTS.find((c) => c.code === "DEL")!;
 
-// A representative Zyla-style flat payload (local currency, string values).
-function londonRaw(): Record<string, string> {
-  return {
-    "Apartment (1 bedroom) Outside of Centre": "1,800.00 £",
-    "Apartment (1 bedroom) in City Centre": "2,400.00 £",
-    "Basic Utilities (Electricity, Heating, Water)": "240.00 £",
-    "Broadband Internet": "35.00 £",
-    "Meal, Inexpensive Restaurant": "20.00 £",
-    "Fitness Club, Monthly Fee for 1 Adult": "42.00 £",
-    "Monthly Pass (Regular Price)": "180.00 £",
-    "Milk (regular), (1 liter)": "1.20 £",
-    "Loaf of Fresh White Bread (500g)": "1.20 £",
-    "Rice (white), (1kg)": "1.60 £",
-    "Eggs (regular) (12)": "3.00 £",
-    "Chicken Fillets (1kg)": "6.50 £",
-  };
-}
-
-test("known city has a valid FX rate and metadata", () => {
-  assert.equal(london.currency, "GBP");
-  assert.equal(london.perGBP, 1);
-  assert.ok(hurghada.perGBP > 1, "Egyptian pound should be many-per-GBP");
+test("computeBudget passes GBP figures straight through (no FX distortion)", () => {
+  const b = computeBudget(london);
+  assert.equal(b.rent, london.rent);
+  assert.equal(b.utilities, london.utilities);
+  assert.equal(b.groceries, london.groceries);
+  assert.equal(b.dining, london.meal);
+  assert.equal(b.transport, london.transport);
+  assert.equal(b.gym, london.gym);
 });
 
-test("computeBudget reads real fields and converts a 1:1 currency unchanged", () => {
-  const b = computeBudget(londonRaw(), london);
-  assert.equal(b.rent, 1800);
-  assert.equal(b.utilities, 275); // 240 + 35
-  assert.equal(b.dining, 20);
-  assert.equal(b.transport, 180);
-  assert.equal(b.gym, 42);
-  assert.ok(b.groceries > 0, "grocery basket should compute from staples");
-  assert.equal(
-    b.monthlyTotal,
-    b.rent + b.utilities + b.groceries + b.dining * 8 + b.transport + b.gym,
-  );
+test("monthlyTotal assumes 8 meals out, matching the app copy", () => {
+  const b = computeBudget(london);
+  assert.equal(b.monthlyTotal, b.rent + b.utilities + b.groceries + b.dining * 8 + b.transport + b.gym);
 });
 
-test("FX conversion divides local amounts to GBP", () => {
-  const egp: CityDef = { ...hurghada, perGBP: 100 };
-  const raw = {
-    "Apartment (1 bedroom) Outside of Centre": "14,000", // /100 = 140
-    "Meal, Inexpensive Restaurant": "150", // /100 = 1.5 -> rounds to 2
-  };
-  const b = computeBudget(raw, egp);
-  assert.equal(b.rent, 140);
-  assert.equal(b.dining, 2);
+test("relative levels are realistic: Hurghada and Delhi are far cheaper than London", () => {
+  const lon = computeBudget(london).monthlyTotal;
+  const hrg = computeBudget(hurghada).monthlyTotal;
+  const del = computeBudget(delhi).monthlyTotal;
+  // Both should be at least 60% cheaper than London — the cases the user flagged.
+  assert.ok(hrg < lon * 0.4, `Hurghada (${hrg}) should be well under 40% of London (${lon})`);
+  assert.ok(del < lon * 0.4, `Delhi (${del}) should be well under 40% of London (${lon})`);
 });
 
-test("missing optional fields fall back to a scale of the meal price (never crash)", () => {
-  const raw = { "Meal, Inexpensive Restaurant": "10" };
-  const b = computeBudget(raw, london);
-  assert.equal(b.dining, 10);
-  assert.equal(b.rent, 0);
-  assert.equal(b.transport, 70); // dining * 7
-  assert.equal(b.gym, 25); // dining * 2.5
-  assert.equal(b.groceries, 160); // dining * 16 (no staples present)
+test("Delhi is present (the case that previously broke the comparison)", () => {
+  assert.ok(delhi, "Delhi must be in the dataset");
 });
 
-test("resolvePerGBP prefers a valid live rate over the fallback", () => {
-  assert.equal(resolvePerGBP(hurghada, { EGP: 63 }), 63);
-});
-
-test("resolvePerGBP falls back when the rate is missing or invalid", () => {
-  assert.equal(resolvePerGBP(hurghada, {}), hurghada.perGBP);
-  assert.equal(resolvePerGBP(hurghada, { EGP: 0 }), hurghada.perGBP);
-  assert.equal(resolvePerGBP(hurghada, { EGP: -5 }), hurghada.perGBP);
-});
-
-test("every curated city has unique code and sane FX", () => {
-  const codes = new Set(CITIES.map((c) => c.code));
-  assert.equal(codes.size, CITIES.length, "codes must be unique");
-  for (const c of CITIES) {
-    assert.ok(c.perGBP > 0, `${c.code} perGBP must be positive`);
-    assert.ok(c.city.length > 0 && c.country.length > 0, `${c.code} needs city+country`);
+test("every city has a unique code and positive, sane figures", () => {
+  const codes = new Set(CITY_COSTS.map((c) => c.code));
+  assert.equal(codes.size, CITY_COSTS.length, "codes must be unique");
+  for (const c of CITY_COSTS) {
+    for (const field of ["rent", "utilities", "groceries", "meal", "transport", "gym"] as const) {
+      assert.ok(c[field] > 0, `${c.code} ${field} must be positive`);
+    }
+    assert.ok(c.label.length > 0 && c.country.length > 0, `${c.code} needs label + country`);
+    // A one-bed rent that is below a single meal is almost certainly a data slip.
+    assert.ok(c.rent > c.meal, `${c.code} rent should exceed a single meal`);
   }
 });
