@@ -128,7 +128,7 @@ ${locationNote}
 
 ${userContext ? `What you know about this traveller (use these facts for personal questions about their flights, trips or days in a country — quote the specific numbers/dates):\n${userContext}\n\n` : ""}Their question: "${question.trim()}"
 
-${placesContext ? placesContext + "\n\n" : ""}Give a short, natural, helpful answer (3-5 sentences max). ${places.length > 0 ? "If relevant, mention the most helpful nearby option by name with practical context." : "Give clear, accurate travel advice."} If they ask about their own flights, trips or days in a country, answer from the facts above; if a fact isn't listed, say you don't have it rather than guessing. Be warm and direct like a knowledgeable friend — never robotic, never vague.`;
+${placesContext ? placesContext + "\n\n" : ""}Give a short, natural, helpful answer (3-5 sentences max). ${places.length > 0 ? "Recommend the most helpful nearby option by name with practical context. Refer to the area using the place addresses above — never try to name their city or region from raw coordinates." : "Give clear, accurate travel advice. Don't guess the traveller's city or region from coordinates; only reference a location if it's stated in the facts above."} If they ask about their own flights, trips or days in a country, answer from the facts above; if a fact isn't listed, say you don't have it rather than guessing. Write complete sentences and finish your final thought. Be warm and direct like a knowledgeable friend — never robotic, never vague.`;
 
   const gate = await allowAiCall(req.auth!.userId);
   if (!gate.allowed) {
@@ -136,8 +136,12 @@ ${placesContext ? placesContext + "\n\n" : ""}Give a short, natural, helpful ans
     return;
   }
 
+  // Generous output budget: the prompt already caps the answer to 3–5
+  // sentences, but a 2.5 model can spend part of the budget before the visible
+  // reply, so a tight cap truncated answers mid-sentence. Real cost is driven by
+  // tokens actually generated, not the ceiling.
   const answer =
-    (await generateText(prompt, { maxTokens: 260, temperature: 0.4 })) ??
+    (await generateText(prompt, { maxTokens: 800, temperature: 0.4 })) ??
     "I couldn't get a response right now — try again in a moment.";
   if (answer.startsWith("I couldn't get")) {
     logger.warn("ask: LLM returned no answer");

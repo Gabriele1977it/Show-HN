@@ -91,8 +91,11 @@ async function geminiCall(
     const json = (await res.json()) as {
       candidates?: Array<{ content?: { parts?: Array<{ text?: string }> }; finishReason?: string }>;
     };
-    const text = json.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (typeof text === "string" && text.trim()) return { kind: "ok", text: text.trim() };
+    // Concatenate every text part — Gemini can split a reply across multiple
+    // parts, and reading only parts[0] silently drops the rest of the answer.
+    const parts = json.candidates?.[0]?.content?.parts ?? [];
+    const text = parts.map((p) => p.text ?? "").join("").trim();
+    if (text) return { kind: "ok", text };
     const finish = json.candidates?.[0]?.finishReason;
     return { kind: "fail", diag: `Gemini returned no text${finish ? ` (${finish})` : ""}` };
   } catch (err) {
