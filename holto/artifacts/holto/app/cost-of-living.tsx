@@ -12,8 +12,8 @@ interface CityOpt { code: string; label: string; country: string }
 interface Budget {
   rent: number; utilities: number; groceries: number; dining: number; transport: number; gym: number; monthlyTotal: number;
 }
-interface CityBudget { code: string; label: string; currency: string; budget: Budget }
-interface Comparison { a: CityBudget; b: CityBudget; cachedUntil: string }
+interface CityBudget { code: string; label: string; country: string; currency: string; budget: Budget; priceIndex: number | null }
+interface Comparison { a: CityBudget; b: CityBudget; dataVersion?: string; priceIndex?: { source: string; year: number; live: boolean }; cachedUntil: string }
 
 const ROWS: { key: keyof Budget; label: string; icon: IconName; hint?: string }[] = [
   { key: "rent", label: "Rent", icon: "home" as IconName, hint: "1-bed flat" },
@@ -176,8 +176,26 @@ export default function CostOfLivingScreen() {
             </View>
           </View>
 
+          {data.a.priceIndex != null && data.b.priceIndex != null ? (
+            <View style={[styles.wbCard, { backgroundColor: colors.card, borderColor: colors.border, borderRadius: colors.radius }]}>
+              <Text style={[styles.wbTitle, { color: colors.foreground }]}>Overall price level · reality check</Text>
+              <View style={styles.wbRow}>
+                <Text style={[styles.wbCity, { color: colors.mutedForeground }]} numberOfLines={1}>{data.a.label}</Text>
+                <Text style={[styles.wbVal, { color: colors.primary }]}>{data.a.priceIndex}</Text>
+              </View>
+              <View style={styles.wbRow}>
+                <Text style={[styles.wbCity, { color: colors.mutedForeground }]} numberOfLines={1}>{data.b.label}</Text>
+                <Text style={[styles.wbVal, { color: colors.primary }]}>{data.b.priceIndex}</Text>
+              </View>
+              <Text style={[styles.wbFoot, { color: colors.mutedForeground }]}>
+                Country-wide index, UK = 100. Source: {data.priceIndex?.source ?? "World Bank"}
+                {data.priceIndex?.year ? ` (${data.priceIndex.year})` : ""}.
+              </Text>
+            </View>
+          ) : null}
+
           <Text style={[styles.note, { color: colors.mutedForeground }]}>
-            Curated estimates in GBP for one person. Rent is a one-bedroom flat; the monthly total assumes ~8 meals out. Real budgets vary with lifestyle and neighbourhood.
+            The monthly breakdown is a HOLTO estimate in GBP for one person — rent is a one-bedroom flat and the total assumes ~8 meals out. The reality-check index above is real World Bank data. Actual budgets vary with lifestyle and neighbourhood.
           </Text>
         </Animated.View>
       ) : null}
@@ -216,6 +234,12 @@ const styles = StyleSheet.create({
   totalLabel: { flex: 1.4, fontFamily: "Inter_700Bold", fontSize: 14 },
   totalVal: { flex: 1, fontFamily: "Inter_700Bold", fontSize: 16, textAlign: "right" },
   note: { fontFamily: "Inter_400Regular", fontSize: 12, lineHeight: 18, marginTop: 14 },
+  wbCard: { borderWidth: 1, padding: 16, marginTop: 16 },
+  wbTitle: { fontFamily: "Inter_700Bold", fontSize: 14, marginBottom: 10 },
+  wbRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 5 },
+  wbCity: { flex: 1, fontFamily: "Inter_500Medium", fontSize: 14 },
+  wbVal: { fontFamily: "Inter_700Bold", fontSize: 18, marginLeft: 12 },
+  wbFoot: { fontFamily: "Inter_400Regular", fontSize: 11, lineHeight: 16, marginTop: 8 },
   infoCard: { borderWidth: 1, padding: 18, marginTop: 20 },
   infoText: { fontFamily: "Inter_400Regular", fontSize: 14, lineHeight: 21 },
   modalBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
