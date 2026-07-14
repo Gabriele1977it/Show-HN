@@ -16,6 +16,16 @@ import {
   type WaterSafety,
 } from "@/constants/countryEssentials";
 
+interface EsimPackage {
+  id: string;
+  operator: string;
+  title: string;
+  data: string;
+  days: number | null;
+  price: number | null;
+  currency: string;
+}
+
 const WATER_META: Record<WaterSafety, { label: string; color: string; emoji: string }> = {
   safe: { label: "Tap water is safe to drink", color: "#2E7D52", emoji: "💧" },
   bottled: { label: "Bottled water recommended", color: "#C9A24B", emoji: "🚰" },
@@ -83,6 +93,15 @@ export default function DestinationScreen() {
     queryFn: () => customFetch<{ destinations: { code: string }[] }>("/api/watchlist", { responseType: "json" }),
     retry: false,
   });
+
+  const { data: esim } = useQuery<{ configured: boolean; packages: EsimPackage[] }>({
+    queryKey: ["esim", selected?.code],
+    queryFn: () => customFetch<{ configured: boolean; packages: EsimPackage[] }>(`/api/esim/packages?country=${selected!.code}`, { responseType: "json" }),
+    enabled: !!selected?.code,
+    retry: false,
+    staleTime: 30 * 60 * 1000,
+  });
+  const esimPackages = esim?.configured ? esim.packages : [];
   const savedCodes = new Set((watchlist?.destinations ?? []).map((d) => d.code));
 
   const toggleSave = useMutation({
@@ -227,6 +246,32 @@ export default function DestinationScreen() {
         <Row emoji="💡" label="Good to know" value={c.tip} colors={colors} />
       </Animated.View>
 
+      {esimPackages.length > 0 ? (
+        <Animated.View entering={FadeInDown.delay(200).duration(400)} style={[styles.card, colors.shadow, { backgroundColor: colors.card, borderColor: colors.border, borderRadius: colors.radius }]}>
+          <View style={styles.esimHead}>
+            <Text style={{ fontSize: 20 }}>📶</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.esimTitle, { color: colors.foreground }]}>Stay connected in {c.name}</Text>
+              <Text style={[styles.esimSub, { color: colors.mutedForeground }]}>Prepaid eSIM data — install before you land, no roaming bills.</Text>
+            </View>
+          </View>
+          {esimPackages.slice(0, 4).map((p) => (
+            <View key={p.id} style={[styles.esimRow, { borderTopColor: colors.border }]}>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.esimData, { color: colors.foreground }]}>{p.data}{p.days ? ` · ${p.days} days` : ""}</Text>
+                <Text style={[styles.esimOp, { color: colors.mutedForeground }]}>{p.operator}</Text>
+              </View>
+              {p.price != null ? (
+                <Text style={[styles.esimPrice, { color: colors.primary }]}>
+                  {p.currency === "GBP" ? "£" : p.currency === "USD" ? "$" : ""}{p.price.toFixed(2)}{p.currency !== "GBP" && p.currency !== "USD" ? ` ${p.currency}` : ""}
+                </Text>
+              ) : null}
+            </View>
+          ))}
+          <Text style={[styles.esimNote, { color: colors.mutedForeground }]}>Powered by Airalo · in-app purchase coming soon.</Text>
+        </Animated.View>
+      ) : null}
+
       <Text style={[styles.note, { color: colors.mutedForeground }]}>
         Guidance for travellers — always confirm emergency numbers and local rules on the ground.
       </Text>
@@ -250,6 +295,14 @@ const styles = StyleSheet.create({
   saveText: { fontFamily: "Inter_600SemiBold", fontSize: 13 },
   watchLink: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 12 },
   watchLinkText: { fontFamily: "Inter_600SemiBold", fontSize: 14 },
+  esimHead: { flexDirection: "row", gap: 12, alignItems: "flex-start" },
+  esimTitle: { fontFamily: "Inter_600SemiBold", fontSize: 15 },
+  esimSub: { fontFamily: "Inter_400Regular", fontSize: 12, lineHeight: 17, marginTop: 2 },
+  esimRow: { flexDirection: "row", alignItems: "center", gap: 12, borderTopWidth: 1, paddingTop: 12, marginTop: 12 },
+  esimData: { fontFamily: "Inter_600SemiBold", fontSize: 14 },
+  esimOp: { fontFamily: "Inter_400Regular", fontSize: 12, marginTop: 1 },
+  esimPrice: { fontFamily: "Inter_700Bold", fontSize: 16 },
+  esimNote: { fontFamily: "Inter_400Regular", fontSize: 11, marginTop: 12 },
   advisory: { flexDirection: "row", alignItems: "center", gap: 10, borderWidth: 1, borderRadius: 12, padding: 12, marginTop: 14 },
   advisoryDot: { width: 9, height: 9, borderRadius: 5 },
   advisoryLabel: { fontFamily: "Inter_600SemiBold", fontSize: 13 },
