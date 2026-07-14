@@ -13,7 +13,7 @@
 //
 // To update: adjust the numbers below and bump DATA_VERSION. Keep values in GBP.
 
-export const DATA_VERSION = "2026-01";
+export const DATA_VERSION = "2026-07";
 
 export interface CityCost {
   code: string;
@@ -54,9 +54,14 @@ export const CITY_COSTS: CityCost[] = [
   { code: "IST", label: "Istanbul", country: "turkey", currency: "TRY", rent: 400, utilities: 60, groceries: 130, meal: 6, transport: 22, gym: 28 },
 
   // — North Africa & Middle East —
-  { code: "HRG", label: "Hurghada", country: "egypt", currency: "EGP", rent: 170, utilities: 40, groceries: 90, meal: 4, transport: 15, gym: 22 },
-  { code: "SSH", label: "Sharm el-Sheikh", country: "egypt", currency: "EGP", rent: 200, utilities: 45, groceries: 100, meal: 5, transport: 15, gym: 25 },
-  { code: "CAI", label: "Cairo", country: "egypt", currency: "EGP", rent: 200, utilities: 40, groceries: 95, meal: 4, transport: 12, gym: 20 },
+  // Hurghada calibrated from resident feedback (El Gouna/Hurghada, Jul 2026):
+  // groceries run ~£5-10/day; a proper inexpensive-restaurant meal is well above
+  // the ~£3 street-stall price; and most visitors rely on taxis, not a cheap bus
+  // pass. Sharm (a comparable Red Sea resort) nudged to match; Cairo is a
+  // non-resort mega-city with genuinely cheaper local food, so it stays lower.
+  { code: "HRG", label: "Hurghada", country: "egypt", currency: "EGP", rent: 200, utilities: 45, groceries: 170, meal: 7, transport: 25, gym: 25 },
+  { code: "SSH", label: "Sharm el-Sheikh", country: "egypt", currency: "EGP", rent: 220, utilities: 45, groceries: 160, meal: 7, transport: 25, gym: 27 },
+  { code: "CAI", label: "Cairo", country: "egypt", currency: "EGP", rent: 200, utilities: 40, groceries: 110, meal: 5, transport: 12, gym: 20 },
   { code: "RAK", label: "Marrakech", country: "morocco", currency: "MAD", rent: 300, utilities: 50, groceries: 130, meal: 5, transport: 15, gym: 25 },
   { code: "DXB", label: "Dubai", country: "united arab emirates", currency: "AED", rent: 1400, utilities: 150, groceries: 230, meal: 12, transport: 60, gym: 55 },
 
