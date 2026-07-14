@@ -39,11 +39,25 @@ export const COUNTRY_ISO3: Record<string, string> = {
   singapore: "SGP",
   vietnam: "VNM",
   japan: "JPN",
+  "south korea": "KOR",
+  philippines: "PHL",
+  cambodia: "KHM",
+  "sri lanka": "LKA",
+  estonia: "EST",
+  croatia: "HRV",
+  bulgaria: "BGR",
+  romania: "ROU",
+  albania: "ALB",
   "south africa": "ZAF",
   georgia: "GEO",
   "united states": "USA",
   canada: "CAN",
   mexico: "MEX",
+  colombia: "COL",
+  argentina: "ARG",
+  brazil: "BRA",
+  peru: "PER",
+  "costa rica": "CRI",
   australia: "AUS",
 };
 
@@ -56,7 +70,9 @@ export const WB_SNAPSHOT: Record<string, number> = {
   ITA: 0.72, GRC: 0.6, CZE: 0.55, HUN: 0.5, POL: 0.5, TUR: 0.28, EGY: 0.22,
   MAR: 0.42, ARE: 0.72, IND: 0.25, THA: 0.42, IDN: 0.37, MYS: 0.45, SGP: 0.85,
   VNM: 0.38, JPN: 0.85, ZAF: 0.42, GEO: 0.38, USA: 1.0, CAN: 0.98, MEX: 0.6,
-  AUS: 1.05,
+  AUS: 1.05, KOR: 0.78, PHL: 0.35, KHM: 0.35, LKA: 0.3, EST: 0.62, HRV: 0.55,
+  BGR: 0.42, ROU: 0.45, ALB: 0.38, COL: 0.35, ARG: 0.35, BRA: 0.42, PER: 0.4,
+  CRI: 0.55,
 };
 export const WB_SNAPSHOT_YEAR = 2023;
 

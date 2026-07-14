@@ -40,6 +40,8 @@ export const CITY_COSTS: CityCost[] = [
   { code: "BCN", label: "Barcelona", country: "spain", currency: "EUR", rent: 1050, utilities: 130, groceries: 200, meal: 13, transport: 40, gym: 42 },
   { code: "MAD", label: "Madrid", country: "spain", currency: "EUR", rent: 1050, utilities: 130, groceries: 200, meal: 13, transport: 55, gym: 40 },
   { code: "VLC", label: "Valencia", country: "spain", currency: "EUR", rent: 800, utilities: 120, groceries: 180, meal: 12, transport: 42, gym: 38 },
+  { code: "LPA", label: "Las Palmas (Gran Canaria)", country: "spain", currency: "EUR", rent: 850, utilities: 115, groceries: 185, meal: 11, transport: 35, gym: 35 },
+  { code: "FNC", label: "Madeira (Funchal)", country: "portugal", currency: "EUR", rent: 850, utilities: 110, groceries: 175, meal: 11, transport: 35, gym: 35 },
 
   // — Western & Central Europe —
   { code: "PAR", label: "Paris", country: "france", currency: "EUR", rent: 1300, utilities: 160, groceries: 240, meal: 16, transport: 86, gym: 38 },
@@ -52,6 +54,13 @@ export const CITY_COSTS: CityCost[] = [
   { code: "BUD", label: "Budapest", country: "hungary", currency: "HUF", rent: 550, utilities: 150, groceries: 150, meal: 7, transport: 25, gym: 30 },
   { code: "KRK", label: "Krakow", country: "poland", currency: "PLN", rent: 600, utilities: 160, groceries: 150, meal: 7, transport: 22, gym: 30 },
   { code: "IST", label: "Istanbul", country: "turkey", currency: "TRY", rent: 400, utilities: 60, groceries: 130, meal: 6, transport: 22, gym: 28 },
+
+  // — Eastern Europe, Baltics & Balkans (digital-nomad-visa hubs) —
+  { code: "TLL", label: "Tallinn", country: "estonia", currency: "EUR", rent: 700, utilities: 130, groceries: 200, meal: 12, transport: 30, gym: 35 },
+  { code: "SPU", label: "Split", country: "croatia", currency: "EUR", rent: 650, utilities: 140, groceries: 190, meal: 12, transport: 30, gym: 35 },
+  { code: "SOF", label: "Sofia", country: "bulgaria", currency: "BGN", rent: 500, utilities: 130, groceries: 150, meal: 8, transport: 25, gym: 30 },
+  { code: "BUH", label: "Bucharest", country: "romania", currency: "RON", rent: 500, utilities: 130, groceries: 150, meal: 9, transport: 20, gym: 30 },
+  { code: "TIA", label: "Tirana", country: "albania", currency: "ALL", rent: 400, utilities: 90, groceries: 140, meal: 7, transport: 15, gym: 25 },
 
   // — North Africa & Middle East —
   // Hurghada calibrated from resident feedback (El Gouna/Hurghada, Jul 2026):
@@ -69,14 +78,21 @@ export const CITY_COSTS: CityCost[] = [
   { code: "DEL", label: "Delhi", country: "india", currency: "INR", rent: 200, utilities: 55, groceries: 95, meal: 3, transport: 15, gym: 18 },
   { code: "BOM", label: "Mumbai", country: "india", currency: "INR", rent: 350, utilities: 55, groceries: 110, meal: 3.5, transport: 15, gym: 22 },
   { code: "BLR", label: "Bengaluru", country: "india", currency: "INR", rent: 220, utilities: 50, groceries: 100, meal: 3, transport: 15, gym: 20 },
+  { code: "GOI", label: "Goa", country: "india", currency: "INR", rent: 250, utilities: 55, groceries: 100, meal: 4, transport: 20, gym: 22 },
   { code: "BKK", label: "Bangkok", country: "thailand", currency: "THB", rent: 400, utilities: 60, groceries: 130, meal: 3, transport: 30, gym: 30 },
+  { code: "CNX", label: "Chiang Mai", country: "thailand", currency: "THB", rent: 300, utilities: 50, groceries: 120, meal: 3, transport: 20, gym: 25 },
   { code: "DPS", label: "Bali (Denpasar)", country: "indonesia", currency: "IDR", rent: 350, utilities: 55, groceries: 120, meal: 3, transport: 15, gym: 35 },
   { code: "KUL", label: "Kuala Lumpur", country: "malaysia", currency: "MYR", rent: 350, utilities: 45, groceries: 120, meal: 3, transport: 25, gym: 35 },
   { code: "SIN", label: "Singapore", country: "singapore", currency: "SGD", rent: 1900, utilities: 150, groceries: 250, meal: 5, transport: 55, gym: 70 },
   { code: "SAI", label: "Ho Chi Minh City", country: "vietnam", currency: "VND", rent: 350, utilities: 55, groceries: 110, meal: 2.5, transport: 12, gym: 30 },
+  { code: "DAD", label: "Da Nang", country: "vietnam", currency: "VND", rent: 320, utilities: 50, groceries: 110, meal: 3, transport: 12, gym: 25 },
+  { code: "CEB", label: "Cebu", country: "philippines", currency: "PHP", rent: 350, utilities: 60, groceries: 130, meal: 4, transport: 15, gym: 30 },
+  { code: "PNH", label: "Phnom Penh", country: "cambodia", currency: "USD", rent: 400, utilities: 70, groceries: 130, meal: 4, transport: 15, gym: 35 },
+  { code: "CMB", label: "Colombo", country: "sri lanka", currency: "LKR", rent: 300, utilities: 45, groceries: 120, meal: 4, transport: 12, gym: 25 },
 
   // — East Asia —
   { code: "TYO", label: "Tokyo", country: "japan", currency: "JPY", rent: 900, utilities: 130, groceries: 240, meal: 6, transport: 60, gym: 60 },
+  { code: "SEL", label: "Seoul", country: "south korea", currency: "KRW", rent: 900, utilities: 130, groceries: 260, meal: 6, transport: 45, gym: 55 },
 
   // — Africa (Sub-Saharan) & Caucasus —
   { code: "CPT", label: "Cape Town", country: "south africa", currency: "ZAR", rent: 550, utilities: 90, groceries: 170, meal: 9, transport: 40, gym: 35 },
@@ -86,5 +102,11 @@ export const CITY_COSTS: CityCost[] = [
   { code: "NYC", label: "New York", country: "united states", currency: "USD", rent: 2800, utilities: 160, groceries: 300, meal: 20, transport: 108, gym: 60 },
   { code: "TOR", label: "Toronto", country: "canada", currency: "CAD", rent: 1500, utilities: 110, groceries: 250, meal: 16, transport: 90, gym: 40 },
   { code: "MEX", label: "Mexico City", country: "mexico", currency: "MXN", rent: 550, utilities: 45, groceries: 160, meal: 6, transport: 18, gym: 35 },
+  { code: "PCM", label: "Playa del Carmen", country: "mexico", currency: "MXN", rent: 650, utilities: 55, groceries: 170, meal: 7, transport: 20, gym: 40 },
+  { code: "MDE", label: "Medellín", country: "colombia", currency: "COP", rent: 450, utilities: 60, groceries: 150, meal: 5, transport: 20, gym: 30 },
+  { code: "BUE", label: "Buenos Aires", country: "argentina", currency: "ARS", rent: 450, utilities: 55, groceries: 160, meal: 7, transport: 15, gym: 30 },
+  { code: "RIO", label: "Rio de Janeiro", country: "brazil", currency: "BRL", rent: 600, utilities: 70, groceries: 190, meal: 8, transport: 30, gym: 35 },
+  { code: "LIM", label: "Lima", country: "peru", currency: "PEN", rent: 450, utilities: 50, groceries: 150, meal: 5, transport: 18, gym: 30 },
+  { code: "SJO", label: "San José", country: "costa rica", currency: "CRC", rent: 650, utilities: 90, groceries: 200, meal: 9, transport: 30, gym: 40 },
   { code: "SYD", label: "Sydney", country: "australia", currency: "AUD", rent: 1700, utilities: 140, groceries: 260, meal: 16, transport: 110, gym: 45 },
 ];
