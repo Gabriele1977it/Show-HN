@@ -1,37 +1,104 @@
 # HOLTO
 
-**An honest travel-disruption companion.** When a flight is delayed or cancelled,
-HOLTO explains the traveller's passenger rights (UK261 / EU261 guidance) in plain
-English, gives a calm step-by-step checklist, and **proactively monitors** the
-flight — pushing an alert the moment its status changes, even with the app closed.
+**The honest travel companion.** HOLTO helps constant travellers, expats and
+digital nomads handle the messy parts of a life lived abroad — flight
+disruptions, passenger rights, day-to-day essentials on the ground — without
+ever inventing a fact. When information is uncertain, HOLTO says so and links to
+the authoritative source.
 
-> Brand promise: **Travel. Relocate. Live better abroad.** The founder's background
-> is fraud analysis, so trust and straight talk are the whole point — HOLTO never
-> invents rights or amounts, and always points to the official process for anything
-> binding.
+> **Travel. Relocate. Live better abroad.** The founder's background is fraud
+> analysis, so trust is the whole product: HOLTO never fabricates rights, amounts,
+> visa rules or safety levels, and always points to the official process for
+> anything binding.
 
-HOLTO is part of the [MadLabs](../README.md) umbrella but, unlike EchoDeck and
-Agent Arena, it is a **self-contained pnpm monorepo** with its own stack and
-deploys independently.
+Live as a PWA at **[app.holtotravel.com](https://app.holtotravel.com)**.
+
+---
+
+## What it does
+
+**Disruption & rights (the core)**
+- **Proactive flight monitoring** — tracks your flight and pushes an alert the
+  moment its status changes, *even with the app closed*.
+- **Passenger rights** — plain-English UK261 / EU261 guidance, computed
+  deterministically (never invented) with a calm step-by-step checklist.
+- **Compensation claims** — generates an authoritative claim letter + amount and
+  tracks it through to payment, with factual escalation routes (CAA / NEB / ADR /
+  small claims).
+
+**The toolkit** — everything a constant traveller needs, in one place:
+
+| Tool | What it does | Data source |
+|------|--------------|-------------|
+| Your travel day | Next flight hour-by-hour, live status | AirLabs |
+| Destination guide | Plugs, emergency numbers, tap water, tipping | Bundled (offline) |
+| Visa & entry | Do you need a visa? guidance + official link | Passport Index + gov.uk |
+| Travel alerts | Live government safety advisories | US State Dept + travel-advisory.info |
+| Cost of living | Compare a month's essentials between cities | Curated + World Bank anchor |
+| Currency converter | 160+ currencies, works offline | open.er-api.com |
+| eSIM data plans | Prepaid data for 190+ countries | Airalo + Stripe |
+| Best light | Golden/blue hour for any place & date | Offline solar maths |
+| Expenses | Scan receipts, split, export a GBP report | AI (optional) |
+| Residency & tax days | Schengen 90/180, 183-day rule | Deterministic |
+| Airport timing | When to leave, using live traffic | Mapbox |
+| Loyalty & points | Every balance in one wallet, auto-imported | AwardWallet |
+| Trips / Add from a booking | Paste a confirmation → HOLTO builds the trip | AI (optional) |
+| Best light, news, weather… | plus live travel news and destination weather | Free feeds |
+
+### The trust philosophy in practice
+
+Every feature is built to **fail toward honesty**, and to run on free / minimum-cost
+data wherever possible:
+
+- **Deterministic first.** Rights, compensation amounts, solar times, residency
+  counts and cost breakdowns are computed, not guessed.
+- **Live authoritative sources, with graceful fallback.** Advisories, FX,
+  flights, visa data and World Bank prices are fetched live and cached; if a feed
+  is unreachable the app degrades to a safe fallback rather than showing nothing —
+  or worse, something wrong.
+- **Safety fails toward caution.** Travel-alert levels can only ever be *raised*
+  by the automated US State Department feed (Level 3 → reconsider, Level 4 → do not
+  travel) — a lagging source can never make a dangerous country look safe.
+- **Always link to the authority.** Visa and safety guidance carry a clear "verify
+  before you fly" disclaimer and a deep link to the official government source.
+
+---
 
 ## Stack
 
-- **App** — Expo / React Native (Expo Router), also builds for web (`artifacts/holto`)
-- **API** — Express 5, PostgreSQL + Drizzle ORM, OpenAI (AI companion), AirLabs
-  (live flight data), Stripe (billing) (`artifacts/api-server`)
-- **Worker** — background flight-monitoring poller → push + email alerts. Runs as
-  a second entry point of the API package (`artifacts/api-server`, `src/worker.ts`)
-  so it shares the flight-lookup, db, and alert code.
+- **App** — Expo / React Native (Expo Router); also builds to a PWA for web
+  (`artifacts/holto`)
+- **API** — Express 5, PostgreSQL + Drizzle ORM (`artifacts/api-server`)
+- **AI** — Google Gemini (primary) with an OpenAI fallback, used *for wording
+  only* — never to decide a fact
+- **Worker** — background flight-monitoring poller → push + email alerts, a second
+  entry point of the API package (`src/worker.ts`) so it shares the flight, DB and
+  alert code
 - **Shared libs** — `lib/db` (schema), `lib/api-spec` (OpenAPI), `lib/api-zod`,
   `lib/api-client-react` (generated hooks)
-- pnpm workspaces, Node 24, TypeScript 5.9, esbuild
+- pnpm workspaces · TypeScript 5.9 · esbuild
+
+### Monorepo layout
+
+```
+holto/
+├─ artifacts/
+│  ├─ holto/         # Expo / React Native app (+ PWA)
+│  ├─ api-server/    # Express API + background worker
+│  └─ mockup-sandbox/
+├─ lib/              # db, api-spec, api-zod, api-client-react
+├─ render.yaml       # Render Blueprint (repo root)
+└─ .env.example
+```
+
+---
 
 ## Run locally
 
 ```bash
 cd holto
 pnpm install
-cp .env.example .env            # then fill in the values (see below)
+cp .env.example .env            # then fill in values (see below)
 
 # 1. Point DATABASE_URL at a Postgres instance, then push the schema:
 pnpm --filter @workspace/db run push
@@ -39,97 +106,100 @@ pnpm --filter @workspace/db run push
 # 2. Start the API (port 5000):
 pnpm --filter @workspace/api-server run dev
 
-# 3. Start the monitoring worker (separate terminal):
+# 3. Start the monitoring worker (separate terminal, optional locally):
 pnpm --filter @workspace/api-server run dev:worker
 
 # 4. Start the app (Expo):
-pnpm --filter holto run start
+pnpm --filter @workspace/holto run start
 ```
 
 Useful workspace scripts:
 
 ```bash
-pnpm run typecheck   # full typecheck across every package
-pnpm run build       # typecheck + build all packages
-pnpm --filter @workspace/api-spec run codegen   # regenerate API hooks + Zod from OpenAPI
+pnpm --filter @workspace/api-server run typecheck   # typecheck API
+pnpm --filter @workspace/holto      run typecheck   # typecheck app
+pnpm --filter @workspace/api-server test            # API unit tests (node:test)
+pnpm --filter @workspace/api-spec   run codegen     # regenerate API hooks + Zod
 ```
+
+---
 
 ## Environment variables
 
-Copy `.env.example` to `.env`. Required unless noted.
+Copy `.env.example` to `.env`. **The app boots with almost none of these** — every
+integration is optional and its feature simply stays hidden until configured, so
+you can start with just `DATABASE_URL` and add capabilities incrementally.
 
-| Var | Used by | Meaning |
-|-----|---------|---------|
-| `DATABASE_URL` | api, worker, db | Postgres connection string. |
-| `PORT` | api | HTTP port (Render/hosts inject this). |
-| `SESSION_SECRET` | api | Secret for signing JWT session tokens. |
-| `OPENAI_API_KEY` | api, worker | OpenAI key for the AI companion + status messages. |
-| `AIRLABS_API_KEY` | api, worker | AirLabs key for live flight status. |
-| `EXPO_ACCESS_TOKEN` | worker | _(optional)_ Expo push access token for higher throughput. |
-| `EMAIL_WEBHOOK_URL` | worker | _(optional)_ Outbound webhook for email fallback alerts (provider relay / Zapier). Logs to console if unset. |
-| `APP_ORIGIN` / `PUBLIC_URL` | api | Public base URL of the deployed API (CORS + Stripe webhook URL). |
-| `ALLOWED_ORIGINS` | api | _(optional)_ Extra CORS origins, comma-separated. |
-| `MONITOR_POLL_MS` | worker | _(optional)_ Poll interval, default 15 min. |
-| `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` | api | _(optional)_ Enables real billing. |
+| Var | Feature | Notes |
+|-----|---------|-------|
+| `DATABASE_URL` | everything | Postgres connection string. **Required.** |
+| `SESSION_SECRET` | auth | Signs session tokens (auto-generated on Render). |
+| `APP_ORIGIN` / `PUBLIC_URL` | api | Public API base URL (CORS + Stripe webhook). |
+| `GEMINI_API_KEY` | AI wording | Ask HOLTO, status messages, booking/receipt parsing. |
+| `OPENAI_API_KEY` | AI wording | Fallback if Gemini is unset. |
+| `AIRLABS_API_KEY` | flights | Live flight status + monitoring. |
+| `MAPBOX_TOKEN` | maps | Geocoding, airport-timing traffic, best-light. |
+| `GOOGLE_MAPS_API_KEY` | Ask HOLTO | Nearby places (Places API). |
+| `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` | billing, eSIM | Enables paid tiers + eSIM checkout. |
+| `RESEND_API_KEY` | email | Password reset + alert fallback (free tier). |
+| `EXPO_ACCESS_TOKEN` | push | Higher push throughput (optional). |
+| `AWARDWALLET_API_KEY` | loyalty | Read-only balance import (free tier). |
+| `AIRALO_CLIENT_ID` / `AIRALO_CLIENT_SECRET` | eSIM | Airalo Partner API. |
+| `OWNER_EMAILS` | admin | Comma-separated owner accounts. |
 
-## Proactive monitoring (how it works)
+Fully key-free feeds (**no configuration**): cost of living (World Bank), visa
+guidance (Passport Index), travel alerts (US State Dept + travel-advisory.info),
+FX rates (open.er-api.com).
+
+---
+
+## How proactive monitoring works
 
 1. The app registers an **Expo push token** (`POST /api/push/register`) after the
    user grants notification permission.
 2. Users track a flight (`POST /api/flights/monitor`), stored in `monitored_flights`.
-3. The **worker** (`artifacts/api-server/src/worker.ts`) polls every
-   `MONITOR_POLL_MS`, fetches each active flight's status through the shared
-   `lib/flights.ts`, and writes `lastStatus` / `lastStatusData` / `lastCheckedAt` back.
-4. When `detectStatusChange(prev, next)` reports a **material change** (→ cancelled
-   / diverted / incident, or a delay crossing the threshold), the worker sends a
-   **push notification** (and an **email fallback** when no push token exists),
-   deep-linking the traveller into the Disruption Rescue flow. Alerts are throttled
-   per flight so the same state is never announced twice.
+3. The **worker** polls every `MONITOR_POLL_MS` (default 15 min), fetches each
+   active flight's status via the shared `lib/flights.ts`, and writes
+   `lastStatus` / `lastStatusData` / `lastCheckedAt`.
+4. On a **material change** (→ cancelled / diverted, or a delay crossing the
+   threshold), it sends a **push** (with an **email fallback**), deep-linking the
+   traveller into the Disruption Rescue flow. Alerts are throttled per flight.
 
-## Compensation claims
+To keep hosting cheap the monitor can run **inside** the API process
+(`ENABLE_MONITOR=1`) instead of as a separate paid worker.
 
-HOLTO doesn't stop at explaining rights — it helps travellers **recover** the money
-and track the claim to payment:
+---
 
-1. From a disruption, `POST /api/claims` generates an authoritative claim (letter +
-   amount, both computed deterministically via `lib/eu261.ts` — never invented) and
-   stores it. Idempotent per disruption.
-2. The claim moves through a validated lifecycle: `draft → submitted →
-   airline_responded → paid | rejected → escalated → closed`, with an append-only
-   timeline. `PATCH /api/claims/:id` advances status / records a reference or the
-   amount received.
-3. `GET /api/claims/:id/letter` returns the ready-to-send letter plus **factual**
-   escalation guidance (UK CAA / EU National Enforcement Body / ADR / small claims —
-   no fabricated airline contacts).
+## Deploy (Render)
 
-In the app: the disruption screen has a **Start your compensation claim** action, and
-the History tab lists every claim with its live status → a claim tracker
-(`app/claim/[id].tsx`) that shows the letter, status stepper, timeline, and escalation.
+The repo-root `render.yaml` is a Render **Blueprint** that stands up the web API +
+a managed Postgres database with almost no manual setup:
 
-## Deploy
+- `DATABASE_URL` injected from the managed database automatically.
+- `SESSION_SECRET` auto-generated.
+- Tables created on deploy via `preDeployCommand`.
+- All third-party keys are `sync:false` (dashboard-set) and optional.
 
-**Non-technical walkthrough: see [`DEPLOY.md`](DEPLOY.md).**
+**To deploy:** Render → **New + → Blueprint** → select this repo → **Apply**.
+Health check: `/api/healthz`.
 
-The repo-root `render.yaml` (on this branch) is a Render **Blueprint** that stands
-up a web API + a managed Postgres database — with almost no manual setup. To keep
-costs low the flight monitor runs **inside** the API service (`ENABLE_MONITOR=1`)
-rather than as a separate paid worker; a dedicated worker is still available
-(`pnpm --filter @workspace/api-server start:worker`) if you prefer to split it out.
+The app ships as a **PWA** (static web export of the Expo app) and points at the
+deployed API base URL via `setBaseUrl`. For native builds, use EAS (`eas build`);
+remote push requires a real device / EAS build.
 
-- `DATABASE_URL` is injected from the managed database automatically.
-- `SESSION_SECRET` is auto-generated (`generateValue: true`).
-- Database tables are created automatically via `preDeployCommand`
-  (`pnpm --filter @workspace/db run push-force`).
-- `OPENAI_API_KEY` and `AIRLABS_API_KEY` are **optional** (`sync:false`, may be
-  left blank): the app boots and serves accounts, deterministic rights, and claims
-  without them; add them to enable AI wording and live flight tracking.
+---
 
-To deploy: Render → **New + → Blueprint** → select this repo and the
-`claude/holto-app-improvements-8cefxv` branch → **Apply**. Health check is
-`/api/healthz`. (Render only auto-detects a blueprint at the repo root, so it lives
-there rather than under `holto/`. EchoDeck's blueprint lives on its own branch.)
+## Testing
 
-For the mobile app, build with EAS (`eas build`) and point it at the deployed API
-base URL (the app configures this via `setBaseUrl` in `lib/api-client-react`).
-Native push requires a real device / EAS build — the Expo Go client cannot receive
-remote push in all cases.
+API logic is covered by `node:test` unit tests
+(`artifacts/api-server/test/*.test.ts`) — rights & compensation maths, solar
+times, timezone/DST conversion, cost-of-living ordering vs. the World Bank anchor,
+the visa requirement normaliser, and the fail-toward-caution advisory override.
+
+```bash
+pnpm --filter @workspace/api-server test
+```
+
+---
+
+*HOLTO is developed with the assistance of Claude Code.*
