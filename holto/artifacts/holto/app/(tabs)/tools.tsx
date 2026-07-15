@@ -11,7 +11,7 @@ interface Tool {
   emoji: string;
   title: string;
   desc: string;
-  route: "/trips" | "/expenses" | "/residency" | "/airport-timing" | "/today" | "/loyalty" | "/import" | "/shoot-times" | "/cost-of-living" | "/currency" | "/destination";
+  route: "/trips" | "/expenses" | "/residency" | "/airport-timing" | "/today" | "/loyalty" | "/import" | "/shoot-times" | "/cost-of-living" | "/currency" | "/destination" | "/esim";
 }
 
 const TOOLS: Tool[] = [
@@ -26,10 +26,10 @@ const TOOLS: Tool[] = [
   { emoji: "🌍", title: "Residency & tax days", desc: "Count your days per country, the Schengen 90/180 limit, and the 183-day rule.", route: "/residency" },
   { emoji: "💷", title: "Cost of living", desc: "Compare a month's essentials between two cities, all in GBP.", route: "/cost-of-living" },
   { emoji: "💱", title: "Currency converter", desc: "Live rates for 160+ currencies — convert instantly, even offline.", route: "/currency" },
+  { emoji: "📶", title: "eSIM data plans", desc: "Prepaid data for 190+ countries — install before you fly, no roaming bills.", route: "/esim" },
 ];
 
 const SOON: { emoji: string; title: string }[] = [
-  { emoji: "📶", title: "eSIM data plans" },
   { emoji: "🛂", title: "Visa & entry checker" },
   { emoji: "📰", title: "Live travel alerts" },
 ];

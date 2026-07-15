@@ -66,6 +66,7 @@ function RootLayoutNav() {
       <Stack.Screen name="currency" options={{ headerShown: true, headerTitle: "Currency Converter", ...headerOptions }} />
       <Stack.Screen name="destination" options={{ headerShown: true, headerTitle: "Destination Guide", ...headerOptions }} />
       <Stack.Screen name="watchlist" options={{ headerShown: true, headerTitle: "Watchlist", ...headerOptions }} />
+      <Stack.Screen name="esim/index" options={{ headerShown: true, headerTitle: "eSIM data plans", ...headerOptions }} />
       <Stack.Screen name="esims" options={{ headerShown: true, headerTitle: "My eSIMs", ...headerOptions }} />
       <Stack.Screen name="esim/complete" options={{ headerShown: true, headerTitle: "Your eSIM", ...headerOptions }} />
       <Stack.Screen name="esim/[id]" options={{ headerShown: true, headerTitle: "Your eSIM", ...headerOptions }} />

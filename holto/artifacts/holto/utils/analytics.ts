@@ -14,7 +14,8 @@ export type AnalyticsEvent =
   | "claim_started"
   | "watchlist_add"
   | "upgrade_view"
-  | "calendar_add";
+  | "calendar_add"
+  | "esim_checkout_start";
 
 export function track(event: AnalyticsEvent): void {
   try {
