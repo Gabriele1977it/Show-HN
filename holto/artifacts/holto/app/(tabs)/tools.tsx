@@ -11,7 +11,7 @@ interface Tool {
   emoji: string;
   title: string;
   desc: string;
-  route: "/trips" | "/expenses" | "/residency" | "/airport-timing" | "/today" | "/loyalty" | "/import" | "/shoot-times" | "/cost-of-living" | "/currency" | "/destination" | "/esim" | "/visa";
+  route: "/trips" | "/expenses" | "/residency" | "/airport-timing" | "/today" | "/loyalty" | "/import" | "/shoot-times" | "/cost-of-living" | "/currency" | "/destination" | "/esim" | "/visa" | "/alerts";
 }
 
 const TOOLS: Tool[] = [
@@ -28,11 +28,10 @@ const TOOLS: Tool[] = [
   { emoji: "💱", title: "Currency converter", desc: "Live rates for 160+ currencies — convert instantly, even offline.", route: "/currency" },
   { emoji: "📶", title: "eSIM data plans", desc: "Prepaid data for 190+ countries — install before you fly, no roaming bills.", route: "/esim" },
   { emoji: "🛂", title: "Visa & entry", desc: "Do you need a visa? Quick guidance for your passport, with the official source to confirm.", route: "/visa" },
+  { emoji: "🚨", title: "Travel alerts", desc: "Live government safety advisories for any country, plus your watchlist at a glance.", route: "/alerts" },
 ];
 
-const SOON: { emoji: string; title: string }[] = [
-  { emoji: "📰", title: "Live travel alerts" },
-];
+const SOON: { emoji: string; title: string }[] = [];
 
 export default function ToolsScreen() {
   const colors = useColors();
@@ -82,17 +81,19 @@ export default function ToolsScreen() {
         ))}
       </View>
 
-      <Animated.View entering={FadeInDown.delay(300).duration(400)} style={{ marginTop: 28 }}>
-        <Text style={[styles.soonLabel, { color: colors.mutedForeground }]}>COMING SOON</Text>
-        <View style={styles.soonRow}>
-          {SOON.map((s) => (
-            <View key={s.title} style={[styles.soonChip, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              <Text style={{ fontSize: 15 }}>{s.emoji}</Text>
-              <Text style={[styles.soonText, { color: colors.mutedForeground }]}>{s.title}</Text>
-            </View>
-          ))}
-        </View>
-      </Animated.View>
+      {SOON.length > 0 ? (
+        <Animated.View entering={FadeInDown.delay(300).duration(400)} style={{ marginTop: 28 }}>
+          <Text style={[styles.soonLabel, { color: colors.mutedForeground }]}>COMING SOON</Text>
+          <View style={styles.soonRow}>
+            {SOON.map((s) => (
+              <View key={s.title} style={[styles.soonChip, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                <Text style={{ fontSize: 15 }}>{s.emoji}</Text>
+                <Text style={[styles.soonText, { color: colors.mutedForeground }]}>{s.title}</Text>
+              </View>
+            ))}
+          </View>
+        </Animated.View>
+      ) : null}
     </ScrollView>
   );
 }

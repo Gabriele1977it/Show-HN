@@ -161,6 +161,13 @@ const GOVUK_SLUG: Record<string, string> = {
   RU: "russia",
 };
 
+// The gov.uk Foreign Office travel-advice page for a destination — authoritative
+// and current, covering both safety alerts and entry requirements. Reused by the
+// visa checker and the travel-alerts tool.
+export function govUkAdviceUrl(destCode: string, destName: string): string {
+  return `https://www.gov.uk/foreign-travel-advice/${govUkSlug(destCode, destName)}`;
+}
+
 function govUkSlug(destCode: string, destName: string): string {
   return (
     GOVUK_SLUG[destCode] ??
@@ -188,7 +195,7 @@ export function officialSources(passportCode: string, destCode: string, destName
   // and is directly linkable per-destination — the primary reference.
   links.push({
     label: "UK Foreign Office — entry requirements",
-    url: `https://www.gov.uk/foreign-travel-advice/${govUkSlug(destCode, destName)}/entry-requirements`,
+    url: `${govUkAdviceUrl(destCode, destName)}/entry-requirements`,
   });
   // Plus the traveller's own government, where we have a reliable landing page.
   const own = GOV_ADVICE[passportCode.trim().toUpperCase()];

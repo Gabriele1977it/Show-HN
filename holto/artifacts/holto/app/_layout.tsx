@@ -64,6 +64,7 @@ function RootLayoutNav() {
       <Stack.Screen name="shoot-times" options={{ headerShown: true, headerTitle: "Best Light", ...headerOptions }} />
       <Stack.Screen name="cost-of-living" options={{ headerShown: true, headerTitle: "Cost of Living", ...headerOptions }} />
       <Stack.Screen name="visa" options={{ headerShown: true, headerTitle: "Visa & Entry", ...headerOptions }} />
+      <Stack.Screen name="alerts" options={{ headerShown: true, headerTitle: "Travel Alerts", ...headerOptions }} />
       <Stack.Screen name="currency" options={{ headerShown: true, headerTitle: "Currency Converter", ...headerOptions }} />
       <Stack.Screen name="destination" options={{ headerShown: true, headerTitle: "Destination Guide", ...headerOptions }} />
       <Stack.Screen name="watchlist" options={{ headerShown: true, headerTitle: "Watchlist", ...headerOptions }} />
