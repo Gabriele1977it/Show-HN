@@ -17,8 +17,40 @@ export function awardwalletConfigured(): boolean {
   return !!process.env.AWARDWALLET_API_KEY;
 }
 
+// Static fallback connect URL (used only if the dynamic create-auth-url call
+// can't be reached or is misconfigured).
 export function awardwalletConnectUrl(): string | null {
   return process.env.AWARDWALLET_CONNECT_URL?.trim() || null;
+}
+
+// Generate a per-user authorisation URL via AwardWallet's "create auth url"
+// endpoint (per their approval email: the connect URL is returned by this call).
+// `state` is our own user id, echoed back so a connection can be tied to the
+// right HOLTO account. The endpoint path defaults to the documented /authUser
+// but can be overridden with AWARDWALLET_AUTHURL_PATH without a code change. Any
+// failure falls back to the static connect URL, so the button always works.
+export async function createAuthUrl(state?: string): Promise<string | null> {
+  const key = process.env.AWARDWALLET_API_KEY;
+  if (!key) return null;
+  const path = process.env.AWARDWALLET_AUTHURL_PATH?.trim() || "/authUser";
+  try {
+    const res = await fetch(`${BASE}${path}`, {
+      method: "POST",
+      signal: AbortSignal.timeout(12000),
+      headers: { "X-Authentication": key, "content-type": "application/json", accept: "application/json" },
+      body: JSON.stringify(state ? { state } : {}),
+    });
+    if (!res.ok) {
+      logger.warn({ status: res.status, path }, "AwardWallet create-auth-url non-OK; using static fallback");
+      return awardwalletConnectUrl();
+    }
+    const data = (await res.json()) as { url?: string; authUrl?: string; authURL?: string } | string;
+    const url = typeof data === "string" ? data : data.url ?? data.authUrl ?? data.authURL ?? null;
+    return url || awardwalletConnectUrl();
+  } catch (err) {
+    logger.warn({ err, path }, "AwardWallet create-auth-url failed; using static fallback");
+    return awardwalletConnectUrl();
+  }
 }
 
 async function call<T>(path: string): Promise<T | null> {

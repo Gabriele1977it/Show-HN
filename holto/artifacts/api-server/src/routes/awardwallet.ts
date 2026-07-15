@@ -5,7 +5,7 @@ import { Router, type IRouter } from "express";
 import { requireAuth } from "../middlewares/auth";
 import {
   awardwalletConfigured,
-  awardwalletConnectUrl,
+  createAuthUrl,
   findConnectedUserIdByEmail,
   getConnectedUserAccounts,
   getMemberAccountsByEmail,
@@ -17,10 +17,14 @@ const router: IRouter = Router();
 // Is AwardWallet available, and is this user linked?
 router.get("/awardwallet/status", requireAuth, async (req, res): Promise<void> => {
   const [user] = await db.select().from(usersTable).where(eq(usersTable.id, req.auth!.userId)).limit(1);
+  const linked = !!user?.awardwalletUserId;
+  // Generate a fresh per-user connect URL only when the user isn't linked yet —
+  // linked users don't need it, so we avoid an extra call on every load.
+  const connectUrl = awardwalletConfigured() && !linked ? await createAuthUrl(String(req.auth!.userId)) : null;
   res.json({
     configured: awardwalletConfigured(),
-    connectUrl: awardwalletConnectUrl(),
-    linked: !!user?.awardwalletUserId,
+    connectUrl,
+    linked,
     syncedAt: user?.awardwalletSyncedAt ?? null,
   });
 });
