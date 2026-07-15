@@ -11,7 +11,7 @@ interface Tool {
   emoji: string;
   title: string;
   desc: string;
-  route: "/trips" | "/expenses" | "/residency" | "/airport-timing" | "/today" | "/loyalty" | "/import" | "/shoot-times" | "/cost-of-living" | "/currency" | "/destination" | "/esim";
+  route: "/trips" | "/expenses" | "/residency" | "/airport-timing" | "/today" | "/loyalty" | "/import" | "/shoot-times" | "/cost-of-living" | "/currency" | "/destination" | "/esim" | "/visa";
 }
 
 const TOOLS: Tool[] = [
@@ -27,10 +27,10 @@ const TOOLS: Tool[] = [
   { emoji: "💷", title: "Cost of living", desc: "Compare a month's essentials between two cities, all in GBP.", route: "/cost-of-living" },
   { emoji: "💱", title: "Currency converter", desc: "Live rates for 160+ currencies — convert instantly, even offline.", route: "/currency" },
   { emoji: "📶", title: "eSIM data plans", desc: "Prepaid data for 190+ countries — install before you fly, no roaming bills.", route: "/esim" },
+  { emoji: "🛂", title: "Visa & entry", desc: "Do you need a visa? Quick guidance for your passport, with the official source to confirm.", route: "/visa" },
 ];
 
 const SOON: { emoji: string; title: string }[] = [
-  { emoji: "🛂", title: "Visa & entry checker" },
   { emoji: "📰", title: "Live travel alerts" },
 ];
 

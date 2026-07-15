@@ -27,6 +27,7 @@ import loyaltyRouter from "./loyalty";
 import publicRouter from "./public";
 import referralRouter from "./referral";
 import shootRouter from "./shoot";
+import visaRouter from "./visa";
 import stripeRouter from "./stripe";
 
 const router: IRouter = Router();
@@ -61,6 +62,7 @@ router.use(loyaltyRouter);
 router.use(publicRouter);
 router.use(referralRouter);
 router.use(shootRouter);
+router.use(visaRouter);
 router.use(stripeRouter);
 
 export default router;
