@@ -8,10 +8,20 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Icon } from "@/components/Icon";
 import { useColors } from "@/hooks/useColors";
 
+interface FeedHealth {
+  loaded: boolean;
+  live?: boolean;
+  year?: number;
+  countries?: number;
+  passports?: number;
+  ageMinutes?: number;
+  fetchedAt?: string;
+}
 interface Overview {
   counts: Record<string, number>;
   aiUsage?: { callsToday: number; callsLast30d: number; searchesToday: number; dailyCap: number | null };
   integrations: Record<string, boolean>;
+  dataHealth?: Record<string, FeedHealth>;
   generatedAt: string;
 }
 interface AdminUser {
@@ -41,13 +51,19 @@ const INTEGRATION_LABELS: Record<string, string> = {
   openAI: "OpenAI",
   flights_airlabs: "Flights (AirLabs)",
   maps_mapbox: "Maps (Mapbox)",
-  costOfLiving_zyla: "Cost of living (Zyla)",
+  costOfLiving: "Cost of living",
   stripe: "Stripe",
   sessionSecret: "Session secret",
   ownerEmailsSet: "Owner emails",
   pushExpo: "Push (Expo)",
   email_resend: "Email (Resend)",
   awardwallet: "AwardWallet",
+};
+const FEED_LABELS: Record<string, string> = {
+  fxRates: "FX rates",
+  worldBankPrices: "World Bank prices",
+  stateDeptAdvisories: "Travel advisories (US State Dept)",
+  visaDataset: "Visa dataset (Passport Index)",
 };
 const TIER_OPTS = [
   { v: "free", label: "Free" },
@@ -258,6 +274,41 @@ export default function AdminScreen() {
           );
         })}
       </View>
+
+      {/* Live data feeds — self-updating sources and their freshness */}
+      {overview.data?.dataHealth ? (
+        <>
+          <Text style={[styles.section, { color: colors.foreground }]}>Live data feeds</Text>
+          <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, borderRadius: colors.radius }]}>
+            {Object.entries(overview.data.dataHealth).map(([k, h], i) => {
+              const label = FEED_LABELS[k] ?? k;
+              let detail: string;
+              if (!h.loaded) detail = "idle · warms on first use";
+              else if (h.fetchedAt) detail = `updated ${new Date(h.fetchedAt).toLocaleDateString("en-GB")}`;
+              else {
+                const bits: string[] = [];
+                if (h.live === false) bits.push("fallback");
+                else if (h.live === true) bits.push("live");
+                if (typeof h.countries === "number") bits.push(`${h.countries} countries`);
+                if (typeof h.passports === "number") bits.push(`${h.passports} passports`);
+                if (typeof h.year === "number") bits.push(`${h.year}`);
+                if (typeof h.ageMinutes === "number") bits.push(`${h.ageMinutes < 60 ? `${h.ageMinutes}m` : `${Math.round(h.ageMinutes / 60)}h`} ago`);
+                detail = bits.join(" · ") || "loaded";
+              }
+              const ok = h.loaded && h.live !== false;
+              return (
+                <View key={k} style={[styles.evtRow, i > 0 && { borderTopColor: colors.border, borderTopWidth: 1 }]}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flex: 1 }}>
+                    <View style={[styles.dot, { backgroundColor: !h.loaded ? colors.mutedForeground : ok ? "#2E7D52" : "#C9A24B" }]} />
+                    <Text style={[styles.evtName, { color: colors.foreground }]}>{label}</Text>
+                  </View>
+                  <Text style={[styles.evtCount, { color: colors.mutedForeground }]}>{detail}</Text>
+                </View>
+              );
+            })}
+          </View>
+        </>
+      ) : null}
 
       {/* Add / grant */}
       <Text style={[styles.section, { color: colors.foreground }]}>Onboard a user</Text>

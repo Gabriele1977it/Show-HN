@@ -128,3 +128,9 @@ export function priceIndexUK100(iso: string, ratios: Record<string, number>): nu
   if (!base || !v) return null;
   return Math.round((100 * v) / base);
 }
+
+// Current cache state without forcing a fetch — for the admin data-health view.
+export function worldBankStatus(): { loaded: boolean; live?: boolean; year?: number; ageMinutes?: number } {
+  if (!cache) return { loaded: false };
+  return { loaded: true, live: cache.live, year: cache.year, ageMinutes: Math.round((Date.now() - cache.ts) / 60000) };
+}

@@ -140,6 +140,12 @@ export async function visaDataAvailable(): Promise<boolean> {
   return !!m && m.size > 0;
 }
 
+// Current cache state without forcing a fetch — for the admin data-health view.
+export function visaStatus(): { loaded: boolean; passports?: number; ageMinutes?: number } {
+  if (!cache) return { loaded: false };
+  return { loaded: true, passports: cache.matrix.size, ageMinutes: Math.round((Date.now() - cache.ts) / 60000) };
+}
+
 // ── Official, authoritative sources (always shown) ──────────────────────────
 // The dataset is guidance; these links are the authority the user should act on.
 

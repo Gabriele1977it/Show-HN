@@ -87,3 +87,9 @@ export async function stateDeptRisk(code: string): Promise<StateDeptEntry | null
   const map = await load();
   return map.get(code.trim().toUpperCase()) ?? null;
 }
+
+// Current cache state without forcing a fetch — for the admin data-health view.
+export function stateDeptStatus(): { loaded: boolean; countries?: number; ageMinutes?: number } {
+  if (!cache) return { loaded: false };
+  return { loaded: true, countries: cache.map.size, ageMinutes: Math.round((Date.now() - cache.ts) / 60000) };
+}

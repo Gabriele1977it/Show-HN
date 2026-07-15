@@ -22,6 +22,10 @@ import { requireOwner } from "../middlewares/owner";
 import { DEMO_TRIPS } from "../lib/demo-trips";
 import { isOwnerEmail } from "../lib/tier";
 import { makeSlug } from "../lib/slug";
+import { ratesFetchedAt } from "../lib/fx";
+import { worldBankStatus } from "../lib/worldbank";
+import { stateDeptStatus } from "../lib/statedept";
+import { visaStatus } from "../lib/visa";
 
 const router: IRouter = Router();
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
@@ -83,6 +87,16 @@ router.get("/admin/overview", async (_req, res): Promise<void> => {
       pushExpo: !!process.env.EXPO_ACCESS_TOKEN,
       email_resend: !!process.env.RESEND_API_KEY,
       awardwallet: !!process.env.AWARDWALLET_API_KEY,
+    },
+    // Freshness of the self-updating data feeds. "idle" just means nothing has
+    // used that feature since the last restart — it warms on first use. These
+    // all fail toward a safe fallback, so "idle"/stale is informational, not an
+    // outage.
+    dataHealth: {
+      fxRates: ratesFetchedAt() ? { loaded: true, fetchedAt: new Date(ratesFetchedAt()!).toISOString() } : { loaded: false },
+      worldBankPrices: worldBankStatus(),
+      stateDeptAdvisories: stateDeptStatus(),
+      visaDataset: visaStatus(),
     },
     generatedAt: new Date().toISOString(),
   });
