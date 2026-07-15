@@ -8,7 +8,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Icon } from "@/components/Icon";
 import { useColors } from "@/hooks/useColors";
 import { openUrl } from "@/utils/openUrl";
-import { ESSENTIALS_LIST, findEssentials, type CountryEssentials } from "@/constants/countryEssentials";
+import { COUNTRIES, findCountry, type Country } from "@/constants/countries";
 
 interface VisaRequirement {
   category: string;
@@ -35,12 +35,12 @@ const TONE: Record<string, { color: string; emoji: string }> = {
 
 function CountryPicker({
   visible, title, onSelect, onClose,
-}: { visible: boolean; title: string; onSelect: (c: CountryEssentials) => void; onClose: () => void }) {
+}: { visible: boolean; title: string; onSelect: (c: Country) => void; onClose: () => void }) {
   const colors = useColors();
   const [query, setQuery] = useState("");
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const list = [...ESSENTIALS_LIST].sort((a, b) => a.name.localeCompare(b.name));
+    const list = [...COUNTRIES].sort((a, b) => a.name.localeCompare(b.name));
     return q ? list.filter((c) => c.name.toLowerCase().includes(q)) : list;
   }, [query]);
 
@@ -76,8 +76,8 @@ export default function VisaScreen() {
   const topPad = Platform.OS === "web" ? 20 : insets.top;
   const bottomPad = Platform.OS === "web" ? 40 : insets.bottom + 24;
 
-  const [passport, setPassport] = useState<CountryEssentials>(() => findEssentials("GB") ?? ESSENTIALS_LIST[0]);
-  const [dest, setDest] = useState<CountryEssentials | null>(null);
+  const [passport, setPassport] = useState<Country>(() => findCountry("GB") ?? COUNTRIES[0]);
+  const [dest, setDest] = useState<Country | null>(null);
   const [picking, setPicking] = useState<null | "passport" | "dest">(null);
 
   const { data, isFetching, isError } = useQuery<VisaResponse>({

@@ -9,7 +9,7 @@ import { Icon } from "@/components/Icon";
 import { useColors } from "@/hooks/useColors";
 import { openUrl } from "@/utils/openUrl";
 import { govUkAdviceUrl } from "@/utils/govAdvice";
-import { ESSENTIALS_LIST, type CountryEssentials } from "@/constants/countryEssentials";
+import { COUNTRIES, findCountry, type Country } from "@/constants/countries";
 
 type Level = "low" | "moderate" | "high" | "extreme";
 interface Advisory {
@@ -21,6 +21,7 @@ interface Advisory {
   message: string | null;
   source: string | null;
   updated: string | null;
+  elevated?: boolean;
 }
 
 const LEVEL: Record<Level, { color: string; emoji: string }> = {
@@ -30,12 +31,12 @@ const LEVEL: Record<Level, { color: string; emoji: string }> = {
   extreme: { color: "#C0392B", emoji: "🔴" },
 };
 
-function CountryPicker({ visible, onSelect, onClose }: { visible: boolean; onSelect: (c: CountryEssentials) => void; onClose: () => void }) {
+function CountryPicker({ visible, onSelect, onClose }: { visible: boolean; onSelect: (c: Country) => void; onClose: () => void }) {
   const colors = useColors();
   const [query, setQuery] = useState("");
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const list = [...ESSENTIALS_LIST].sort((a, b) => a.name.localeCompare(b.name));
+    const list = [...COUNTRIES].sort((a, b) => a.name.localeCompare(b.name));
     return q ? list.filter((c) => c.name.toLowerCase().includes(q)) : list;
   }, [query]);
   return (
@@ -70,7 +71,7 @@ export default function AlertsScreen() {
   const topPad = Platform.OS === "web" ? 20 : insets.top;
   const bottomPad = Platform.OS === "web" ? 40 : insets.bottom + 24;
 
-  const [country, setCountry] = useState<CountryEssentials | null>(null);
+  const [country, setCountry] = useState<Country | null>(null);
   const [picking, setPicking] = useState(false);
 
   const detail = useQuery<{ available: boolean; advisory?: Advisory }>({
@@ -96,8 +97,8 @@ export default function AlertsScreen() {
 
   const adv = detail.data?.available ? detail.data.advisory : undefined;
   const lvl = adv ? LEVEL[adv.level] : null;
-  const nameFor = (code: string) => ESSENTIALS_LIST.find((c) => c.code === code)?.name ?? code;
-  const flagFor = (code: string) => ESSENTIALS_LIST.find((c) => c.code === code)?.flag ?? "🏳️";
+  const nameFor = (code: string) => findCountry(code)?.name ?? code;
+  const flagFor = (code: string) => findCountry(code)?.flag ?? "🏳️";
 
   return (
     <ScrollView
@@ -132,6 +133,9 @@ export default function AlertsScreen() {
                 <Text style={[styles.cardLevel, { color: lvl.color }]}>{adv.label}</Text>
               </View>
             </View>
+            {adv.elevated ? (
+              <Text style={[styles.elevatedNote, { color: lvl.color }]}>⚠️ Raised by HOLTO's safety review — an active conflict or serious government warning applies here.</Text>
+            ) : null}
             {adv.message ? <Text style={[styles.cardMsg, { color: colors.mutedForeground }]} numberOfLines={4}>{adv.message}</Text> : null}
             <Pressable onPress={() => openUrl(govUkAdviceUrl(country.code, country.name))} style={[styles.linkRow, { borderColor: colors.border }]}>
               <Icon name="globe" size={15} color={colors.primary} />
@@ -167,7 +171,7 @@ export default function AlertsScreen() {
               return (
                 <Pressable
                   key={r.code}
-                  onPress={() => setCountry(ESSENTIALS_LIST.find((c) => c.code === r.code) ?? null)}
+                  onPress={() => setCountry(findCountry(r.code) ?? null)}
                   style={[styles.glanceRow, { backgroundColor: colors.card, borderColor: colors.border, borderRadius: colors.radius }]}
                 >
                   <Text style={{ fontSize: 20 }}>{flagFor(r.code)}</Text>
@@ -210,6 +214,7 @@ const styles = StyleSheet.create({
   cardCountry: { fontFamily: "Inter_700Bold", fontSize: 17 },
   cardLevel: { fontFamily: "Inter_600SemiBold", fontSize: 14, marginTop: 1 },
   cardMsg: { fontFamily: "Inter_400Regular", fontSize: 13, lineHeight: 19 },
+  elevatedNote: { fontFamily: "Inter_600SemiBold", fontSize: 13, lineHeight: 19 },
   linkRow: { flexDirection: "row", alignItems: "center", gap: 8, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 11 },
   linkText: { flex: 1, fontFamily: "Inter_600SemiBold", fontSize: 13 },
   meta: { fontFamily: "Inter_400Regular", fontSize: 11 },
