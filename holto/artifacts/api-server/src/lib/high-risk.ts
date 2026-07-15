@@ -1,9 +1,10 @@
-// Safety override for the travel-alerts tool. The free advisory aggregator can
-// lag badly on fast-moving conflicts (it once reported Israel as low-risk), and
-// for a SAFETY feature that is the worst possible failure. This curated list of
-// countries under a serious, country-wide (or majority) government travel
-// warning lets us guarantee the tool fails toward caution: it can only ever
-// RAISE an advisory level, never lower it.
+// Curated BACKSTOP for the travel-alerts safety override. The primary source is
+// now automated and self-updating — the live US State Department advisory feed
+// (see lib/statedept.ts) — so this list normally isn't even consulted. It exists
+// only as a fallback for when that feed is unreachable, guaranteeing the big
+// conflict zones still fail toward caution. Like the feed, it can only ever
+// RAISE an advisory level, never lower it. Because it's a backstop, it needs far
+// less upkeep, but a periodic glance is still worthwhile.
 //
 // Deliberately conservative about scope: countries where only a specific region
 // is affected (e.g. Egypt/Sinai, Mexico/certain states, Türkiye's border) are
