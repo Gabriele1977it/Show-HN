@@ -188,29 +188,38 @@ export default function MonitorScreen() {
     }
   };
 
+  // Alert.alert with buttons is a no-op on React Native Web (the PWA), so the
+  // confirm never fired there and flights couldn't be removed. Use window.confirm
+  // on web and Alert on native.
+  const confirmStopTracking = (): Promise<boolean> => {
+    const message = "Stop tracking this flight? You'll no longer receive status updates for it.";
+    if (Platform.OS === "web") {
+      return Promise.resolve(typeof window === "undefined" ? true : window.confirm(message));
+    }
+    return new Promise((resolve) => {
+      Alert.alert("Stop tracking?", message, [
+        { text: "Cancel", style: "cancel", onPress: () => resolve(false) },
+        { text: "Stop tracking", style: "destructive", onPress: () => resolve(true) },
+      ]);
+    });
+  };
+
   const handleRemove = async (id: number) => {
-    Alert.alert("Stop tracking?", "You'll no longer receive status updates for this flight.", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Stop tracking",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            await removeFlight({ id });
-            await refetchList();
-            if (id === activeFlightId) {
-              setActiveFlightId(null);
-              setActiveFlightNumber(null);
-              setLiveStatus(null);
-              setStatusError(null);
-              if (pollRef.current) clearInterval(pollRef.current);
-            }
-          } catch {
-            Alert.alert("Error", "Could not remove this flight.");
-          }
-        },
-      },
-    ]);
+    if (!(await confirmStopTracking())) return;
+    try {
+      await removeFlight({ id });
+      await refetchList();
+      if (id === activeFlightId) {
+        setActiveFlightId(null);
+        setActiveFlightNumber(null);
+        setLiveStatus(null);
+        setStatusError(null);
+        if (pollRef.current) clearInterval(pollRef.current);
+      }
+    } catch {
+      if (Platform.OS === "web" && typeof window !== "undefined") window.alert("Could not remove this flight. Please try again.");
+      else Alert.alert("Error", "Could not remove this flight.");
+    }
   };
 
   const handleSelectFlight = (flight: { id: number; flightNumber: string }) => {
