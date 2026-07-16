@@ -1,5 +1,13 @@
 import { logger } from "./logger";
-import { candidateFlightNumbers, friendlyStatusMessage, mapStatus, type FlightStatus } from "./flight-format";
+import {
+  candidateFlightNumbers,
+  deriveStatus,
+  effectiveDelayMinutes,
+  friendlyStatusMessage,
+  mapStatus,
+  officialStatusUrl,
+  type FlightStatus,
+} from "./flight-format";
 
 // Shared flight-status logic used by both the `/flights/status` route and the
 // background monitor worker, so there is one implementation of AirLabs querying,
@@ -12,10 +20,22 @@ export type { FlightStatus } from "./flight-format";
 // The companion line is computed deterministically (see friendlyStatusMessage)
 // — no LLM call — so a flight lookup is free and instant. Kept async-compatible
 // for existing call sites.
-export function generateStatusMessage(flight: Record<string, unknown>): string {
-  return friendlyStatusMessage(
-    mapStatus(flight.status as string),
+// Effective, time-aware delay + status for a raw provider flight record.
+function derive(flight: Record<string, unknown>): { status: FlightStatus; delay: number | null } {
+  const effDelay = effectiveDelayMinutes(
     typeof flight.dep_delay === "number" ? flight.dep_delay : null,
+    (flight.dep_time as string | null) ?? null,
+    (flight.dep_estimated as string | null) ?? null,
+    (flight.dep_actual as string | null) ?? null,
+  );
+  return { status: deriveStatus(mapStatus(flight.status as string), effDelay), delay: effDelay };
+}
+
+export function generateStatusMessage(flight: Record<string, unknown>): string {
+  const { status, delay } = derive(flight);
+  return friendlyStatusMessage(
+    status,
+    delay,
     (flight.dep_gate as string | null) ?? null,
     (flight.dep_terminal as string | null) ?? null,
   );
@@ -52,7 +72,9 @@ async function tryAirlabsEndpoint(url: string, label: string): Promise<Record<st
 }
 
 function normaliseScheduleRow(row: Record<string, unknown>): Record<string, unknown> {
-  // Schedules endpoint uses dep_time / arr_time as ISO-like strings
+  // Schedules endpoint uses dep_time / arr_time as ISO-like strings, and also
+  // carries estimated/actual times + a `delayed` minutes figure — all of which
+  // we keep so a delay can be detected even before the status string flips.
   const depTime = (row.dep_time ?? row.dep_time_utc ?? null) as string | null;
   const arrTime = (row.arr_time ?? row.arr_time_utc ?? null) as string | null;
 
@@ -64,8 +86,10 @@ function normaliseScheduleRow(row: Record<string, unknown>): Record<string, unkn
     arr_iata: row.arr_iata,
     dep_time: depTime,
     arr_time: arrTime,
-    dep_estimated: null,
-    arr_estimated: null,
+    dep_estimated: (row.dep_estimated ?? row.dep_estimated_utc ?? null) as string | null,
+    dep_actual: (row.dep_actual ?? row.dep_actual_utc ?? null) as string | null,
+    arr_estimated: (row.arr_estimated ?? row.arr_estimated_utc ?? null) as string | null,
+    arr_actual: (row.arr_actual ?? row.arr_actual_utc ?? null) as string | null,
     dep_delay: typeof row.delayed === "number" ? row.delayed : null,
     arr_delay: null,
     dep_gate: row.dep_gate ?? null,
@@ -147,6 +171,7 @@ export interface FlightResponse {
   depTerminal: string | null;
   arrTerminal: string | null;
   companionMessage: string | null;
+  officialStatusUrl: string;
   checkedAt: string;
 }
 
@@ -155,22 +180,25 @@ export function buildFlightResponse(
   flight: Record<string, unknown>,
   companionMessage: string | null,
 ): FlightResponse {
+  const { status, delay } = derive(flight);
+  const fn = (flight.flight_iata as string | null) ?? flightNumber;
   return {
-    flightNumber: (flight.flight_iata as string | null) ?? flightNumber,
+    flightNumber: fn,
     airlineIata: (flight.airline_iata as string | null) ?? null,
-    status: mapStatus(flight.status as string),
+    status, // time-aware: "delayed" even when the provider still says "scheduled"
     depAirport: (flight.dep_iata as string | null) ?? null,
     arrAirport: (flight.arr_iata as string | null) ?? null,
     scheduledDep: (flight.dep_time as string | null) ?? null,
     estimatedDep: (flight.dep_estimated as string | null) ?? null,
     scheduledArr: (flight.arr_time as string | null) ?? null,
     estimatedArr: (flight.arr_estimated as string | null) ?? null,
-    depDelay: typeof flight.dep_delay === "number" ? flight.dep_delay : null,
+    depDelay: delay,
     arrDelay: typeof flight.arr_delay === "number" ? flight.arr_delay : null,
     depGate: (flight.dep_gate as string | null) ?? null,
     depTerminal: (flight.dep_terminal as string | null) ?? null,
     arrTerminal: (flight.arr_terminal as string | null) ?? null,
     companionMessage,
+    officialStatusUrl: officialStatusUrl(fn),
     checkedAt: new Date().toISOString(),
   };
 }

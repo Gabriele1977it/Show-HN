@@ -3,6 +3,7 @@
 
 export type FlightStatus =
   | "scheduled"
+  | "delayed"
   | "active"
   | "landed"
   | "cancelled"
@@ -35,6 +36,14 @@ const ICAO_TO_IATA: Record<string, string> = {
   TAP: "TP",  // TAP Portugal
 };
 
+// A link to the authoritative live status for a flight. Google's flight-status
+// panel is free, universal, and pulls current data (incl. the airline's own
+// figures) — so travellers always have a one-tap way to verify against the
+// source of truth, whatever our feed says.
+export function officialStatusUrl(flightNumber: string): string {
+  return `https://www.google.com/search?q=${encodeURIComponent(`${flightNumber} flight status`)}`;
+}
+
 export function candidateFlightNumbers(fn: string): string[] {
   const match = fn.match(/^([A-Z]{2,3})(\d+[A-Z]?)$/);
   if (!match) return [fn];
@@ -45,8 +54,56 @@ export function candidateFlightNumbers(fn: string): string[] {
 }
 
 export function mapStatus(raw: string | undefined): FlightStatus {
-  const valid = ["scheduled", "active", "landed", "cancelled", "incident", "diverted"];
-  return valid.includes(raw ?? "") ? (raw as FlightStatus) : "unknown";
+  const s = (raw ?? "").toLowerCase().trim();
+  // Normalise the various provider spellings onto our set.
+  if (s === "en-route" || s === "en route" || s === "airborne") return "active";
+  if (s === "redirected") return "diverted";
+  const valid = ["scheduled", "delayed", "active", "landed", "cancelled", "incident", "diverted"];
+  return valid.includes(s) ? (s as FlightStatus) : "unknown";
+}
+
+// Minutes between two ISO/date-ish strings (b − a), or null if unparseable.
+export function minutesBetween(a: string | null | undefined, b: string | null | undefined): number | null {
+  if (!a || !b) return null;
+  const ta = Date.parse(a);
+  const tb = Date.parse(b);
+  if (Number.isNaN(ta) || Number.isNaN(tb)) return null;
+  return Math.round((tb - ta) / 60000);
+}
+
+// The effective departure delay in minutes — the largest of the provider's own
+// delay figure and the gap between the scheduled time and any estimated/actual
+// time. This catches delays the provider's status string hasn't caught up with.
+export function effectiveDelayMinutes(
+  providerDelay: number | null,
+  scheduledDep: string | null,
+  estimatedDep: string | null,
+  actualDep: string | null,
+): number | null {
+  const candidates: number[] = [];
+  if (typeof providerDelay === "number" && Number.isFinite(providerDelay)) candidates.push(providerDelay);
+  const est = minutesBetween(scheduledDep, estimatedDep);
+  if (est != null) candidates.push(est);
+  const act = minutesBetween(scheduledDep, actualDep);
+  if (act != null) candidates.push(act);
+  if (!candidates.length) return null;
+  return Math.max(...candidates);
+}
+
+// The delay (minutes) at or above which we call a flight "delayed". Matches the
+// EU/UK261 mental model where short slips aren't worth alarming about.
+export const DELAY_THRESHOLD_MIN = 15;
+
+// Derive the status the traveller should actually see. Terminal / in-air states
+// from the provider are authoritative and kept as-is; otherwise, if the
+// effective delay crosses the threshold, we surface "delayed" even when the
+// provider still says "scheduled".
+export function deriveStatus(providerStatus: FlightStatus, effDelay: number | null): FlightStatus {
+  if (["cancelled", "diverted", "incident", "landed", "active"].includes(providerStatus)) {
+    return providerStatus;
+  }
+  if (effDelay != null && effDelay >= DELAY_THRESHOLD_MIN) return "delayed";
+  return providerStatus; // scheduled / unknown
 }
 
 // A calm, warm, human status line — computed deterministically (no LLM), so it's
@@ -73,13 +130,13 @@ export function friendlyStatusMessage(
       return "Landed safely. Welcome — safe onward travels. 👋";
     case "active":
       return "You're in the air — arrival details will firm up as the flight progresses.";
-    case "scheduled": {
-      if (depDelay != null && depDelay >= 15) {
-        return `Running about ${depDelay} min behind${where ? ` from ${where}` : ""}. I'll keep watching and nudge you if it changes.`;
-      }
-      return `On schedule so far${where ? ` — ${where}` : ""}. I'll flag any change straight away.`;
-    }
+    case "delayed":
+      return `Now showing a delay${depDelay != null && depDelay >= 15 ? ` of about ${depDelay} min` : ""}${where ? ` at ${where}` : ""}. I'll keep watching — double-check the airline's live status too.`;
+    case "scheduled":
+      // Honest framing: report what the feed shows without over-promising, and
+      // point to the airline as the source of truth.
+      return `No delay reported yet${where ? ` — ${where}` : ""}. Live feeds can lag the airline, so confirm on the airline's page as departure nears — I'll flag any change I see.`;
     default:
-      return "I couldn't confirm live status yet — try again closer to departure, and I'll keep watching.";
+      return "I couldn't confirm live status yet — check the airline's live status, and I'll keep watching.";
   }
 }

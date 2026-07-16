@@ -13,7 +13,7 @@ import { track } from "@/utils/analytics";
 import { addToCalendar } from "@/utils/calendar";
 import { useColors } from "@/hooks/useColors";
 
-type FlightStatus = "scheduled" | "active" | "landed" | "cancelled" | "incident" | "diverted" | "unknown";
+type FlightStatus = "scheduled" | "delayed" | "active" | "landed" | "cancelled" | "incident" | "diverted" | "unknown";
 
 interface JourneyFlight {
   tripItemId: number;
@@ -49,13 +49,14 @@ interface Weather {
 }
 
 function statusLabel(s: FlightStatus) {
-  return { scheduled: "Scheduled", active: "In air", landed: "Landed", cancelled: "Cancelled", incident: "Incident", diverted: "Diverted", unknown: "Watching" }[s] ?? "Watching";
+  return { scheduled: "Scheduled", delayed: "Delayed", active: "In air", landed: "Landed", cancelled: "Cancelled", incident: "Incident", diverted: "Diverted", unknown: "Watching" }[s] ?? "Watching";
 }
 function statusColor(s: FlightStatus): string {
   switch (s) {
     case "active": return "#1C7C8C";
     case "landed": return "#2E7D52";
     case "cancelled": return "#C0392B";
+    case "delayed": return "#D97706";
     case "incident":
     case "diverted": return "#C9A24B";
     default: return "#6B8A94";

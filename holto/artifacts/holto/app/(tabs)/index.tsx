@@ -51,7 +51,7 @@ const TOOLKIT: { emoji: string; label: string; route: string }[] = [
   { emoji: "💷", label: "Cost of living", route: "/cost-of-living" },
 ];
 
-type FlightStatus = "scheduled" | "active" | "landed" | "cancelled" | "incident" | "diverted" | "unknown";
+type FlightStatus = "scheduled" | "delayed" | "active" | "landed" | "cancelled" | "incident" | "diverted" | "unknown";
 
 interface FlightResult {
   flightNumber: string;
@@ -68,6 +68,7 @@ interface FlightResult {
   depGate: string | null;
   depTerminal: string | null;
   companionMessage: string | null;
+  officialStatusUrl?: string;
 }
 
 interface JourneyFlight {
@@ -88,7 +89,7 @@ interface JourneyResponse {
 }
 
 function statusLabel(s: FlightStatus) {
-  return { scheduled: "Scheduled", active: "In Air", landed: "Landed", cancelled: "Cancelled", incident: "Incident", diverted: "Diverted", unknown: "Unknown" }[s] ?? "Unknown";
+  return { scheduled: "Scheduled", delayed: "Delayed", active: "In Air", landed: "Landed", cancelled: "Cancelled", incident: "Incident", diverted: "Diverted", unknown: "Unknown" }[s] ?? "Unknown";
 }
 
 function statusColor(s: FlightStatus): string {
@@ -96,6 +97,7 @@ function statusColor(s: FlightStatus): string {
     case "active": return "#1C7C8C";
     case "landed": return "#2E7D52";
     case "cancelled": return "#C0392B";
+    case "delayed": return "#D97706";
     case "incident":
     case "diverted": return "#C9A24B";
     default: return "#6B8A94";
@@ -155,6 +157,9 @@ function FlightResultCard({
   const depTime = formatFlightTime(result.scheduledDep);
   const arrTime = formatFlightTime(result.scheduledArr);
   const airline = airlineFullName(result.airlineIata);
+  const isDelayed = result.status === "delayed" || (result.depDelay != null && result.depDelay >= 15);
+  const estDepTime = result.estimatedDep ? formatFlightTime(result.estimatedDep) : null;
+  const estArrTime = result.estimatedArr ? formatFlightTime(result.estimatedArr) : null;
 
   return (
     <Animated.View entering={FadeInDown.duration(400)}>
@@ -180,7 +185,14 @@ function FlightResultCard({
           <View style={styles.routeRow}>
             <View style={styles.routePoint}>
               <Text style={[styles.routeCode, { color: colors.foreground }]}>{result.depAirport ?? "—"}</Text>
-              <Text style={[styles.routeTime, { color: colors.primary }]}>{depTime}</Text>
+              {isDelayed && estDepTime && estDepTime !== depTime ? (
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                  <Text style={[styles.routeTime, { color: colors.mutedForeground, textDecorationLine: "line-through", fontSize: 14 }]}>{depTime}</Text>
+                  <Text style={[styles.routeTime, { color: "#D97706" }]}>{estDepTime}</Text>
+                </View>
+              ) : (
+                <Text style={[styles.routeTime, { color: colors.primary }]}>{depTime}</Text>
+              )}
             </View>
             <View style={styles.routeLine}>
               <View style={[styles.routeDash, { backgroundColor: colors.border }]} />
@@ -189,7 +201,14 @@ function FlightResultCard({
             </View>
             <View style={[styles.routePoint, { alignItems: "flex-end" }]}>
               <Text style={[styles.routeCode, { color: colors.foreground }]}>{result.arrAirport ?? "—"}</Text>
-              <Text style={[styles.routeTime, { color: colors.primary }]}>{arrTime}</Text>
+              {isDelayed && estArrTime && estArrTime !== arrTime ? (
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                  <Text style={[styles.routeTime, { color: colors.mutedForeground, textDecorationLine: "line-through", fontSize: 14 }]}>{arrTime}</Text>
+                  <Text style={[styles.routeTime, { color: "#D97706" }]}>{estArrTime}</Text>
+                </View>
+              ) : (
+                <Text style={[styles.routeTime, { color: colors.primary }]}>{arrTime}</Text>
+              )}
             </View>
           </View>
         )}
@@ -255,6 +274,13 @@ function FlightResultCard({
             <Text style={[styles.linkText, { color: colors.primary }]}>Add to trip</Text>
           </Pressable>
         </View>
+
+        {result.officialStatusUrl ? (
+          <Pressable onPress={() => openUrl(result.officialStatusUrl!)} style={styles.verifyRow} hitSlop={6}>
+            <Icon name="globe" size={13} color={colors.mutedForeground} />
+            <Text style={[styles.verifyText, { color: colors.mutedForeground }]}>Check live status with the airline</Text>
+          </Pressable>
+        ) : null}
       </View>
     </Animated.View>
   );
@@ -834,6 +860,8 @@ const styles = StyleSheet.create({
   linkRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", borderTopWidth: 1, marginTop: 14, paddingTop: 12 },
   linkBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, paddingVertical: 4 },
   linkText: { fontFamily: "Inter_600SemiBold", fontSize: 13 },
+  verifyRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, marginTop: 10 },
+  verifyText: { fontFamily: "Inter_500Medium", fontSize: 12, textDecorationLine: "underline" },
   linkDivider: { width: 1, height: 18 },
   trackBtn: {
     flex: 2,

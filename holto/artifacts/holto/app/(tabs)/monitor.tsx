@@ -23,10 +23,10 @@ import { useAuth } from "@/context/AuthContext";
 
 const POLL_INTERVAL_MS = 15 * 60 * 1000;
 
-type FlightStatus = "scheduled" | "active" | "landed" | "cancelled" | "incident" | "diverted" | "unknown";
+type FlightStatus = "scheduled" | "delayed" | "active" | "landed" | "cancelled" | "incident" | "diverted" | "unknown";
 
 function statusLabel(s: FlightStatus): string {
-  return { scheduled: "Scheduled", active: "In Air", landed: "Landed", cancelled: "Cancelled", incident: "Incident", diverted: "Diverted", unknown: "Unknown" }[s] ?? "Unknown";
+  return { scheduled: "Scheduled", delayed: "Delayed", active: "In Air", landed: "Landed", cancelled: "Cancelled", incident: "Incident", diverted: "Diverted", unknown: "Unknown" }[s] ?? "Unknown";
 }
 
 function statusBg(s: FlightStatus, colors: ReturnType<typeof useColors>): string {
