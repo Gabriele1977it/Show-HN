@@ -12,6 +12,7 @@ import { track } from "@/utils/analytics";
 import { openUrl } from "@/utils/openUrl";
 import {
   ESSENTIALS_LIST,
+  ESSENTIALS_REVIEWED,
   findEssentials,
   type CountryEssentials,
   type WaterSafety,
@@ -258,6 +259,10 @@ export default function DestinationScreen() {
         <Row emoji="💡" label="Good to know" value={c.tip} colors={colors} />
       </Animated.View>
 
+      <Text style={[styles.reviewedNote, { color: colors.mutedForeground }]}>
+        Essentials are guidance, reviewed {ESSENTIALS_REVIEWED} · norms and emergency numbers can vary regionally — double-check locally.
+      </Text>
+
       {esimPackages.length > 0 ? (
         <Animated.View entering={FadeInDown.delay(200).duration(400)} style={[styles.card, colors.shadow, { backgroundColor: colors.card, borderColor: colors.border, borderRadius: colors.radius }]}>
           <View style={styles.esimHead}>
@@ -325,6 +330,7 @@ const styles = StyleSheet.create({
   esimBuy: { minWidth: 68, height: 36, borderRadius: 10, alignItems: "center", justifyContent: "center", paddingHorizontal: 14 },
   esimBuyText: { fontFamily: "Inter_700Bold", fontSize: 14 },
   esimNote: { fontFamily: "Inter_400Regular", fontSize: 11, marginTop: 12 },
+  reviewedNote: { fontFamily: "Inter_400Regular", fontSize: 11, lineHeight: 16, marginTop: 14, paddingHorizontal: 4 },
   advisory: { flexDirection: "row", alignItems: "center", gap: 10, borderWidth: 1, borderRadius: 12, padding: 12, marginTop: 14 },
   advisoryDot: { width: 9, height: 9, borderRadius: 5 },
   advisoryLabel: { fontFamily: "Inter_600SemiBold", fontSize: 13 },

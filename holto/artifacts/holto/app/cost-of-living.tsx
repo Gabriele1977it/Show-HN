@@ -195,7 +195,7 @@ export default function CostOfLivingScreen() {
           ) : null}
 
           <Text style={[styles.note, { color: colors.mutedForeground }]}>
-            The monthly breakdown is a HOLTO estimate in GBP for one person — rent is a one-bedroom flat and the total assumes ~8 meals out. The reality-check index above is real World Bank data. Actual budgets vary with lifestyle and neighbourhood.
+            The monthly breakdown is a HOLTO estimate in GBP for one person — rent is a one-bedroom flat and the total assumes ~8 meals out. The reality-check index above is real World Bank data{data.priceIndex?.year ? ` (${data.priceIndex.year})` : ""}. Actual budgets vary with lifestyle and neighbourhood.{data.dataVersion ? ` · Estimates reviewed ${data.dataVersion}.` : ""}
           </Text>
         </Animated.View>
       ) : null}

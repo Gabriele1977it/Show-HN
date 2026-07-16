@@ -3,6 +3,10 @@
 // on a plane). Curated for HOLTO's common destinations. Guidance, not gospel:
 // emergency numbers and norms can vary regionally, so we keep it pragmatic.
 
+// When the essentials facts below were last reviewed. Surfaced in the app so
+// even the static reference data is transparent about its age.
+export const ESSENTIALS_REVIEWED = "July 2026";
+
 export type WaterSafety = "safe" | "bottled" | "caution";
 export type DrivingSide = "left" | "right";
 

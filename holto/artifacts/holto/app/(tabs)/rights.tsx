@@ -371,6 +371,9 @@ export default function RightsScreen() {
               )}
             </Animated.View>
           )}
+          <Text style={[styles.rulesAsOf, { color: colors.mutedForeground }]}>
+            Based on UK261 / EU261 rules current as of July 2026. Guidance, not legal advice — the airline or a regulator makes the final decision.
+          </Text>
         </View>
       </Animated.View>
 
@@ -495,6 +498,7 @@ const styles = StyleSheet.create({
   resultMeta: { borderTopWidth: 1, marginTop: 12, paddingTop: 10 },
   resultMetaText: { fontFamily: "Inter_400Regular", fontSize: 13 },
   resultNote: { fontFamily: "Inter_400Regular", fontSize: 12, lineHeight: 18 },
+  rulesAsOf: { fontFamily: "Inter_400Regular", fontSize: 11, lineHeight: 16, marginTop: 14 },
   resultIneligible: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
   resultIneligibleText: { fontFamily: "Inter_400Regular", fontSize: 14, flex: 1, lineHeight: 20 },
   sectionTitle: { fontFamily: "Inter_700Bold", fontSize: 20, letterSpacing: -0.2 },
