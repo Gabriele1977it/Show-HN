@@ -1,0 +1,57 @@
+import assert from "node:assert/strict";
+import { test } from "node:test";
+
+import { normaliseAdbFlight } from "../src/lib/aerodatabox.ts";
+import { mergeFlightRecords } from "../src/lib/flights.ts";
+import { mapStatus } from "../src/lib/flight-format.ts";
+
+test("normaliseAdbFlight maps status and parses the space-separated UTC times", () => {
+  const r = normaliseAdbFlight({
+    number: "EY 64",
+    status: "Delayed",
+    airline: { iata: "EY" },
+    departure: {
+      airport: { iata: "LHR" },
+      scheduledTime: { utc: "2026-07-15 14:45Z" },
+      revisedTime: { utc: "2026-07-15 17:10Z" },
+      terminal: "4",
+      gate: "10A",
+    },
+    arrival: { airport: { iata: "AUH" }, scheduledTime: { utc: "2026-07-16 00:45Z" } },
+  });
+  assert.equal(r.flight_iata, "EY64");
+  assert.equal(r.status, "delayed");
+  assert.equal(r.dep_iata, "LHR");
+  assert.equal(r.dep_time, "2026-07-15T14:45:00.000Z");
+  assert.equal(r.dep_estimated, "2026-07-15T17:10:00.000Z");
+  assert.equal(r.dep_terminal, "4");
+});
+
+test("normaliseAdbFlight maps the status vocabulary", () => {
+  assert.equal(normaliseAdbFlight({ status: "Canceled" }).status, "cancelled");
+  assert.equal(normaliseAdbFlight({ status: "Departed" }).status, "active");
+  assert.equal(normaliseAdbFlight({ status: "Arrived" }).status, "landed");
+  assert.equal(normaliseAdbFlight({ status: "Expected" }).status, "scheduled");
+});
+
+test("mergeFlightRecords takes the more-disrupted status", () => {
+  const airlabs = { status: "scheduled", dep_time: "2026-07-15T14:45:00Z" };
+  const adb = { status: "delayed", dep_time: "2026-07-15T14:45:00Z", dep_estimated: "2026-07-15T17:10:00Z" };
+  const merged = mergeFlightRecords(airlabs, adb)!;
+  assert.equal(mapStatus(merged.status as string), "delayed");
+  assert.equal(merged.dep_estimated, "2026-07-15T17:10:00Z"); // delay signal preserved
+});
+
+test("mergeFlightRecords keeps the later estimated time (reveals the delay)", () => {
+  const a = { status: "scheduled", dep_estimated: "2026-07-15T15:00:00Z" };
+  const b = { status: "scheduled", dep_estimated: "2026-07-15T17:10:00Z" };
+  const merged = mergeFlightRecords(a, b)!;
+  assert.equal(merged.dep_estimated, "2026-07-15T17:10:00Z");
+});
+
+test("mergeFlightRecords tolerates either side being null", () => {
+  const only = { status: "delayed" };
+  assert.deepEqual(mergeFlightRecords(only, null), only);
+  assert.deepEqual(mergeFlightRecords(null, only), only);
+  assert.equal(mergeFlightRecords(null, null), null);
+});

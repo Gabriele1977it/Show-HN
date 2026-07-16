@@ -79,6 +79,7 @@ router.get("/admin/overview", async (_req, res): Promise<void> => {
       geminiAI: !!process.env.GEMINI_API_KEY,
       openAI: !!process.env.OPENAI_API_KEY,
       flights_airlabs: !!process.env.AIRLABS_API_KEY,
+      flights_aerodatabox: !!process.env.AERODATABOX_API_KEY,
       maps_mapbox: !!process.env.MAPBOX_TOKEN,
       costOfLiving: "bundled + World Bank (no key)",
       stripe: !!process.env.STRIPE_SECRET_KEY,

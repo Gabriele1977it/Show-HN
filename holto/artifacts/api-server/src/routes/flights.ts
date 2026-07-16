@@ -4,6 +4,7 @@ import { Router, type IRouter } from "express";
 
 import { requireAuth } from "../middlewares/auth";
 import { buildFlightResponse, fetchFlightData, generateStatusMessage } from "../lib/flights";
+import { aerodataboxConfigured } from "../lib/aerodatabox";
 import { allowFlightSearch } from "../lib/usage";
 import { getUserTier, TIER_FEATURES } from "../lib/tier";
 
@@ -27,13 +28,13 @@ router.get("/flights/status", requireAuth, async (req, res): Promise<void> => {
   }
 
   const apiKey = process.env.AIRLABS_API_KEY;
-  if (!apiKey) {
+  if (!apiKey && !aerodataboxConfigured()) {
     res.status(503).json({ error: "Flight tracking is not configured." });
     return;
   }
 
   req.log.info({ flightNumber }, "Fetching flight status");
-  const flight = await fetchFlightData(flightNumber, apiKey);
+  const flight = await fetchFlightData(flightNumber, apiKey ?? "");
 
   if (!flight) {
     req.log.warn({ flightNumber }, "Flight not found in any AirLabs endpoint");

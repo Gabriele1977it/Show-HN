@@ -50,6 +50,7 @@ const INTEGRATION_LABELS: Record<string, string> = {
   geminiAI: "Gemini AI",
   openAI: "OpenAI",
   flights_airlabs: "Flights (AirLabs)",
+  flights_aerodatabox: "Flights (AeroDataBox)",
   maps_mapbox: "Maps (Mapbox)",
   costOfLiving: "Cost of living",
   stripe: "Stripe",

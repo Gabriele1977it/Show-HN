@@ -11,6 +11,7 @@ import {
   type FlightStatus,
 } from "./flights";
 import { detectStatusChange, type FlightSnapshot, type StatusChange } from "./status-change";
+import { aerodataboxConfigured } from "./aerodatabox";
 
 export { detectStatusChange } from "./status-change";
 
@@ -72,8 +73,8 @@ async function deliverAlert(
  */
 export async function pollOnce(): Promise<{ checked: number; alerts: number }> {
   const apiKey = process.env.AIRLABS_API_KEY;
-  if (!apiKey) {
-    logger.warn("AIRLABS_API_KEY not set — monitor pass skipped");
+  if (!apiKey && !aerodataboxConfigured()) {
+    logger.warn("No flight provider configured (AirLabs / AeroDataBox) — monitor pass skipped");
     return { checked: 0, alerts: 0 };
   }
 
@@ -90,7 +91,7 @@ export async function pollOnce(): Promise<{ checked: number; alerts: number }> {
   for (const f of flights) {
     try {
       if (f.lastStatus && TERMINAL.has(f.lastStatus)) continue;
-      const raw = await fetchFlightData(f.flightNumber, apiKey);
+      const raw = await fetchFlightData(f.flightNumber, apiKey ?? "");
       if (!raw) continue; // data gap — leave the last known state intact
       const resp = buildFlightResponse(f.flightNumber, raw, null);
       if (resp.status === "unknown") continue;
