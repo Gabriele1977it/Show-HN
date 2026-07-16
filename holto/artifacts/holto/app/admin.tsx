@@ -8,6 +8,25 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Icon } from "@/components/Icon";
 import { useColors } from "@/hooks/useColors";
 
+interface ProviderDebug {
+  configured: boolean;
+  found: boolean;
+  data: {
+    status: string | null;
+    dep_time: string | null;
+    dep_estimated: string | null;
+    dep_actual: string | null;
+    dep_delay: number | null;
+    dep_gate: string | null;
+    dep_terminal: string | null;
+  } | null;
+}
+interface FlightDebug {
+  flightNumber: string;
+  airlabs: ProviderDebug;
+  aerodatabox: ProviderDebug;
+  result: { status: string; delay: number | null } | null;
+}
 interface FeedHealth {
   loaded: boolean;
   live?: boolean;
@@ -84,6 +103,7 @@ export default function AdminScreen() {
   const [name, setName] = useState("");
   const [newTier, setNewTier] = useState("pro");
   const [notice, setNotice] = useState<string | null>(null);
+  const [debugFlight, setDebugFlight] = useState("");
 
   const [cEmail, setCEmail] = useState("");
   const [cCode, setCCode] = useState("");
@@ -164,6 +184,11 @@ export default function AdminScreen() {
       setCNotice(`Demo trips ready:\n${links}`);
     },
     onError: () => setCNotice("Couldn't create demo trips. Try again."),
+  });
+
+  const flightDebug = useMutation({
+    mutationFn: (fn: string) =>
+      customFetch<FlightDebug>(`/api/admin/flight-debug?flightNumber=${encodeURIComponent(fn)}`, { responseType: "json" }),
   });
 
   function submitCreator() {
@@ -274,6 +299,53 @@ export default function AdminScreen() {
             </View>
           );
         })}
+      </View>
+
+      {/* Flight diagnostic — what each provider actually returns */}
+      <Text style={[styles.section, { color: colors.foreground }]}>Flight status debug</Text>
+      <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, borderRadius: colors.radius }]}>
+        <View style={{ flexDirection: "row", gap: 8 }}>
+          <TextInput
+            value={debugFlight}
+            onChangeText={setDebugFlight}
+            placeholder="Flight number (e.g. EY62)"
+            placeholderTextColor={colors.mutedForeground}
+            autoCapitalize="characters"
+            autoCorrect={false}
+            style={[styles.input, { flex: 1, backgroundColor: colors.background, borderColor: colors.border, color: colors.foreground }]}
+          />
+          <Pressable
+            onPress={() => debugFlight.trim() && flightDebug.mutate(debugFlight.trim().toUpperCase())}
+            disabled={flightDebug.isPending}
+            style={[styles.solidBtn, { backgroundColor: colors.primary, paddingHorizontal: 18, opacity: flightDebug.isPending ? 0.7 : 1 }]}
+          >
+            <Text style={[styles.solidBtnText, { color: colors.primaryForeground }]}>{flightDebug.isPending ? "…" : "Check"}</Text>
+          </Pressable>
+        </View>
+        {flightDebug.data ? (
+          <View style={{ marginTop: 12, gap: 8 }}>
+            {(["airlabs", "aerodatabox"] as const).map((p) => {
+              const d = flightDebug.data![p];
+              const label = p === "airlabs" ? "AirLabs" : "AeroDataBox";
+              return (
+                <View key={p} style={[styles.dbgRow, { borderColor: colors.border }]}>
+                  <Text style={[styles.dbgName, { color: colors.foreground }]}>{label}</Text>
+                  <Text style={[styles.dbgVal, { color: colors.mutedForeground }]}>
+                    {!d.configured ? "not configured" : !d.found ? "no data" : `${d.data?.status ?? "?"}${d.data?.dep_estimated ? ` · est ${d.data.dep_estimated.slice(11, 16)}` : ""}${d.data?.dep_delay != null ? ` · ${d.data.dep_delay}m` : ""}`}
+                  </Text>
+                </View>
+              );
+            })}
+            <View style={[styles.dbgRow, { borderColor: colors.border }]}>
+              <Text style={[styles.dbgName, { color: colors.primary }]}>App shows</Text>
+              <Text style={[styles.dbgVal, { color: colors.primary, fontFamily: "Inter_700Bold" }]}>
+                {flightDebug.data.result ? `${flightDebug.data.result.status}${flightDebug.data.result.delay != null ? ` · ${flightDebug.data.result.delay}m` : ""}` : "not found"}
+              </Text>
+            </View>
+          </View>
+        ) : flightDebug.isError ? (
+          <Text style={[styles.dbgVal, { color: colors.destructive, marginTop: 10 }]}>Couldn't check that flight.</Text>
+        ) : null}
       </View>
 
       {/* Live data feeds — self-updating sources and their freshness */}
@@ -410,6 +482,9 @@ const styles = StyleSheet.create({
   tierChipText: { fontFamily: "Inter_600SemiBold", fontSize: 13 },
   solidBtn: { height: 48, borderRadius: 12, alignItems: "center", justifyContent: "center" },
   solidBtnText: { fontFamily: "Inter_600SemiBold", fontSize: 15 },
+  dbgRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderTopWidth: 1, paddingTop: 8 },
+  dbgName: { fontFamily: "Inter_600SemiBold", fontSize: 13 },
+  dbgVal: { fontFamily: "Inter_500Medium", fontSize: 13 },
   notice: { fontFamily: "Inter_500Medium", fontSize: 13, marginTop: 12, padding: 12, borderRadius: 10, overflow: "hidden" },
   searchWrap: { flexDirection: "row", alignItems: "center", gap: 8, borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, height: 44, marginBottom: 8 },
   searchInput: { flex: 1, fontFamily: "Inter_400Regular", fontSize: 15, height: "100%" },

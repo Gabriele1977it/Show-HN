@@ -97,6 +97,25 @@ export function normaliseAdbFlight(f: AdbFlight): Record<string, unknown> {
   };
 }
 
+// A daily flight number returns several legs (yesterday, today, tomorrow). Pick
+// the most relevant: prefer a leg that already carries a revised/estimated time
+// (a live delay signal), otherwise the one whose scheduled departure is closest
+// to now. Exported for testing.
+export function pickBestLeg(list: AdbFlight[]): AdbFlight {
+  const now = Date.now();
+  const score = (f: AdbFlight): [number, number] => {
+    const hasRevised = f.departure?.revisedTime?.utc || f.departure?.predictedTime?.utc ? 1 : 0;
+    const sched = toIso(f.departure?.scheduledTime);
+    const dist = sched ? Math.abs(Date.parse(sched) - now) : Number.MAX_SAFE_INTEGER;
+    return [hasRevised, -dist]; // more revised first, then nearest scheduled
+  };
+  return [...list].sort((a, b) => {
+    const sa = score(a);
+    const sb = score(b);
+    return sb[0] - sa[0] || sb[1] - sa[1];
+  })[0];
+}
+
 // Fetch the current status for a flight number, or null on any failure.
 export async function fetchAeroDataBox(flightNumber: string): Promise<Record<string, unknown> | null> {
   const key = process.env.AERODATABOX_API_KEY;
@@ -121,9 +140,7 @@ export async function fetchAeroDataBox(flightNumber: string): Promise<Record<str
           ? [data as AdbFlight]
           : [];
     if (!list.length) return null;
-    // Prefer the leg with a real departure time closest to now; simplest robust
-    // choice is the first, which AeroDataBox returns for the nearest date.
-    return normaliseAdbFlight(list[0]);
+    return normaliseAdbFlight(pickBestLeg(list));
   } catch (err) {
     logger.warn({ err, fn }, "AeroDataBox fetch failed");
     return null;

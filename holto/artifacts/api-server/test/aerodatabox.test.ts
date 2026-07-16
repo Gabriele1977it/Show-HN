@@ -55,3 +55,14 @@ test("mergeFlightRecords tolerates either side being null", () => {
   assert.deepEqual(mergeFlightRecords(null, only), only);
   assert.equal(mergeFlightRecords(null, null), null);
 });
+
+import { pickBestLeg } from "../src/lib/aerodatabox.ts";
+
+test("pickBestLeg prefers a leg that carries a revised (delay) time", () => {
+  const legs = [
+    { departure: { scheduledTime: { utc: "2020-01-01 09:30Z" } } }, // old, no revised
+    { departure: { scheduledTime: { utc: "2020-01-02 09:30Z" }, revisedTime: { utc: "2020-01-02 10:15Z" } } },
+  ];
+  const best = pickBestLeg(legs);
+  assert.equal(best.departure?.revisedTime?.utc, "2020-01-02 10:15Z");
+});

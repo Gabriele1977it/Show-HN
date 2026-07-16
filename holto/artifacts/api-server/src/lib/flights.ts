@@ -199,6 +199,19 @@ export function mergeFlightRecords(
   };
 }
 
+// Raw AirLabs-only lookup (uncached) — exposed for the admin flight diagnostic.
+export async function fetchAirlabsFlight(
+  flightNumber: string,
+  apiKey: string,
+): Promise<Record<string, unknown> | null> {
+  return fetchFlightDataUncached(flightNumber, apiKey);
+}
+
+// Time-aware status + delay for a raw provider record — exposed for diagnostics.
+export function deriveStatusAndDelay(flight: Record<string, unknown>): { status: FlightStatus; delay: number | null } {
+  return derive(flight);
+}
+
 export async function fetchFlightData(
   flightNumber: string,
   apiKey: string,

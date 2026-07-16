@@ -26,6 +26,8 @@ import { ratesFetchedAt } from "../lib/fx";
 import { worldBankStatus } from "../lib/worldbank";
 import { stateDeptStatus } from "../lib/statedept";
 import { visaStatus } from "../lib/visa";
+import { deriveStatusAndDelay, fetchAirlabsFlight, mergeFlightRecords } from "../lib/flights";
+import { aerodataboxConfigured, fetchAeroDataBox } from "../lib/aerodatabox";
 
 const router: IRouter = Router();
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
@@ -33,6 +35,44 @@ const TIERS = new Set(["free", "trip_pass", "pro"]);
 
 // Every admin route is owner-only (and returns 404 to everyone else).
 router.use("/admin", requireAuth, requireOwner);
+
+// Flight diagnostic: what does each provider actually return for a flight number?
+// Bypasses the cache and shows AirLabs vs AeroDataBox vs the merged/derived view,
+// so a "shows on-time but it's delayed" report can be pinpointed to its source.
+router.get("/admin/flight-debug", async (req, res): Promise<void> => {
+  const fn = String(req.query.flightNumber ?? "").trim().toUpperCase();
+  if (!/^[A-Z0-9]{3,8}$/.test(fn)) {
+    res.status(400).json({ error: "Enter a flight number, e.g. EY62." });
+    return;
+  }
+  const airlabsKey = process.env.AIRLABS_API_KEY ?? "";
+  const pick = (r: Record<string, unknown> | null) =>
+    r
+      ? {
+          status: r.status ?? null,
+          dep_time: r.dep_time ?? null,
+          dep_estimated: r.dep_estimated ?? null,
+          dep_actual: r.dep_actual ?? null,
+          dep_delay: r.dep_delay ?? null,
+          dep_gate: r.dep_gate ?? null,
+          dep_terminal: r.dep_terminal ?? null,
+        }
+      : null;
+
+  const [airlabs, adb] = await Promise.all([
+    airlabsKey ? fetchAirlabsFlight(fn, airlabsKey) : Promise.resolve(null),
+    aerodataboxConfigured() ? fetchAeroDataBox(fn) : Promise.resolve(null),
+  ]);
+  const merged = mergeFlightRecords(airlabs, adb);
+  const derived = merged ? deriveStatusAndDelay(merged) : null;
+
+  res.json({
+    flightNumber: fn,
+    airlabs: { configured: !!airlabsKey, found: !!airlabs, data: pick(airlabs) },
+    aerodatabox: { configured: aerodataboxConfigured(), found: !!adb, data: pick(adb) },
+    result: derived, // what the app would show: { status, delay }
+  });
+});
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function tableCount(table: any): Promise<number> {
