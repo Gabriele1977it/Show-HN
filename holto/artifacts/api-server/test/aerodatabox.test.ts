@@ -67,7 +67,14 @@ test("mergeFlightRecords tolerates either side being null", () => {
   assert.equal(mergeFlightRecords(null, null), null);
 });
 
-import { pickBestLeg } from "../src/lib/aerodatabox.ts";
+import { localWindow, pickBestLeg } from "../src/lib/aerodatabox.ts";
+
+test("localWindow builds a ±2h airport-local FIDS window", () => {
+  const w = localWindow("2026-07-16 09:30+01:00")!;
+  assert.equal(w.from, "2026-07-16T07:30");
+  assert.equal(w.to, "2026-07-16T11:30");
+  assert.equal(localWindow("nonsense"), null);
+});
 
 test("pickBestLeg prefers a leg that carries a revised (delay) time", () => {
   const legs = [
