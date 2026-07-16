@@ -9,6 +9,7 @@ import { Icon } from "@/components/Icon";
 import { useColors } from "@/hooks/useColors";
 
 interface ProviderDebug {
+  name: string;
   configured: boolean;
   found: boolean;
   data: {
@@ -23,8 +24,7 @@ interface ProviderDebug {
 }
 interface FlightDebug {
   flightNumber: string;
-  airlabs: ProviderDebug;
-  aerodatabox: ProviderDebug;
+  providers: ProviderDebug[];
   result: { status: string; delay: number | null } | null;
 }
 interface FeedHealth {
@@ -324,18 +324,14 @@ export default function AdminScreen() {
         </View>
         {flightDebug.data ? (
           <View style={{ marginTop: 12, gap: 8 }}>
-            {(["airlabs", "aerodatabox"] as const).map((p) => {
-              const d = flightDebug.data![p];
-              const label = p === "airlabs" ? "AirLabs" : "AeroDataBox";
-              return (
-                <View key={p} style={[styles.dbgRow, { borderColor: colors.border }]}>
-                  <Text style={[styles.dbgName, { color: colors.foreground }]}>{label}</Text>
-                  <Text style={[styles.dbgVal, { color: colors.mutedForeground }]}>
-                    {!d.configured ? "not configured" : !d.found ? "no data" : `${d.data?.status ?? "?"}${d.data?.dep_estimated ? ` · est ${d.data.dep_estimated.slice(11, 16)}` : ""}${d.data?.dep_delay != null ? ` · ${d.data.dep_delay}m` : ""}`}
-                  </Text>
-                </View>
-              );
-            })}
+            {flightDebug.data.providers.map((d) => (
+              <View key={d.name} style={[styles.dbgRow, { borderColor: colors.border }]}>
+                <Text style={[styles.dbgName, { color: colors.foreground }]}>{d.name}</Text>
+                <Text style={[styles.dbgVal, { color: colors.mutedForeground }]}>
+                  {!d.configured ? "not configured" : !d.found ? "no data" : `${d.data?.status ?? "?"}${d.data?.dep_estimated ? ` · est ${d.data.dep_estimated.slice(11, 16)}` : ""}${d.data?.dep_delay != null ? ` · ${d.data.dep_delay}m` : ""}`}
+                </Text>
+              </View>
+            ))}
             <View style={[styles.dbgRow, { borderColor: colors.border }]}>
               <Text style={[styles.dbgName, { color: colors.primary }]}>App shows</Text>
               <Text style={[styles.dbgVal, { color: colors.primary, fontFamily: "Inter_700Bold" }]}>

@@ -27,7 +27,7 @@ import { worldBankStatus } from "../lib/worldbank";
 import { stateDeptStatus } from "../lib/statedept";
 import { visaStatus } from "../lib/visa";
 import { deriveStatusAndDelay, fetchAirlabsFlight, mergeFlightRecords } from "../lib/flights";
-import { aerodataboxConfigured, fetchAeroDataBox } from "../lib/aerodatabox";
+import { aerodataboxConfigured, debugAeroDataBox } from "../lib/aerodatabox";
 
 const router: IRouter = Router();
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
@@ -59,17 +59,24 @@ router.get("/admin/flight-debug", async (req, res): Promise<void> => {
         }
       : null;
 
+  const adbOn = aerodataboxConfigured();
   const [airlabs, adb] = await Promise.all([
     airlabsKey ? fetchAirlabsFlight(fn, airlabsKey) : Promise.resolve(null),
-    aerodataboxConfigured() ? fetchAeroDataBox(fn) : Promise.resolve(null),
+    adbOn ? debugAeroDataBox(fn) : Promise.resolve({ byNumber: null, fids: null }),
   ]);
-  const merged = mergeFlightRecords(airlabs, adb);
+  // The effective AeroDataBox record = by-number, enriched by the live board.
+  const useFids = adb.fids && (adb.fids.dep_estimated || adb.fids.dep_actual || adb.fids.status === "delayed");
+  const adbEffective = useFids ? { ...(adb.byNumber ?? {}), ...adb.fids } : adb.byNumber;
+  const merged = mergeFlightRecords(airlabs, adbEffective);
   const derived = merged ? deriveStatusAndDelay(merged) : null;
 
   res.json({
     flightNumber: fn,
-    airlabs: { configured: !!airlabsKey, found: !!airlabs, data: pick(airlabs) },
-    aerodatabox: { configured: aerodataboxConfigured(), found: !!adb, data: pick(adb) },
+    providers: [
+      { name: "AirLabs", configured: !!airlabsKey, found: !!airlabs, data: pick(airlabs) },
+      { name: "AeroDataBox (number)", configured: adbOn, found: !!adb.byNumber, data: pick(adb.byNumber) },
+      { name: "AeroDataBox (live board)", configured: adbOn, found: !!adb.fids, data: pick(adb.fids) },
+    ],
     result: derived, // what the app would show: { status, delay }
   });
 });

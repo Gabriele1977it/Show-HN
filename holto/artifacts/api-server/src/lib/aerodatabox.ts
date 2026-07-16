@@ -1,4 +1,5 @@
 import { logger } from "./logger";
+import { effectiveDelayMinutes, DELAY_THRESHOLD_MIN } from "./flight-format";
 
 // Optional second flight-status provider: AeroDataBox (via RapidAPI). It has
 // notably better *pre-departure* delay coverage than AirLabs' free tier, so we
@@ -162,11 +163,16 @@ async function fetchFidsDeparture(iata: string, from: string, to: string, fn: st
   return hit ? normaliseAdbFlight(hit) : null;
 }
 
-// Fetch the current status for a flight number, or null on any failure. When the
-// flight-by-number result has no live delay signal, cross-checks the live
-// departures board for a revised time (disable with AERODATABOX_DISABLE_FIDS=1).
-export async function fetchAeroDataBox(flightNumber: string): Promise<Record<string, unknown> | null> {
-  if (!process.env.AERODATABOX_API_KEY) return null;
+export interface AdbLookup {
+  byNumber: Record<string, unknown> | null;
+  fids: Record<string, unknown> | null;
+}
+
+// Shared lookup: flight-by-number, plus the live departures board when the
+// by-number result shows no real delay (a revised time equal to scheduled — as
+// EY62 returned — still means "on time", so trigger on the delay value, not its
+// presence). Disable the FIDS step with AERODATABOX_DISABLE_FIDS=1.
+async function lookupAdb(flightNumber: string): Promise<AdbLookup> {
   const fn = flightNumber.trim().toUpperCase();
   const data = await adbGet(`/flights/number/${encodeURIComponent(fn)}?withLocation=false&withAircraftImage=false`);
   const list: AdbFlight[] = Array.isArray(data)
@@ -176,23 +182,43 @@ export async function fetchAeroDataBox(flightNumber: string): Promise<Record<str
       : data && typeof data === "object" && "number" in (data as object)
         ? [data as AdbFlight]
         : [];
-  if (!list.length) return null;
+  if (!list.length) return { byNumber: null, fids: null };
 
   const best = pickBestLeg(list);
-  const record = normaliseAdbFlight(best);
+  const byNumber = normaliseAdbFlight(best);
 
-  // Enrich from the live departures board if we found no delay signal yet.
-  const noSignal = !record.dep_estimated && !record.dep_actual;
+  const byNumberDelay = effectiveDelayMinutes(
+    typeof byNumber.dep_delay === "number" ? byNumber.dep_delay : null,
+    byNumber.dep_time as string | null,
+    byNumber.dep_estimated as string | null,
+    byNumber.dep_actual as string | null,
+  );
+  const noSignal = byNumberDelay == null || byNumberDelay < DELAY_THRESHOLD_MIN;
   const iata = best.departure?.airport?.iata;
   const localRaw = best.departure?.scheduledTime?.local;
+
+  let fids: Record<string, unknown> | null = null;
   if (noSignal && iata && localRaw && process.env.AERODATABOX_DISABLE_FIDS !== "1") {
     const win = localWindow(localRaw);
-    if (win) {
-      const fids = await fetchFidsDeparture(iata, win.from, win.to, fn);
-      if (fids && (fids.dep_estimated || fids.dep_actual || fids.status === "delayed")) {
-        return { ...record, ...fids };
-      }
-    }
+    if (win) fids = await fetchFidsDeparture(iata, win.from, win.to, fn);
   }
-  return record;
+  return { byNumber, fids };
+}
+
+function useFids(fids: Record<string, unknown> | null): boolean {
+  return !!fids && !!(fids.dep_estimated || fids.dep_actual || fids.status === "delayed");
+}
+
+// Fetch the effective status for a flight number, or null on any failure.
+export async function fetchAeroDataBox(flightNumber: string): Promise<Record<string, unknown> | null> {
+  if (!process.env.AERODATABOX_API_KEY) return null;
+  const { byNumber, fids } = await lookupAdb(flightNumber);
+  if (!byNumber) return null;
+  return useFids(fids) ? { ...byNumber, ...fids } : byNumber;
+}
+
+// Diagnostic variant: exposes the by-number and live-board results separately.
+export async function debugAeroDataBox(flightNumber: string): Promise<AdbLookup> {
+  if (!process.env.AERODATABOX_API_KEY) return { byNumber: null, fids: null };
+  return lookupAdb(flightNumber);
 }
