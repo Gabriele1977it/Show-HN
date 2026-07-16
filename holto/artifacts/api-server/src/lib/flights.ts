@@ -29,7 +29,10 @@ function derive(flight: Record<string, unknown>): { status: FlightStatus; delay:
     (flight.dep_estimated as string | null) ?? null,
     (flight.dep_actual as string | null) ?? null,
   );
-  return { status: deriveStatus(mapStatus(flight.status as string), effDelay), delay: effDelay };
+  const status = deriveStatus(mapStatus(flight.status as string), effDelay);
+  // Only surface a positive delay figure — a negative/zero "delay" is noise.
+  const delay = effDelay != null && effDelay >= 1 ? effDelay : null;
+  return { status, delay };
 }
 
 export function generateStatusMessage(flight: Record<string, unknown>): string {
@@ -157,15 +160,21 @@ const STATUS_SEVERITY: Record<FlightStatus, number> = {
   unknown: 0,
 };
 
-function laterIso(a: unknown, b: unknown): string | null {
-  const av = typeof a === "string" ? Date.parse(a) : NaN;
-  const bv = typeof b === "string" ? Date.parse(b) : NaN;
-  if (Number.isNaN(av)) return typeof b === "string" ? (b as string) : null;
-  if (Number.isNaN(bv)) return a as string;
-  return av >= bv ? (a as string) : (b as string);
+// The departure delay for a SINGLE provider's record, computed from its own
+// (internally time-zone-consistent) fields. Never mixes providers — that was the
+// bug that produced a phantom −60 min from AirLabs' local vs AeroDataBox's UTC.
+function recordDelay(r: Record<string, unknown>): number | null {
+  return effectiveDelayMinutes(
+    typeof r.dep_delay === "number" ? r.dep_delay : null,
+    (r.dep_time as string | null) ?? null,
+    (r.dep_estimated as string | null) ?? null,
+    (r.dep_actual as string | null) ?? null,
+  );
 }
 
 // Merge two provider records into the most complete, most-disrupted view.
+// Delays are compared per-provider (each from its own times), and the displayed
+// time fields come from a single provider so they stay consistent downstream.
 export function mergeFlightRecords(
   a: Record<string, unknown> | null,
   b: Record<string, unknown> | null,
@@ -175,8 +184,16 @@ export function mergeFlightRecords(
   const pick = (k: string) => a[k] ?? b[k];
   const sev = (r: Record<string, unknown>) => STATUS_SEVERITY[mapStatus(r.status as string)] ?? 0;
   const status = sev(a) >= sev(b) ? a.status : b.status;
-  const num = (x: unknown) => (typeof x === "number" ? x : null);
-  const maxDelay = Math.max(num(a.dep_delay) ?? -Infinity, num(b.dep_delay) ?? -Infinity);
+
+  const da = recordDelay(a);
+  const db = recordDelay(b);
+  // The bigger, real delay wins; a negative "delay" is meaningless → treat as none.
+  const best = Math.max(da ?? -Infinity, db ?? -Infinity);
+  const delay = Number.isFinite(best) && best >= 1 ? best : da == null && db == null ? null : 0;
+  // Times shown to the user come from whichever provider carries that delay, so
+  // scheduled/estimated stay in the same time base.
+  const src = (db ?? -Infinity) > (da ?? -Infinity) ? b : a;
+
   return {
     ...b,
     ...a,
@@ -185,17 +202,16 @@ export function mergeFlightRecords(
     airline_iata: pick("airline_iata"),
     dep_iata: pick("dep_iata"),
     arr_iata: pick("arr_iata"),
-    dep_time: pick("dep_time"),
-    arr_time: pick("arr_time"),
-    // For estimates, keep the LATER time — the one that reveals a delay.
-    dep_estimated: laterIso(a.dep_estimated, b.dep_estimated),
-    arr_estimated: laterIso(a.arr_estimated, b.arr_estimated),
-    dep_actual: pick("dep_actual"),
-    arr_actual: pick("arr_actual"),
     dep_gate: pick("dep_gate"),
     dep_terminal: pick("dep_terminal"),
     arr_terminal: pick("arr_terminal"),
-    dep_delay: Number.isFinite(maxDelay) ? maxDelay : null,
+    dep_time: src.dep_time ?? pick("dep_time"),
+    dep_estimated: src.dep_estimated ?? null,
+    dep_actual: src.dep_actual ?? null,
+    arr_time: src.arr_time ?? pick("arr_time"),
+    arr_estimated: src.arr_estimated ?? null,
+    arr_actual: src.arr_actual ?? null,
+    dep_delay: delay,
   };
 }
 

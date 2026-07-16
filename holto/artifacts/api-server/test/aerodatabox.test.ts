@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import { normaliseAdbFlight } from "../src/lib/aerodatabox.ts";
-import { mergeFlightRecords } from "../src/lib/flights.ts";
+import { deriveStatusAndDelay, mergeFlightRecords } from "../src/lib/flights.ts";
 import { mapStatus } from "../src/lib/flight-format.ts";
 
 test("normaliseAdbFlight maps status and parses the space-separated UTC times", () => {
@@ -42,11 +42,22 @@ test("mergeFlightRecords takes the more-disrupted status", () => {
   assert.equal(merged.dep_estimated, "2026-07-15T17:10:00Z"); // delay signal preserved
 });
 
-test("mergeFlightRecords keeps the later estimated time (reveals the delay)", () => {
-  const a = { status: "scheduled", dep_estimated: "2026-07-15T15:00:00Z" };
-  const b = { status: "scheduled", dep_estimated: "2026-07-15T17:10:00Z" };
+test("mergeFlightRecords surfaces the bigger real delay and its consistent times", () => {
+  const a = { status: "scheduled", dep_time: "2026-07-15T14:45:00Z", dep_estimated: "2026-07-15T15:00:00Z" }; // 15m
+  const b = { status: "scheduled", dep_time: "2026-07-15T14:45:00Z", dep_estimated: "2026-07-15T17:10:00Z" }; // 145m
   const merged = mergeFlightRecords(a, b)!;
+  assert.equal(merged.dep_delay, 145);
   assert.equal(merged.dep_estimated, "2026-07-15T17:10:00Z");
+});
+
+test("merge doesn't invent a delay from local-vs-UTC time bases (the EY62 -60 bug)", () => {
+  const airlabs = { status: "scheduled", dep_time: "2026-07-16 09:30" }; // local, no estimate
+  const adb = { status: "scheduled", dep_time: "2026-07-16T08:30:00Z", dep_estimated: "2026-07-16T08:30:00Z" }; // UTC, on time
+  const merged = mergeFlightRecords(airlabs, adb)!;
+  assert.ok((merged.dep_delay as number) >= 0, "delay must never be negative");
+  const d = deriveStatusAndDelay(merged);
+  assert.equal(d.status, "scheduled");
+  assert.equal(d.delay, null); // no phantom delay
 });
 
 test("mergeFlightRecords tolerates either side being null", () => {
