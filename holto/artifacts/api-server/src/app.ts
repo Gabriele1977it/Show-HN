@@ -1,8 +1,9 @@
-import express, { type Express } from "express";
+import express, { type Express, type NextFunction, type Request, type Response } from "express";
 import cors from "cors";
 import pinoHttp from "pino-http";
 import router from "./routes";
 import { logger } from "./lib/logger";
+import { captureError } from "./lib/sentry";
 import { WebhookHandlers } from "./webhookHandlers";
 
 const app: Express = express();
@@ -120,5 +121,15 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 app.use("/api", router);
+
+// Final error handler: report to Sentry (if enabled), log, and return a clean
+// 500. Express 5 forwards rejected async handlers here automatically.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+app.use((err: unknown, req: Request, res: Response, _next: NextFunction) => {
+  captureError(err, { path: req.path, method: req.method });
+  logger.error({ err, path: req.path, method: req.method }, "Unhandled route error");
+  if (res.headersSent) return;
+  res.status(500).json({ error: "Something went wrong on our side. Please try again." });
+});
 
 export default app;

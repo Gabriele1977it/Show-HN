@@ -5,7 +5,11 @@ import { ensureAppSchema } from "./lib/ensure-schema";
 import { logger } from "./lib/logger";
 import { pollOnce } from "./lib/monitor";
 import { runProactiveReminders } from "./lib/reminders";
+import { initSentry } from "./lib/sentry";
 import { getStripeSync } from "./stripeClient";
+
+// Initialise error tracking before the server starts (dormant unless SENTRY_DSN).
+initSentry("web");
 
 // Optional in-process flight monitor. Set ENABLE_MONITOR=1 to run the poll loop
 // inside the web service instead of a separate worker — saves the cost of a

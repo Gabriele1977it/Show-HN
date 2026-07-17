@@ -135,6 +135,7 @@ router.get("/admin/overview", async (_req, res): Promise<void> => {
       pushExpo: !!process.env.EXPO_ACCESS_TOKEN,
       email_resend: !!process.env.RESEND_API_KEY,
       awardwallet: !!process.env.AWARDWALLET_API_KEY,
+      errorTracking_sentry: !!process.env.SENTRY_DSN,
     },
     // Freshness of the self-updating data feeds. "idle" just means nothing has
     // used that feature since the last restart — it warms on first use. These

@@ -1,9 +1,12 @@
 import { logger } from "./lib/logger";
 import { pollOnce } from "./lib/monitor";
+import { initSentry } from "./lib/sentry";
 
 // Standalone long-running process that powers HOLTO's proactive monitoring.
 // It shares the API server's code (flight lookup, db, alert delivery) but runs
 // as its own process so alerts fire even when no client is connected.
+
+initSentry("worker");
 
 const POLL_MS = Number(process.env.MONITOR_POLL_MS) || 15 * 60 * 1000;
 

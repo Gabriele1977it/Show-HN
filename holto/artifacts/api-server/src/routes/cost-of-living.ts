@@ -1,5 +1,6 @@
 import { Router, type IRouter } from "express";
 
+import { requireAuth } from "../middlewares/auth";
 import { CITY_COSTS, DATA_VERSION, type CityCost } from "../lib/cost-of-living-data";
 import { COUNTRY_ISO3, getPriceLevels, priceIndexUK100 } from "../lib/worldbank";
 
@@ -71,7 +72,7 @@ function toCityBudget(c: CityCost, ratios: Record<string, number>): CityBudget {
 }
 
 // List of comparable cities for the picker.
-router.get("/cost-of-living/cities", (_req, res) => {
+router.get("/cost-of-living/cities", requireAuth, (_req, res) => {
   res.json(
     CITY_COSTS.map((c) => ({ code: c.code, label: c.label, country: c.country })).sort((x, y) =>
       x.label.localeCompare(y.label),
@@ -80,7 +81,7 @@ router.get("/cost-of-living/cities", (_req, res) => {
 });
 
 // Compare two cities: /cost-of-living?a=LON&b=HRG
-router.get("/cost-of-living", async (req, res) => {
+router.get("/cost-of-living", requireAuth, async (req, res) => {
   const aCode = typeof req.query.a === "string" ? req.query.a.toUpperCase() : "LON";
   const bCode = typeof req.query.b === "string" ? req.query.b.toUpperCase() : "HRG";
   const aCity = CITY_BY_CODE.get(aCode);

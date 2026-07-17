@@ -1,13 +1,15 @@
 import { Router, type IRouter } from "express";
 
+import { requireAuth } from "../middlewares/auth";
 import { AIRPORTS } from "../lib/airports";
 import { getWeather } from "../lib/weather";
 
 const router: IRouter = Router();
 
-// Public, cached weather. Accepts either ?airport=IATA (resolved from our
-// airport coordinate table) or explicit ?lat=&lon=. No key, no per-request cost.
-router.get("/weather", async (req, res): Promise<void> => {
+// Cached weather for signed-in users. Accepts either ?airport=IATA (resolved
+// from our airport coordinate table) or explicit ?lat=&lon=. No key, no
+// per-request cost; auth-gated so it can't be called anonymously at scale.
+router.get("/weather", requireAuth, async (req, res): Promise<void> => {
   let lat = Number(req.query.lat);
   let lon = Number(req.query.lon);
 

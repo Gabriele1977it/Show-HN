@@ -78,6 +78,7 @@ const INTEGRATION_LABELS: Record<string, string> = {
   pushExpo: "Push (Expo)",
   email_resend: "Email (Resend)",
   awardwallet: "AwardWallet",
+  errorTracking_sentry: "Error tracking (Sentry)",
 };
 const FEED_LABELS: Record<string, string> = {
   fxRates: "FX rates",
