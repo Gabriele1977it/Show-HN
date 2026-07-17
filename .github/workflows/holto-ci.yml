@@ -1,0 +1,53 @@
+name: HOLTO CI
+
+# Typecheck, unit tests, and build for the HOLTO app + API on every change under
+# holto/. Scoped by path so it never runs for the other MadLabs projects.
+
+on:
+  push:
+    paths:
+      - "holto/**"
+      - ".github/workflows/holto-ci.yml"
+  pull_request:
+    paths:
+      - "holto/**"
+
+defaults:
+  run:
+    working-directory: holto
+
+jobs:
+  checks:
+    name: Typecheck · Test · Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.0
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: holto/pnpm-lock.yaml
+
+      # Frozen lockfile: install the exact resolved versions, so CI can never
+      # introduce the kind of dependency drift that silently breaks types.
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck (API)
+        run: pnpm --filter @workspace/api-server run typecheck
+
+      - name: Typecheck (app)
+        run: pnpm --filter @workspace/holto run typecheck
+
+      - name: Unit tests (API)
+        run: pnpm --filter @workspace/api-server test
+
+      - name: Build (API)
+        run: pnpm --filter @workspace/api-server run build
