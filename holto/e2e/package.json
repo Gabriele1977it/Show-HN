@@ -1,0 +1,15 @@
+{
+  "name": "holto-e2e",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Standalone Playwright smoke + visual-regression tests for HOLTO. Deliberately NOT part of the pnpm workspace, so it never touches the app/API dependency trees.",
+  "scripts": {
+    "test": "playwright test",
+    "test:update": "playwright test --update-snapshots",
+    "test:ui": "playwright test --ui",
+    "report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.48.0"
+  }
+}
