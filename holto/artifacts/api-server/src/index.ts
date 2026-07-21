@@ -1,5 +1,6 @@
 import { runMigrations } from "stripe-replit-sync";
 
+import { syncAllPackages } from "./lib/airalo";
 import app from "./app";
 import { ensureAppSchema } from "./lib/ensure-schema";
 import { logger } from "./lib/logger";
@@ -33,6 +34,20 @@ function startInProcessMonitor(): void {
   };
   void tick();
   setInterval(() => void tick(), pollMs).unref();
+
+  // Airalo asks partners to sync GET /v2/packages at least hourly so we never
+  // show retired or out-of-stock plans. Runs here (not a separate worker) since
+  // monitoring lives in this process. No-op until Airalo creds are set.
+  const packageSyncMs = Number(process.env.AIRALO_SYNC_MS) || 60 * 60 * 1000;
+  const syncPackages = async (): Promise<void> => {
+    try {
+      await syncAllPackages();
+    } catch (err) {
+      logger.error({ err }, "Airalo package sync failed");
+    }
+  };
+  void syncPackages();
+  setInterval(() => void syncPackages(), packageSyncMs).unref();
 }
 
 async function initStripe(): Promise<void> {

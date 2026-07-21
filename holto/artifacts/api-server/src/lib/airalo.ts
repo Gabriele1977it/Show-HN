@@ -101,6 +101,27 @@ function pickPrice(pkg: AwPackage): { price: number | null; currency: string } {
 const cache = new Map<string, { data: EsimPackage[]; ts: number }>();
 const CACHE_TTL_MS = 60 * 60 * 1000; // Airalo asks for at most one call/hour.
 
+// Flatten one country's operators/packages into our normalised shape.
+function normalisePackages(country: AwCountry): EsimPackage[] {
+  const out: EsimPackage[] = [];
+  for (const op of country.operators ?? []) {
+    for (const pkg of op.packages ?? []) {
+      const { price, currency } = pickPrice(pkg);
+      out.push({
+        id: String(pkg.id ?? ""),
+        operator: op.title ?? "Airalo",
+        title: pkg.title ?? formatData(pkg),
+        data: formatData(pkg),
+        days: pkg.day ?? null,
+        price,
+        currency,
+      });
+    }
+  }
+  out.sort((a, b) => (a.price ?? Infinity) - (b.price ?? Infinity));
+  return out;
+}
+
 // The full normalised package list for a country (cheapest first), cached.
 async function fetchCountryPackages(code: string): Promise<EsimPackage[]> {
   const hit = cache.get(code);
@@ -122,22 +143,7 @@ async function fetchCountryPackages(code: string): Promise<EsimPackage[]> {
     }
     const json = (await res.json()) as { data?: AwCountry[] };
     const out: EsimPackage[] = [];
-    for (const country of json.data ?? []) {
-      for (const op of country.operators ?? []) {
-        for (const pkg of op.packages ?? []) {
-          const { price, currency } = pickPrice(pkg);
-          out.push({
-            id: String(pkg.id ?? ""),
-            operator: op.title ?? "Airalo",
-            title: pkg.title ?? formatData(pkg),
-            data: formatData(pkg),
-            days: pkg.day ?? null,
-            price,
-            currency,
-          });
-        }
-      }
-    }
+    for (const country of json.data ?? []) out.push(...normalisePackages(country));
     out.sort((a, b) => (a.price ?? Infinity) - (b.price ?? Infinity));
     cache.set(code, { data: out, ts: Date.now() });
     return out;
@@ -145,6 +151,58 @@ async function fetchCountryPackages(code: string): Promise<EsimPackage[]> {
     logger.warn({ err, code }, "Airalo packages errored");
     return [];
   }
+}
+
+// Sync the whole local catalogue from GET /v2/packages. Airalo asks partners to
+// hit this endpoint at least once an hour so they never serve retired or
+// out-of-stock plans; the on-demand per-country fetch alone leaves quiet hours
+// with no sync at all. The monitor worker calls this hourly. It pages through
+// the full list, warms the per-country cache (so live lookups stay instant and
+// consistent), and returns a count. Never throws; a no-op until configured.
+export async function syncAllPackages(): Promise<{ countries: number; packages: number }> {
+  if (!airaloConfigured()) return { countries: 0, packages: 0 };
+  const token = await getToken();
+  if (!token) return { countries: 0, packages: 0 };
+
+  const MAX_PAGES = 30; // safety cap against a runaway pagination loop
+  const fresh = new Map<string, EsimPackage[]>();
+  let countries = 0;
+  let packages = 0;
+  let page = 1;
+
+  try {
+    for (; page <= MAX_PAGES; page += 1) {
+      const url = `${BASE}/v2/packages?filter[type]=local&limit=100&page=${page}`;
+      const res = await fetch(url, {
+        headers: { authorization: `Bearer ${token}`, accept: "application/json" },
+        signal: AbortSignal.timeout(20000),
+      });
+      if (!res.ok) {
+        const body = await res.text().catch(() => "");
+        logger.warn({ status: res.status, page, body: body.slice(0, 300) }, "Airalo package sync page failed");
+        break;
+      }
+      const json = (await res.json()) as { data?: AwCountry[]; meta?: { last_page?: number } };
+      const data = json.data ?? [];
+      if (data.length === 0) break;
+      for (const country of data) {
+        const code = (country.country_code ?? "").trim().toUpperCase();
+        const list = normalisePackages(country);
+        if (/^[A-Z]{2}$/.test(code)) fresh.set(code, list);
+        countries += 1;
+        packages += list.length;
+      }
+      const lastPage = json.meta?.last_page;
+      if (lastPage && page >= lastPage) break;
+    }
+    // Swap the freshly-synced lists into the cache in one go.
+    const ts = Date.now();
+    for (const [code, list] of fresh) cache.set(code, { data: list, ts });
+    logger.info({ countries, packages, pages: page }, "Airalo package catalogue synced");
+  } catch (err) {
+    logger.warn({ err }, "Airalo package sync errored");
+  }
+  return { countries, packages };
 }
 
 // Data packages to show for a country (cheapest six).
