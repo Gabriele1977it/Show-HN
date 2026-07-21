@@ -68,9 +68,20 @@ Tap through each; expect content, **no error message, no blank screen**:
 
 ## 4. Money paths (5 min)
 
-- [ ] **eSIM purchase** — buy with a Stripe **test card** (`4242 4242 4242 4242`,
-      any future expiry/CVC). You should land on the install screen with a QR.
-- [ ] **Pro upgrade** — same test-card flow; account shows the upgraded tier.
+> **Which card to use depends on your Stripe keys.** With **live** keys
+> (`sk_live_…`, what you run in production) the `4242…` test card is *rejected*
+> — "your card was declined… known test card." Two ways to test:
+> - **Live keys (recommended):** buy the cheapest eSIM with a **real card**,
+>   confirm it works, then **refund** yourself in the Stripe dashboard (≈ £0).
+>   This is the only way to exercise the real webhook + Airalo fulfilment.
+> - **Test keys:** switch Stripe to **Test mode**, put the `sk_test_…` key and
+>   the **test** webhook secret on Render, and then `4242 4242 4242 4242` (any
+>   future expiry/CVC) works. Switch the live keys back before promoting.
+
+- [ ] **eSIM purchase** — complete a checkout (see the note above for which card).
+      You should land on the install screen with a QR, and the sale should appear
+      in your **GoAffPro** dashboard.
+- [ ] **Pro upgrade** — same flow; account shows the upgraded tier.
 - [ ] Confirm the Stripe **webhook** shows delivered events in the Stripe dashboard.
 
 ---
