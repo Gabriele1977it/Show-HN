@@ -145,12 +145,23 @@ router.post("/stripe/portal", requireAuth, async (req, res): Promise<void> => {
 router.get("/stripe/checkout/success", async (req, res): Promise<void> => {
   const sessionId = req.query.session_id as string | undefined;
 
+  // Real order data for the affiliate (GoAffPro) conversion pixel, populated
+  // only once we've confirmed the payment actually went through.
+  let affiliateOrder: { number: string; total: number } | null = null;
+
   if (sessionId) {
     try {
       const stripeClient = getUncachableStripeClient();
       const session = await stripeClient.checkout.sessions.retrieve(sessionId, {
         expand: ["line_items.data.price.product"],
       });
+
+      if (session.payment_status === "paid") {
+        affiliateOrder = {
+          number: session.id,
+          total: (session.amount_total ?? 0) / 100,
+        };
+      }
 
       if (session.payment_status === "paid" && session.customer) {
         const customerId =
@@ -186,8 +197,20 @@ router.get("/stripe/checkout/success", async (req, res): Promise<void> => {
     }
   }
 
+  // This "thank you" page is served by the API (not the web PWA), so it needs
+  // its own copy of the GoAffPro loader plus a conversion pixel carrying the
+  // real order number + total. Both are emitted only for a confirmed-paid
+  // session; JSON.stringify safely escapes the values into the script.
+  const affiliateHead = affiliateOrder
+    ? `<script async src="https://api.goaffpro.com/loader.js?shop=tudjoystqf"></script>`
+    : "";
+  const affiliateBody = affiliateOrder
+    ? `<script>(function(){window.goaffpro_order=${JSON.stringify(affiliateOrder)};function fire(){try{if(typeof goaffproTrackConversion==='function'){goaffproTrackConversion();return true}}catch(e){}return false}if(!fire()){var n=0,t=setInterval(function(){n++;if(fire()||n>40)clearInterval(t)},250)}})();</script>`
+    : "";
+
   res.send(`<!DOCTYPE html><html><head><title>Payment successful — HOLTO</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
+${affiliateHead}
 <style>body{font-family:system-ui,sans-serif;background:#0a1628;color:#f8fafc;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;padding:20px;box-sizing:border-box;text-align:center}
 .card{background:#162238;border-radius:16px;padding:40px 32px;max-width:400px;width:100%}
 .icon{font-size:56px;margin-bottom:16px}h1{margin:0 0 8px;font-size:22px;color:#0d9488}p{color:#94a3b8;margin:0 0 24px;line-height:1.5}
@@ -195,7 +218,9 @@ router.get("/stripe/checkout/success", async (req, res): Promise<void> => {
 <body><div class="card"><div class="icon">✅</div>
 <h1>Payment successful!</h1>
 <p>Your HOLTO plan is now active. Return to the app to start using your new features.</p>
-<a class="btn" href="https://www.holtotravel.co.uk">Back to HOLTO</a></div></body></html>`);
+<a class="btn" href="https://www.holtotravel.co.uk">Back to HOLTO</a></div>
+${affiliateBody}
+</body></html>`);
 });
 
 router.get("/stripe/checkout/cancel", (_req, res) => {

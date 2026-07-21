@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { EsimInstall, type EsimOrder } from "@/components/EsimInstall";
 import { Icon } from "@/components/Icon";
 import { useColors } from "@/hooks/useColors";
+import { trackAffiliateConversion } from "@/utils/affiliate";
 
 export default function EsimCompleteScreen() {
   const colors = useColors();
@@ -30,6 +31,14 @@ export default function EsimCompleteScreen() {
 
   const order = fulfill.data?.order;
   const errorMsg = (fulfill.error as { data?: { error?: string } })?.data?.error;
+
+  // Report the completed eSIM sale to the affiliate program with the real order
+  // number + amount charged. No-op on native; deduped per order (see helper).
+  useEffect(() => {
+    if (order?.id != null && order.amount != null) {
+      trackAffiliateConversion(order.id, order.amount);
+    }
+  }, [order?.id, order?.amount]);
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: colors.background }} contentContainerStyle={{ padding: 20, paddingTop: topPad + 8, paddingBottom: 60 }}>

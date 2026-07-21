@@ -51,6 +51,10 @@ const tags = [
   `<meta name="twitter:image" content="${site}/icon.png" />`,
   // Service worker (installability)
   "<script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('/sw.js').catch(function(){})})}</script>",
+  // GoAffPro affiliate loader — present on every page so referral cookies are
+  // set on first visit. Conversions are fired from the purchase-success screens
+  // (see utils/affiliate.ts). Async so it never blocks first paint.
+  '<script async src="https://api.goaffpro.com/loader.js?shop=tudjoystqf"></script>',
 ].join("\n    ");
 
 html = html.replace("</head>", `    ${tags}\n  </head>`);

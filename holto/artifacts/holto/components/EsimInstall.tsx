@@ -11,6 +11,7 @@ export interface EsimOrder {
   dataLabel: string | null;
   days: number | null;
   status: string;
+  amount?: string;
   iccid: string | null;
   qrCodeUrl: string | null;
   lpa: string | null;
